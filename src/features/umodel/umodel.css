@@ -2509,6 +2509,229 @@ body.ume-resizing-detail .ume-detail-panel {
   border-bottom: 0;
 }
 
+/* Aliyun playground inspired compact graph and form detail overrides. */
+.ume-v2 .v2-node-card-body {
+  border: 1px solid color-mix(in srgb, var(--node-color) 58%, #ffffff);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--node-color) 7%, #ffffff);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.ume-v2 .v2-node-card:hover .v2-node-card-body,
+.ume-v2 .react-flow__node.selected .v2-node-card-body {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--node-color) 38%, transparent), 0 3px 10px rgba(15, 23, 42, 0.12);
+}
+
+.ume-v2 .ume-node-full {
+  min-height: 42px;
+  padding: 5px 8px 5px 10px;
+}
+
+.ume-v2 .ume-node-meta {
+  gap: 4px;
+}
+
+.ume-v2 .ume-node-title {
+  color: var(--node-color);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ume-v2 .ume-node-tags,
+.ume-v2 .ume-node-operation-button,
+.ume-v2 .ume-node-top-menu {
+  display: none;
+}
+
+.ume-v2 .react-flow__handle {
+  width: 4px;
+  height: 4px;
+  border: 0;
+  background: var(--node-color);
+  opacity: 0.55;
+}
+
+.ume-v2 .react-flow__edge path:not(.v2-edge-hitarea) {
+  vector-effect: non-scaling-stroke;
+}
+
+.ume-topbar-actions {
+  gap: 12px;
+}
+
+.ume-detail-panel.open {
+  width: min(var(--ume-detail-width, 470px), 520px, 100%);
+  min-width: min(var(--ume-detail-width, 470px), 520px, 100%);
+}
+
+.ume-detail-header {
+  min-height: 78px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.ume-detail-stripe {
+  width: 4px;
+  height: 34px;
+  border-radius: 8px;
+}
+
+.ume-detail-title strong {
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.ume-detail-title code {
+  margin-top: 8px;
+  color: #9ca3af;
+  font-family: var(--ume-font-sans);
+  font-size: 13px;
+}
+
+.ume-detail-tabs {
+  gap: 0;
+  padding: 12px 18px 8px;
+}
+
+.ume-detail-tabs button {
+  min-width: 116px;
+  height: 32px;
+  border-radius: 18px;
+  background: #f3f5f8;
+  box-shadow: none;
+  color: #9ca3af;
+}
+
+.ume-detail-tabs button.active {
+  background: #fff;
+  color: #1f2937;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.14);
+}
+
+.ume-form-detail {
+  display: grid;
+  gap: 14px;
+  color: #2f343d;
+  font-size: 14px;
+}
+
+.ume-form-field {
+  display: grid;
+  gap: 8px;
+}
+
+.ume-form-field > span {
+  color: #262b33;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ume-form-field.required > span::before {
+  content: "*";
+  margin-right: 2px;
+  color: #ff4d2e;
+}
+
+.ume-form-field em {
+  color: #9ca3af;
+  font-style: normal;
+}
+
+.ume-select-like,
+.ume-form-field input,
+.ume-form-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+  background: #fff;
+  color: #374151;
+  font: inherit;
+}
+
+.ume-select-like {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-left: 4px solid var(--field-color, #0ea5e9);
+}
+
+.ume-form-field input {
+  height: 38px;
+  padding: 0 12px;
+}
+
+.ume-form-field textarea {
+  min-height: 92px;
+  padding: 12px;
+  resize: vertical;
+}
+
+.ume-i18n-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ume-form-section {
+  border: 1px solid #eef2f7;
+  background: #fff;
+}
+
+.ume-form-section header {
+  padding: 12px 16px;
+  background: #eef3f9;
+  color: #2f343d;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.ume-form-section.open {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 14px;
+}
+
+.ume-form-section.open > :not(header) {
+  margin-inline: 14px;
+}
+
+.ume-schema-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ume-schema-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border: 1px solid #edf0f5;
+  border-radius: 3px;
+  background: #fafbfc;
+}
+
+.ume-schema-row strong {
+  color: #374151;
+}
+
+.ume-schema-row span,
+.ume-schema-empty {
+  color: #9ca3af;
+}
+
+.ume-form-section pre {
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #475569;
+  font-family: var(--ume-font-mono);
+  font-size: 12px;
+}
+
 .ume-dialog header div {
   min-width: 0;
   display: flex;

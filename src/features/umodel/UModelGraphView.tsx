@@ -4,14 +4,12 @@ import { Cable, CircleDashed, Copy, Crosshair, GitBranch, Trash2 } from 'lucide-
 import {
   Background,
   BackgroundVariant,
-  BaseEdge,
   Controls,
   EdgeLabelRenderer,
   Handle,
   MiniMap,
   Position,
   ReactFlow,
-  getBezierPath,
   useReactFlow,
   type Edge,
   type EdgeProps,
@@ -335,33 +333,15 @@ function UModelEdge({
   sourceY,
   targetX,
   targetY,
-  sourcePosition,
-  targetPosition,
   data,
 }: EdgeProps<Edge<UModelEdgeData>>) {
   const { t } = useI18n()
-  let edgePath: string
-  let labelX: number
-  let labelY: number
-  if (source === target) {
-    const radiusX = Math.max(80, Math.abs(sourceX - targetX) * 0.8 || 120)
-    const radiusY = 100
-    edgePath = `M ${sourceX - 5} ${sourceY} A ${radiusX} ${radiusY} 0 1 0 ${targetX + 2} ${targetY}`
-    labelX = (sourceX + targetX) / 2
-    labelY = sourceY - radiusY - 80
-  } else {
-    const bezier = getBezierPath({
-      sourceX,
-      sourceY,
-      targetX,
-      targetY,
-      sourcePosition,
-      targetPosition,
-    })
-    edgePath = bezier[0]
-    labelX = bezier[1]
-    labelY = bezier[2]
-  }
+  const midX = sourceX + Math.max(60, (targetX - sourceX) * 0.52)
+  const edgePath = source === target
+    ? `M ${sourceX - 5} ${sourceY} C ${sourceX + 90} ${sourceY - 120}, ${targetX + 90} ${targetY + 120}, ${targetX + 2} ${targetY}`
+    : `M ${sourceX} ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${targetX} ${targetY}`
+  const labelX = midX
+  const labelY = (sourceY + targetY) / 2
   const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_')
   const sourceColor = data?.sourceColor || colorForKind(data?.sourceKind || 'entity_set').color
   const targetColor = data?.targetColor || colorForKind(data?.targetKind || data?.kind || 'data_link').color
@@ -389,27 +369,16 @@ function UModelEdge({
         </linearGradient>
       </defs>
       <path className="v2-edge-hitarea" d={edgePath} fill="none" stroke="transparent" strokeWidth={16} />
-      {selected && (
-        <BaseEdge
-          path={edgePath}
-          style={{
-            stroke: targetColor,
-            strokeWidth: 8,
-            opacity: 0.16,
-            pointerEvents: 'none',
-          }}
-        />
-      )}
-      <BaseEdge
+      {selected && <path d={edgePath} fill="none" stroke={targetColor} strokeWidth={7} opacity={0.14} pointerEvents="none" />}
+      <path
         id={id}
-        path={edgePath}
-        style={{
-          stroke: `url(#v2-edge-grad-${safeId})`,
-          strokeWidth: selected ? 3.1 : 2.4,
-          strokeDasharray: isDraft ? '6 4' : undefined,
-          opacity: selected ? 0.95 : 0.8,
-          pointerEvents: 'none',
-        }}
+        d={edgePath}
+        fill="none"
+        stroke={`url(#v2-edge-grad-${safeId})`}
+        strokeWidth={selected ? 2.1 : 1.35}
+        strokeDasharray={isDraft ? '6 4' : undefined}
+        opacity={selected ? 0.95 : 0.72}
+        pointerEvents="none"
       />
       <circle cx={targetX} cy={targetY} r={4.2} fill={targetColor} opacity={selected ? 0.95 : 0.78} />
       {data && label && (

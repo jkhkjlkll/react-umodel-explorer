@@ -5,8 +5,10 @@ import * as YAML from 'js-yaml'
 import {
   Box,
   Cable,
+  Bookmark,
   Crosshair,
   Database,
+  Download,
   FileUp,
   GitBranch,
   Layers,
@@ -502,6 +504,16 @@ export function UModelPage({
     setMessage(t('umodelExplorer.message.redoDraftChange'))
   }
 
+  function exportElements() {
+    const blob = new Blob([stringify(draftElements)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${workspaceId || 'umodel'}-elements.json`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="ume-v2 umodel-page">
       <aside className="ume-sidebar">
@@ -601,6 +613,9 @@ export function UModelPage({
           <div className="ume-topbar-actions">
             {error && <span className="ume-toast danger">{error}</span>}
             <span className="ume-action-divider" />
+            <IconButton className="ume-icon-button" label="收藏当前视图" onClick={() => setMessage('已收藏当前视图')} type="button">
+              <Bookmark size={15} />
+            </IconButton>
             <div className="ume-add-menu-wrap">
               <IconButton className="ume-icon-button" label={t('umodelExplorer.action.add')} onClick={() => setAddMenuOpen((value) => !value)} type="button">
                 <Plus size={15} />
@@ -630,6 +645,9 @@ export function UModelPage({
             </IconButton>
             <IconButton className="ume-icon-button" disabled={redoStack.length === 0} label={t('umodelExplorer.action.redo')} onClick={redoDraft} type="button">
               <Redo2 size={15} />
+            </IconButton>
+            <IconButton className="ume-icon-button" label="导出当前 UModel" onClick={exportElements} type="button">
+              <Download size={15} />
             </IconButton>
             <button
               className="ume-submit-button"
@@ -990,6 +1008,7 @@ function DetailPanel({
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
   const [resizing, setResizing] = useState(false)
+  const [viewMode, setViewMode] = useState<'form' | 'json'>('form')
 
   useEffect(() => {
     setJson(element ? stringify(element) : '')
@@ -1062,8 +1081,16 @@ function DetailPanel({
         </button>
       </header>
       <div className="ume-separator horizontal" />
+      <div className="ume-detail-tabs">
+        <button className={viewMode === 'form' ? 'active' : ''} onClick={() => setViewMode('form')} type="button">
+          可控表单视图
+        </button>
+        <button className={viewMode === 'json' ? 'active' : ''} onClick={() => setViewMode('json')} type="button">
+          JSON
+        </button>
+      </div>
       <div className="ume-detail-body">
-        <MonacoJsonEditor value={json} onChange={setJson} />
+        {viewMode === 'form' ? <UModelFormDetail element={element} /> : <MonacoJsonEditor value={json} onChange={setJson} />}
         {status && <pre className="ume-result-box">{status}</pre>}
       </div>
       <footer className="ume-detail-footer">
@@ -1074,6 +1101,90 @@ function DetailPanel({
       </footer>
     </aside>
   )
+}
+
+function UModelFormDetail({ element }: { element: UModelElement }) {
+  const color = colorForKind(element.kind)
+  const spec = element.spec || {}
+  const description = descriptionForElement(element)
+  const fields = asUnknownArray(spec.fields)
+  const metrics = asUnknownArray(spec.metrics)
+  const schemaItems = fields.length > 0 ? fields : metrics
+  return (
+    <div className="ume-form-detail">
+      <label className="ume-form-field required">
+        <span>Kind <em>?</em> :</span>
+        <div className="ume-select-like" style={{ '--field-color': color.color } as CSSProperties}>
+          {color.label}
+        </div>
+      </label>
+
+      <section className="ume-form-section open">
+        <header>⌄ 元数据信息 (Metadata)</header>
+        <label className="ume-form-field required">
+          <span>域 (Domain) :</span>
+          <input value={element.domain || ''} readOnly />
+        </label>
+        <label className="ume-form-field required">
+          <span>Name :</span>
+          <input value={element.name || ''} readOnly />
+        </label>
+        <label className="ume-form-field required">
+          <span>显示名 (Display Name) :</span>
+          <div className="ume-i18n-row">
+            <input value={localizedText((spec.display_name as unknown) || element.name, 'zh_cn')} placeholder="请输入中文显示名" readOnly />
+            <input value={localizedText((spec.display_name as unknown) || element.name, 'en_us')} placeholder="Please enter" readOnly />
+          </div>
+        </label>
+        <label className="ume-form-field">
+          <span>描述 (Description) :</span>
+          <div className="ume-i18n-row">
+            <textarea value={description} placeholder="请输入中文描述" readOnly />
+            <textarea value={description} placeholder="Please enter English description" readOnly />
+          </div>
+        </label>
+      </section>
+
+      <section className="ume-form-section">
+        <header>› 更多配置</header>
+      </section>
+
+      <section className="ume-form-section open">
+        <header>⌄ Schema 信息 (Schema)</header>
+        <div className="ume-schema-list">
+          {schemaItems.slice(0, 8).map((item, index) => (
+            <div key={index} className="ume-schema-row">
+              <strong>{schemaItemName(item) || `field_${index + 1}`}</strong>
+              <span>{schemaItemType(item) || 'string'}</span>
+            </div>
+          ))}
+          {schemaItems.length === 0 && <div className="ume-schema-empty">暂无 Schema 字段</div>}
+        </div>
+      </section>
+
+      <section className="ume-form-section open">
+        <header>⌄ 属性信息 (Spec)</header>
+        <pre>{stringify(spec)}</pre>
+      </section>
+    </div>
+  )
+}
+
+function localizedText(value: unknown, locale: 'zh_cn' | 'en_us') {
+  if (typeof value === 'string') return value
+  if (isObject(value)) return optionalString(value[locale]) || ''
+  return ''
+}
+
+function schemaItemName(value: unknown) {
+  if (typeof value === 'string') return value
+  if (isObject(value)) return optionalString(value.name)
+  return ''
+}
+
+function schemaItemType(value: unknown) {
+  if (isObject(value)) return optionalString(value.type)
+  return ''
 }
 
 function MonacoJsonEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {

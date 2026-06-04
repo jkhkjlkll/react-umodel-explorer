@@ -121,8 +121,8 @@ export function buildGraph(
     const key = elementKey(element)
     const color = colorForKind(element.kind)
     const entityLinkNode = entitySetLinkDisplay === 'relative_link' && isEntitySetLinkElement(element)
-    const width = entityLinkNode ? Math.min(190, Math.max(68, entityLinkTypeForEdge(element).length * 8 + 38)) : nodeWidth
-    const height = entityLinkNode ? 30 : 84
+    const width = entityLinkNode ? Math.min(160, Math.max(68, entityLinkTypeForEdge(element).length * 7 + 34)) : 168
+    const height = entityLinkNode ? 28 : 48
     return {
       id: key,
       type: 'umodel',
@@ -204,28 +204,111 @@ function fallbackLayoutNodes(elements: UModelElement[]) {
 }
 
 export async function layoutGraphWithGraphviz(model: GraphModel): Promise<GraphModel> {
-  if (model.nodes.length === 0) return model
-  const graphviz = await getGraphviz()
-  const dot = graphToDot(model)
-  const raw = graphviz.layout(dot, 'json')
-  const parsed = JSON.parse(raw) as { objects?: Array<{ name?: string; pos?: string }> }
-  const positions = new Map<string, { x: number; y: number }>()
+  return layoutGraphAsStructuredTree(model)
+}
 
-  for (const item of parsed.objects || []) {
-    if (!item.name || !item.pos) continue
-    const [xRaw, yRaw] = item.pos.split(',').map(Number)
-    if (Number.isFinite(xRaw) && Number.isFinite(yRaw)) positions.set(item.name, { x: xRaw, y: yRaw })
+function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
+  if (model.nodes.length === 0) return model
+
+  const outgoing = new Map<string, string[]>()
+  const incoming = new Map<string, number>()
+  for (const node of model.nodes) {
+    outgoing.set(node.id, [])
+    incoming.set(node.id, 0)
   }
-  if (positions.size === 0) return model
+  for (const edge of model.edges) {
+    if (!outgoing.has(edge.source) || !incoming.has(edge.target)) continue
+    outgoing.get(edge.source)!.push(edge.target)
+    incoming.set(edge.target, (incoming.get(edge.target) || 0) + 1)
+  }
+
+  const nodeById = new Map(model.nodes.map((node) => [node.id, node]))
+  const rootCandidates = model.nodes
+    .filter((node) => (incoming.get(node.id) || 0) === 0)
+    .sort(compareStructuredNodes)
+  const roots = rootCandidates.length > 0 ? rootCandidates : [...model.nodes].sort(compareStructuredNodes).slice(0, 1)
+  const depthById = new Map<string, number>()
+  const queue = roots.map((node) => ({ id: node.id, depth: 0 }))
+
+  while (queue.length > 0) {
+    const item = queue.shift()!
+    const currentDepth = depthById.get(item.id)
+    if (currentDepth !== undefined && currentDepth <= item.depth) continue
+    depthById.set(item.id, item.depth)
+    const nextNodes: GraphModel['nodes'] = []
+    for (const id of outgoing.get(item.id) || []) {
+      const node = nodeById.get(id)
+      if (node) nextNodes.push(node)
+    }
+    const nextIds = nextNodes.sort(compareStructuredNodes).map((node) => node.id)
+    for (const id of nextIds) queue.push({ id, depth: item.depth + 1 })
+  }
+
+  for (const node of model.nodes) {
+    if (!depthById.has(node.id)) depthById.set(node.id, depthForKind(node.data.kind))
+  }
+
+  const columns = new Map<number, typeof model.nodes>()
+  for (const node of model.nodes) {
+    const depth = Math.min(6, depthById.get(node.id) || 0)
+    if (!columns.has(depth)) columns.set(depth, [])
+    columns.get(depth)!.push(node)
+  }
+
+  const positions = new Map<string, { x: number; y: number }>()
+  const columnGap = 330
+  const rowGap = 74
+  const domainGap = 58
+  const sortedColumns = [...columns.entries()].sort((left, right) => left[0] - right[0])
+
+  for (const [depth, nodes] of sortedColumns) {
+    let cursorY = 0
+    const byDomain = new Map<string, typeof model.nodes>()
+    for (const node of [...nodes].sort(compareStructuredNodes)) {
+      const domain = node.data.domain || 'unknown'
+      if (!byDomain.has(domain)) byDomain.set(domain, [])
+      byDomain.get(domain)!.push(node)
+    }
+    for (const [, domainNodes] of [...byDomain.entries()].sort((left, right) => left[0].localeCompare(right[0]))) {
+      const sorted = domainNodes.sort(compareStructuredNodes)
+      sorted.forEach((node, index) => {
+        positions.set(node.id, {
+          x: depth * columnGap,
+          y: cursorY + index * rowGap,
+        })
+      })
+      cursorY += sorted.length * rowGap + domainGap
+    }
+  }
+
+  const minY = Math.min(...[...positions.values()].map((position) => position.y))
+  const maxY = Math.max(...[...positions.values()].map((position) => position.y))
+  const offsetY = Number.isFinite(minY) && Number.isFinite(maxY) ? -((minY + maxY) / 2) : 0
 
   return {
     ...model,
     nodes: model.nodes.map((node) => {
       const position = positions.get(node.id)
       if (!position) return node
-      return { ...node, position }
+      return { ...node, position: { x: position.x, y: position.y + offsetY } }
     }),
   }
+}
+
+function compareStructuredNodes(left: GraphModel['nodes'][number], right: GraphModel['nodes'][number]) {
+  const domain = (left.data.domain || '').localeCompare(right.data.domain || '')
+  if (domain !== 0) return domain
+  const kind = left.data.kind.localeCompare(right.data.kind)
+  if (kind !== 0) return kind
+  return left.data.title.localeCompare(right.data.title)
+}
+
+function depthForKind(kind: string) {
+  if (kind === 'entity_set') return 1
+  if (kind === 'entity_set_link') return 2
+  if (kind === 'metric_set' || kind === 'log_set') return 3
+  if (kind === 'trace_set' || kind === 'event_set' || kind === 'profile_set') return 4
+  return 5
 }
 
 function getGraphviz(): Promise<Graphviz> {
