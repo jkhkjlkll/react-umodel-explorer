@@ -1,0 +1,112 @@
+:root {
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: #202123;
+  background: #f7f8f8;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+
+  --om-bg: #f7f8f8;
+  --om-surface: #ffffff;
+  --om-surface-subtle: #f0f2f1;
+  --om-surface-raised: #ffffff;
+  --om-text: #202123;
+  --om-text-muted: #66706b;
+  --om-text-faint: #8b958f;
+  --om-border: #dfe4e1;
+  --om-border-strong: #c4ccc7;
+  --om-primary: #6559d9;
+  --om-primary-strong: #4f46c8;
+  --om-primary-soft: #eceafe;
+  --om-primary-border: #d6d1fb;
+  --om-primary-ring: rgba(101, 89, 217, 0.16);
+  --om-accent: #10a37f;
+  --om-accent-strong: #0c7f64;
+  --om-accent-soft: #dcf6ed;
+  --om-indigo: #6559d9;
+  --om-indigo-soft: #eceafe;
+  --om-coral: #d85b43;
+  --om-coral-soft: #fdebe6;
+  --om-amber: #a86f00;
+  --om-amber-soft: #fff2cf;
+  --om-red: #c43d3d;
+  --om-red-soft: #fde7e7;
+  --om-shadow-sm: 0 1px 1px rgba(20, 22, 21, 0.05);
+  --om-shadow-md: 0 12px 30px rgba(20, 22, 21, 0.08);
+  --om-shadow-panel: -2px 0 8px rgba(15, 23, 42, 0.018);
+  --om-shadow-control: 0 1px 2px rgba(20, 22, 21, 0.05);
+  --om-radius: 8px;
+  --om-radius-panel: 18px;
+  --om-radius-sm: 6px;
+  --om-radius-xs: 4px;
+  --om-panel-overlap: 18px;
+  --om-panel-border: rgba(15, 23, 42, 0.07);
+  --om-focus-ring: var(--om-primary-ring);
+  --om-sidebar-item-height: 38px;
+  --om-sidebar-item-font-size: 14px;
+  --om-sidebar-row-font-size: 13px;
+  --om-sidebar-meta-font-size: 12px;
+  --om-sidebar-section-font-size: 11px;
+  --om-sidebar-icon-size: 16px;
+  --om-mono:
+    "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --om-cjk-font:
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", Inter, ui-sans-serif, system-ui,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.72)),
+    var(--om-bg);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  letter-spacing: 0;
+}
+
+a {
+  color: inherit;
+}
+
+.app-shell {
+  min-height: 100vh;
+  color: var(--om-text);
+}
+
+.mono {
+  font-family: var(--om-mono);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

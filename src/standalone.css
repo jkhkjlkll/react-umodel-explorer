@@ -1,0 +1,38 @@
+.standalone-brand-mark {
+  display: grid;
+  place-items: center;
+  color: var(--om-accent);
+}
+
+.standalone-sidebar-footer {
+  display: grid;
+  gap: 8px;
+}
+
+.standalone-sidebar-footer .om-badge {
+  width: 100%;
+  justify-content: flex-start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.standalone-error-text {
+  max-height: 120px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--om-danger) 30%, transparent);
+  border-radius: var(--om-radius-sm);
+  background: color-mix(in srgb, var(--om-danger) 8%, #fff);
+  color: var(--om-danger);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.standalone-reset-button.om-button {
+  color: var(--om-text-faint);
+}
+
+.workspace-shell.collapsed .standalone-sidebar-footer .om-badge {
+  justify-content: center;
+  padding-inline: 0;
+}
