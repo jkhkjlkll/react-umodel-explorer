@@ -151,6 +151,8 @@ export interface QueryResult {
   rows: Array<Record<string, unknown>>
   page: {
     limit?: number
+    total?: number
+    has_more?: boolean
     page_token?: string
   }
   explain?: QueryExplain

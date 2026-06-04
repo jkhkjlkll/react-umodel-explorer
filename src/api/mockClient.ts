@@ -64,7 +64,11 @@ export class MockUModelApi implements UModelApiClient {
     return {
       columns: ['kind', 'domain', 'name', 'version', 'spec', 'metadata'],
       rows,
-      page: { limit },
+      page: {
+        limit,
+        total: this.elements.length,
+        has_more: this.elements.length > limit,
+      },
     }
   }
 

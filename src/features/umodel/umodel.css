@@ -2446,6 +2446,22 @@ body.ume-resizing-detail .ume-detail-panel {
   background: var(--ume-color-border);
 }
 
+.ume-status-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #b45309;
+  font-weight: 650;
+}
+
+.ume-status-warning span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.16);
+}
+
 .ume-status-spacer {
   margin-left: auto;
 }

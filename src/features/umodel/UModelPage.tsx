@@ -79,6 +79,7 @@ import {
 import './umodel.css'
 
 type SidebarTab = 'summary' | 'settings'
+const UMODEL_DISPLAY_LIMIT = 700
 
 export function UModelPage({
   api,
@@ -153,7 +154,7 @@ export function UModelPage({
     setLoading(true)
     setError('')
     try {
-      const result = await api.listUModel(workspaceId, 1000)
+      const result = await api.listUModel(workspaceId, UMODEL_DISPLAY_LIMIT)
       const elements = result.rows.map(rowToElement).filter((element) => elementKey(element))
       setQueryResult(result)
       setServerElements(elements)
@@ -200,7 +201,9 @@ export function UModelPage({
   const stats = useMemo(() => summarize(draftElements), [draftElements])
   const searchIndex = useMemo(() => buildSearchIndex(draftElements), [draftElements])
   const resultLimit = queryResult?.page.limit
-  const resultLimitReached = Boolean(resultLimit && serverElements.length >= resultLimit)
+  const resultLimitReached = Boolean(
+    resultLimit && (queryResult?.page.has_more || serverElements.length >= resultLimit),
+  )
   const filtered = useMemo(
     () => filterElements(draftElements, fullTextFilters, kindFilters, domainFilters, focusIds, filterStacking, mode, entitySetLinkDisplay),
     [domainFilters, draftElements, entitySetLinkDisplay, filterStacking, focusIds, fullTextFilters, kindFilters, mode],
@@ -719,7 +722,10 @@ export function UModelPage({
           {resultLimitReached && resultLimit && (
             <>
               <span className="ume-status-sep" />
-              <span>{t('umodelExplorer.status.limit', { limit: resultLimit.toLocaleString() })}</span>
+              <span className="ume-status-warning">
+                <span />
+                {t('umodelExplorer.status.limit', { limit: filteredStats.nodes.toLocaleString() })}
+              </span>
             </>
           )}
         </footer>

@@ -74,8 +74,8 @@ Request:
 
 ```json
 {
-  "query": ".umodel | sort name | limit 1000",
-  "limit": 1000
+  "query": ".umodel | sort name | limit 700",
+  "limit": 700
 }
 ```
 
@@ -106,10 +106,14 @@ Preferred response:
     }
   ],
   "page": {
-    "limit": 1000
+    "limit": 700,
+    "total": 1200,
+    "has_more": true
   }
 }
 ```
+
+When `page.has_more` is `true`, the UI shows the large-result warning and displays only the returned rows.
 
 The client also accepts this alternate execute shape:
 
