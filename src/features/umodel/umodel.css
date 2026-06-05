@@ -2489,8 +2489,8 @@ body.ume-resizing-detail .ume-detail-panel {
 
 .v2-graph-container[data-zoom="mini"] .ume-map-node,
 .v2-graph-container[data-zoom="compact"] .ume-map-node {
-  width: 164px;
-  height: 52px;
+  width: 250px;
+  height: 64px;
   align-items: center;
 }
 

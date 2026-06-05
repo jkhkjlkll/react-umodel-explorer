@@ -125,7 +125,7 @@ function toOpenTopoXData(graph: GraphModel): TopologyGraphData & Record<string, 
           colorBg: color.bg,
           colorText: color.text,
           label: color.label,
-          size: { width: Number(node.width || node.measured?.width || 164), height: Number(node.height || node.measured?.height || 52) },
+          size: { width: Number(node.width || node.measured?.width || 250), height: Number(node.height || node.measured?.height || 64) },
         },
       }
     }),
@@ -201,11 +201,11 @@ function offsetsForGroups<T extends { id: string }>(groups: Map<string, T[]>, ra
 }
 
 function centerX(node: GraphModel['nodes'][number]) {
-  return node.position.x + Number(node.width || node.measured?.width || 164) / 2
+  return node.position.x + Number(node.width || node.measured?.width || 250) / 2
 }
 
 function centerY(node: GraphModel['nodes'][number]) {
-  return node.position.y + Number(node.height || node.measured?.height || 52) / 2
+  return node.position.y + Number(node.height || node.measured?.height || 64) / 2
 }
 
 function clamp(value: number, min: number, max: number) {

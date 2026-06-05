@@ -140,8 +140,8 @@ export function buildGraph(
     const key = elementKey(element)
     const color = colorForKind(element.kind)
     const entityLinkNode = entitySetLinkDisplay === 'relative_link' && isEntitySetLinkElement(element)
-    const width = entityLinkNode ? Math.min(160, Math.max(68, entityLinkTypeForEdge(element).length * 7 + 34)) : 164
-    const height = entityLinkNode ? 28 : 52
+    const width = entityLinkNode ? Math.min(170, Math.max(86, entityLinkTypeForEdge(element).length * 7 + 44)) : 250
+    const height = entityLinkNode ? 34 : 64
     return {
       id: key,
       type: 'umodel',
@@ -353,7 +353,7 @@ function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
     const yOffset = options?.yOffset || 0
     const typeOffsets = options?.typeOffsets || {}
     const columnStep = options?.columnStep || 158
-    const minGap = Math.max(rowStep, 74)
+    const minGap = Math.max(rowStep, 86)
     const anchorGroups = new Map<string, string[]>()
     for (const id of ids) {
       const anchor = bestEntityAnchor(id) || '__none__'
@@ -387,26 +387,26 @@ function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
     }
   }
 
-  placeStack(primaryEntityIds, 0, 76)
-  placeClusteredLane(secondaryEntityIds, -250, -1, { rowStep: 74 })
-  placeClusteredLane(leftFarIds, -540, -1, {
-    rowStep: 74,
+  placeStack(primaryEntityIds, 0, 92)
+  placeClusteredLane(secondaryEntityIds, -340, -1, { rowStep: 86 })
+  placeClusteredLane(leftFarIds, -760, -1, {
+    rowStep: 86,
     yOffset: -20,
-    columnStep: 132,
+    columnStep: 260,
     typeOffsets: { explorer: 0, event_set: 0, aliyun_prometheus: 1, trace_set: 1, profile_set: 2 },
   })
-  placeClusteredLane(rightIds, 260, 1, {
-    rowStep: 74,
-    columnStep: 132,
+  placeClusteredLane(rightIds, 340, 1, {
+    rowStep: 86,
+    columnStep: 280,
     typeOffsets: { metric_set: 0, runbook_set: 0, log_set: 1 },
   })
-  placeClusteredLane(storageIds, 640, 1, {
-    rowStep: 74,
+  placeClusteredLane(storageIds, 940, 1, {
+    rowStep: 86,
     yOffset: 8,
-    columnStep: 132,
+    columnStep: 280,
     typeOffsets: { sls_logstore: 0, sls_metricstore: 1 },
   })
-  placeClusteredLane(fallbackIds, -540, -1, { rowStep: 74, yOffset: 22, columnStep: 132 })
+  placeClusteredLane(fallbackIds, -760, -1, { rowStep: 86, yOffset: 22, columnStep: 260 })
 
   const minY = Math.min(...[...positions.values()].map((position) => position.y))
   const offsetY = Number.isFinite(minY) ? -minY : 0
