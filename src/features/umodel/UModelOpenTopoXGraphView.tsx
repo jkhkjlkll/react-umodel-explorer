@@ -131,7 +131,8 @@ function toOpenTopoXData(graph: GraphModel): TopologyGraphData & Record<string, 
     }),
     edges: visibleEdges.map((edge) => {
       const data = edge.data as UModelEdgeData | undefined
-      const color = colorForKind(data?.kind || 'data_link').color
+      const sourceColor = data?.sourceColor || colorForKind(data?.sourceKind || 'data_link').color
+      const targetColor = data?.targetColor || colorForKind(data?.targetKind || data?.kind || 'data_link').color
       return {
         id: data?.element ? elementKey(data.element) : edge.id,
         source: edge.source,
@@ -146,7 +147,10 @@ function toOpenTopoXData(graph: GraphModel): TopologyGraphData & Record<string, 
           status: 'ok',
           targetDot: true,
           targetDotRadius: 3.4,
-          color,
+          color: targetColor,
+          sourceColor,
+          targetColor,
+          gradient: true,
           ...edgeOffsets.get(edge.id),
         },
       }

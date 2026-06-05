@@ -348,10 +348,11 @@ function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
     })
   }
 
-  function placeClusteredLane(ids: string[], x: number, direction: 1 | -1, options?: { rowStep?: number; yOffset?: number; typeOffsets?: Record<string, number> }) {
+  function placeClusteredLane(ids: string[], x: number, direction: 1 | -1, options?: { rowStep?: number; yOffset?: number; typeOffsets?: Record<string, number>; columnStep?: number }) {
     const rowStep = options?.rowStep || 54
     const yOffset = options?.yOffset || 0
     const typeOffsets = options?.typeOffsets || {}
+    const columnStep = options?.columnStep || 158
     const anchorGroups = new Map<string, string[]>()
     for (const id of ids) {
       const anchor = bestEntityAnchor(id) || '__none__'
@@ -378,7 +379,7 @@ function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
         occupied.push(y)
         occupiedByColumn.set(columnKey, occupied)
         positions.set(id, {
-          x: x + direction * column * 158,
+          x: x + direction * column * columnStep,
           y,
         })
       })
@@ -387,21 +388,24 @@ function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
 
   placeStack(primaryEntityIds, 0, 58)
   placeClusteredLane(secondaryEntityIds, -250, -1, { rowStep: 56 })
-  placeClusteredLane(leftFarIds, -500, -1, {
+  placeClusteredLane(leftFarIds, -540, -1, {
     rowStep: 56,
     yOffset: -20,
-    typeOffsets: { explorer: 0, aliyun_prometheus: 1, event_set: 0, profile_set: 1, trace_set: 1 },
+    columnStep: 132,
+    typeOffsets: { explorer: 0, event_set: 0, aliyun_prometheus: 1, trace_set: 1, profile_set: 2 },
   })
   placeClusteredLane(rightIds, 260, 1, {
     rowStep: 56,
-    typeOffsets: { metric_set: 0, log_set: 1, runbook_set: 0 },
+    columnStep: 132,
+    typeOffsets: { metric_set: 0, runbook_set: 0, log_set: 1 },
   })
-  placeClusteredLane(storageIds, 668, 1, {
+  placeClusteredLane(storageIds, 640, 1, {
     rowStep: 56,
     yOffset: 8,
+    columnStep: 132,
     typeOffsets: { sls_logstore: 0, sls_metricstore: 1 },
   })
-  placeClusteredLane(fallbackIds, -500, -1, { rowStep: 56, yOffset: 22 })
+  placeClusteredLane(fallbackIds, -540, -1, { rowStep: 56, yOffset: 22, columnStep: 132 })
 
   const minY = Math.min(...[...positions.values()].map((position) => position.y))
   const offsetY = Number.isFinite(minY) ? -minY : 0

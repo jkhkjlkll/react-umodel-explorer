@@ -2309,6 +2309,8 @@ export class NewTopoGraph {
     const visible = document.createElementNS(SVG_NS, "path");
     visible.setAttribute("d", path.d);
     visible.classList.add("topo-edge-path", `status-${edge.data?.status || "ok"}`);
+    const gradientId = this.ensureEdgeGradient(edge, path);
+    if (gradientId) visible.setAttribute("stroke", `url(#${gradientId})`);
     if (edgeShape?.pathClassName) visible.classList.add(...toClassList(edgeShape.pathClassName));
     const markerEnd = edge.markerEnd === false || edge.data?.markerEnd === false || edgeShape?.markerEnd === false
       ? ""
@@ -2332,6 +2334,7 @@ export class NewTopoGraph {
       dot.setAttribute("cx", String(path.target?.x ?? 0));
       dot.setAttribute("cy", String(path.target?.y ?? 0));
       dot.setAttribute("r", String(edge.data?.targetDotRadius || 3.4));
+      if (edge.data?.targetColor) dot.setAttribute("fill", edge.data.targetColor);
       group.appendChild(dot);
     }
     const edgeLabel = typeof edgeShape?.labelFormatter === "function"
@@ -2349,6 +2352,37 @@ export class NewTopoGraph {
       group.appendChild(this.createAgentEdgeAction(edge, path));
     }
     return group;
+  }
+
+  ensureEdgeGradient(edge, path) {
+    if (!edge.data?.gradient || !edge.data?.sourceColor || !edge.data?.targetColor || !this.edgeDefs || !path.from || !path.to) return "";
+    const id = `edge-gradient-${this.instanceId}-${cssSafeId(edge.id)}`;
+    let gradient = this.edgeDefs.querySelector(`[data-edge-gradient-id="${id}"]`);
+    let start;
+    let end;
+    if (!gradient) {
+      gradient = document.createElementNS(SVG_NS, "linearGradient");
+      gradient.setAttribute("id", id);
+      gradient.setAttribute("data-edge-gradient-id", id);
+      gradient.setAttribute("gradientUnits", "userSpaceOnUse");
+      start = document.createElementNS(SVG_NS, "stop");
+      start.setAttribute("offset", "0%");
+      end = document.createElementNS(SVG_NS, "stop");
+      end.setAttribute("offset", "100%");
+      gradient.append(start, end);
+      this.edgeDefs.appendChild(gradient);
+    } else {
+      const stops = gradient.querySelectorAll("stop");
+      start = stops[0];
+      end = stops[1];
+    }
+    gradient.setAttribute("x1", String(path.from.x));
+    gradient.setAttribute("y1", String(path.from.y));
+    gradient.setAttribute("x2", String(path.target?.x ?? path.to.x));
+    gradient.setAttribute("y2", String(path.target?.y ?? path.to.y));
+    start?.setAttribute("stop-color", edge.data.sourceColor);
+    end?.setAttribute("stop-color", edge.data.targetColor);
+    return id;
   }
 
   createAgentEdgeAction(edge, path) {
@@ -2608,12 +2642,17 @@ export class NewTopoGraph {
     if (visible) {
       visible.setAttribute("d", path.d);
       setStatusClass(visible, edge.data?.status || "ok");
+      const gradientId = this.ensureEdgeGradient(edge, path);
+      if (gradientId) visible.setAttribute("stroke", `url(#${gradientId})`);
+      else visible.removeAttribute("stroke");
     }
     element.querySelector(".topo-edge-hit")?.setAttribute("d", path.d);
     const dot = element.querySelector(".topo-edge-target-dot");
     if (dot) {
       dot.setAttribute("cx", String(path.target?.x ?? 0));
       dot.setAttribute("cy", String(path.target?.y ?? 0));
+      if (edge.data?.targetColor) dot.setAttribute("fill", edge.data.targetColor);
+      else dot.removeAttribute("fill");
     }
     const label = element.querySelector(".topo-edge-label");
     if (label) {
@@ -3206,8 +3245,10 @@ function buildEdgePath(source, target, rankDir, edge = {}) {
     : "";
   return {
     d: `M ${geometry.from.x} ${geometry.from.y} C ${geometry.c1.x} ${geometry.c1.y}, ${geometry.c2.x} ${geometry.c2.y}, ${geometry.to.x} ${geometry.to.y}${second}`,
+    from: geometry.from,
     label: geometry.label,
     target: geometry.segment2?.to || geometry.to,
+    to: geometry.segment2?.to || geometry.to,
   };
 }
 
@@ -3809,6 +3850,13 @@ function escapeHtml(value) {
 function cssEscape(value) {
   if (window.CSS?.escape) return CSS.escape(value);
   return String(value).replace(/"/g, '\\"');
+}
+
+function cssSafeId(value) {
+  return String(value ?? "")
+    .replace(/[^a-zA-Z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 function clamp(value, min, max) {
