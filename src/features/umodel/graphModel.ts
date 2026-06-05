@@ -1,4 +1,3 @@
-import type { Graphviz } from '@hpcc-js/wasm-graphviz'
 import { Position, type Edge, type Node } from '@xyflow/react'
 import type { UModelElement } from '../../api/types'
 import {
@@ -10,7 +9,6 @@ import {
   entityLinkTypeForEdge,
   isEntitySetLinkElement,
   isLinkElement,
-  nodeWidth,
   tagCountForElement,
   tagsForElement,
   titleForElement,
@@ -58,8 +56,6 @@ export interface GraphModel {
   nodes: Array<Node<UModelNodeData>>
   edges: Array<Edge<UModelEdgeData>>
 }
-
-let graphvizPromise: Promise<Graphviz> | null = null
 
 export function buildGraph(
   elements: UModelElement[],
@@ -121,8 +117,8 @@ export function buildGraph(
     const key = elementKey(element)
     const color = colorForKind(element.kind)
     const entityLinkNode = entitySetLinkDisplay === 'relative_link' && isEntitySetLinkElement(element)
-    const width = entityLinkNode ? Math.min(160, Math.max(68, entityLinkTypeForEdge(element).length * 7 + 34)) : 168
-    const height = entityLinkNode ? 28 : 48
+    const width = entityLinkNode ? Math.min(160, Math.max(68, entityLinkTypeForEdge(element).length * 7 + 34)) : 164
+    const height = entityLinkNode ? 28 : 52
     return {
       id: key,
       type: 'umodel',
@@ -195,7 +191,7 @@ function fallbackLayoutNodes(elements: UModelElement[]) {
       const chunk = sorted.slice(start, start + maxPerLane)
       chunk.forEach((element, index) => {
         const total = chunk.length
-        result.push({ element, position: { x: lane * 330, y: (index - (total - 1) / 2) * 96 } })
+        result.push({ element, position: { x: lane * 330, y: (index - (total - 1) / 2) * 68 } })
       })
       lane += 1
     }
@@ -210,87 +206,240 @@ export async function layoutGraphWithGraphviz(model: GraphModel): Promise<GraphM
 function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
   if (model.nodes.length === 0) return model
 
-  const outgoing = new Map<string, string[]>()
+  const outgoing = new Map<string, Array<{ id: string; target: string }>>()
   const incoming = new Map<string, number>()
+  const degree = new Map<string, number>()
   for (const node of model.nodes) {
     outgoing.set(node.id, [])
     incoming.set(node.id, 0)
+    degree.set(node.id, 0)
   }
   for (const edge of model.edges) {
     if (!outgoing.has(edge.source) || !incoming.has(edge.target)) continue
-    outgoing.get(edge.source)!.push(edge.target)
+    outgoing.get(edge.source)!.push({ id: edge.id, target: edge.target })
     incoming.set(edge.target, (incoming.get(edge.target) || 0) + 1)
+    degree.set(edge.source, (degree.get(edge.source) || 0) + 1)
+    degree.set(edge.target, (degree.get(edge.target) || 0) + 1)
   }
 
   const nodeById = new Map(model.nodes.map((node) => [node.id, node]))
-  const rootCandidates = model.nodes
-    .filter((node) => (incoming.get(node.id) || 0) === 0)
-    .sort(compareStructuredNodes)
-  const roots = rootCandidates.length > 0 ? rootCandidates : [...model.nodes].sort(compareStructuredNodes).slice(0, 1)
-  const depthById = new Map<string, number>()
-  const queue = roots.map((node) => ({ id: node.id, depth: 0 }))
+  const visited = new Set<string>()
+  const childrenById = new Map<string, string[]>()
+  const treeEdgeIds = new Set<string>()
+  const roots: string[] = []
 
-  while (queue.length > 0) {
-    const item = queue.shift()!
-    const currentDepth = depthById.get(item.id)
-    if (currentDepth !== undefined && currentDepth <= item.depth) continue
-    depthById.set(item.id, item.depth)
-    const nextNodes: GraphModel['nodes'] = []
-    for (const id of outgoing.get(item.id) || []) {
-      const node = nodeById.get(id)
-      if (node) nextNodes.push(node)
+  for (const node of model.nodes) childrenById.set(node.id, [])
+
+  function compareByConnectivity(leftId: string, rightId: string) {
+    const degreeDelta = (degree.get(rightId) || 0) - (degree.get(leftId) || 0)
+    if (degreeDelta !== 0) return degreeDelta
+    const left = nodeById.get(leftId)
+    const right = nodeById.get(rightId)
+    if (left && right) return compareStructuredNodes(left, right)
+    return leftId.localeCompare(rightId)
+  }
+
+  function growTree(rootId: string) {
+    if (visited.has(rootId)) return
+    roots.push(rootId)
+    visited.add(rootId)
+    const queue = [rootId]
+    while (queue.length > 0) {
+      const currentId = queue.shift()!
+      const nextEdges = [...(outgoing.get(currentId) || [])]
+        .filter((edge) => !visited.has(edge.target))
+        .sort((left, right) => compareByConnectivity(left.target, right.target))
+      for (const edge of nextEdges) {
+        visited.add(edge.target)
+        childrenById.get(currentId)!.push(edge.target)
+        treeEdgeIds.add(edge.id)
+        queue.push(edge.target)
+      }
     }
-    const nextIds = nextNodes.sort(compareStructuredNodes).map((node) => node.id)
-    for (const id of nextIds) queue.push({ id, depth: item.depth + 1 })
   }
 
-  for (const node of model.nodes) {
-    if (!depthById.has(node.id)) depthById.set(node.id, depthForKind(node.data.kind))
-  }
+  const preferredRoots = model.nodes
+    .filter((node) => (outgoing.get(node.id)?.length || 0) > 0 && (incoming.get(node.id) || 0) === 0)
+    .map((node) => node.id)
+    .sort(compareByConnectivity)
+  const fallbackRoots = model.nodes
+    .map((node) => node.id)
+    .sort(compareByConnectivity)
 
-  const columns = new Map<number, typeof model.nodes>()
-  for (const node of model.nodes) {
-    const depth = Math.min(6, depthById.get(node.id) || 0)
-    if (!columns.has(depth)) columns.set(depth, [])
-    columns.get(depth)!.push(node)
-  }
+  for (const id of [...preferredRoots, ...fallbackRoots]) growTree(id)
 
   const positions = new Map<string, { x: number; y: number }>()
-  const columnGap = 330
-  const rowGap = 74
-  const domainGap = 58
-  const sortedColumns = [...columns.entries()].sort((left, right) => left[0] - right[0])
+  const entityIds = model.nodes
+    .filter((node) => node.data.kind === 'entity_set')
+    .map((node) => node.id)
+    .sort(compareByConnectivity)
+  const primaryEntityIds = entityIds.slice(0, Math.min(18, Math.max(8, Math.ceil(entityIds.length * 0.36))))
+  const primaryEntityIdSet = new Set(primaryEntityIds)
+  const secondaryEntityIds = entityIds.filter((id) => !primaryEntityIdSet.has(id))
+  const leftFarKinds = new Set(['explorer', 'aliyun_prometheus', 'profile_set', 'trace_set', 'event_set'])
+  const rightKinds = new Set(['metric_set', 'log_set', 'runbook_set'])
+  const storageKinds = new Set(['sls_logstore', 'sls_metricstore'])
+  const leftFarIds: string[] = []
+  const rightIds: string[] = []
+  const storageIds: string[] = []
+  const fallbackIds: string[] = []
 
-  for (const [depth, nodes] of sortedColumns) {
-    let cursorY = 0
-    const byDomain = new Map<string, typeof model.nodes>()
-    for (const node of [...nodes].sort(compareStructuredNodes)) {
-      const domain = node.data.domain || 'unknown'
-      if (!byDomain.has(domain)) byDomain.set(domain, [])
-      byDomain.get(domain)!.push(node)
+  for (const node of model.nodes) {
+    if (node.data.kind === 'entity_set') continue
+    if (leftFarKinds.has(node.data.kind)) leftFarIds.push(node.id)
+    else if (rightKinds.has(node.data.kind)) rightIds.push(node.id)
+    else if (storageKinds.has(node.data.kind)) storageIds.push(node.id)
+    else fallbackIds.push(node.id)
+  }
+
+  function connectedIds(id: string) {
+    const ids: string[] = []
+    for (const edge of model.edges) {
+      if (edge.source === id) ids.push(edge.target)
+      else if (edge.target === id) ids.push(edge.source)
     }
-    for (const [, domainNodes] of [...byDomain.entries()].sort((left, right) => left[0].localeCompare(right[0]))) {
-      const sorted = domainNodes.sort(compareStructuredNodes)
-      sorted.forEach((node, index) => {
-        positions.set(node.id, {
-          x: depth * columnGap,
-          y: cursorY + index * rowGap,
+    return ids
+  }
+
+  function bestEntityAnchor(id: string) {
+    const candidates = connectedIds(id)
+      .filter((candidateId) => nodeById.get(candidateId)?.data.kind === 'entity_set')
+      .sort((leftId, rightId) => {
+        const primaryDelta = Number(primaryEntityIdSet.has(rightId)) - Number(primaryEntityIdSet.has(leftId))
+        if (primaryDelta !== 0) return primaryDelta
+        return compareByConnectivity(leftId, rightId)
+      })
+    return candidates[0] || primaryEntityIds[0] || entityIds[0]
+  }
+
+  function positionedAnchorY(id: string) {
+    const direct = positions.get(id)
+    if (direct) return direct.y
+    const positionedNeighbor = connectedIds(id)
+      .map((candidateId) => positions.get(candidateId))
+      .filter(Boolean)
+      .sort((left, right) => Math.abs(left!.y) - Math.abs(right!.y))[0]
+    if (positionedNeighbor) return positionedNeighbor.y
+    const entityAnchor = bestEntityAnchor(id)
+    return entityAnchor ? positions.get(entityAnchor)?.y || 0 : 0
+  }
+
+  function placeStack(ids: string[], x: number, rowStep: number, yOffset = 0) {
+    const sortedIds = [...ids].sort(compareByConnectivity)
+    sortedIds.forEach((id, index) => {
+      positions.set(id, { x, y: (index - (sortedIds.length - 1) / 2) * rowStep + yOffset })
+    })
+  }
+
+  function placeClusteredLane(ids: string[], x: number, direction: 1 | -1, options?: { rowStep?: number; yOffset?: number; typeOffsets?: Record<string, number> }) {
+    const rowStep = options?.rowStep || 54
+    const yOffset = options?.yOffset || 0
+    const typeOffsets = options?.typeOffsets || {}
+    const anchorGroups = new Map<string, string[]>()
+    for (const id of ids) {
+      const anchor = bestEntityAnchor(id) || '__none__'
+      if (!anchorGroups.has(anchor)) anchorGroups.set(anchor, [])
+      anchorGroups.get(anchor)!.push(id)
+    }
+
+    const occupiedByColumn = new Map<number, number[]>()
+    const anchors = [...anchorGroups.entries()].sort((left, right) => positionedAnchorY(left[0]) - positionedAnchorY(right[0]))
+    for (const [anchor, groupIds] of anchors) {
+      const sortedGroup = groupIds.sort((leftId, rightId) => {
+        const kindDelta = laneKindOrder(nodeById.get(leftId)?.data.kind || '') - laneKindOrder(nodeById.get(rightId)?.data.kind || '')
+        if (kindDelta !== 0) return kindDelta
+        return compareByConnectivity(leftId, rightId)
+      })
+      sortedGroup.forEach((id, index) => {
+        const kind = nodeById.get(id)?.data.kind || ''
+        const column = typeOffsets[kind] || 0
+        const columnKey = direction * column
+        const occupied = occupiedByColumn.get(columnKey) || []
+        const desiredY = positionedAnchorY(anchor) + (index - (sortedGroup.length - 1) / 2) * rowStep + yOffset
+        let y = desiredY
+        while (occupied.some((value) => Math.abs(value - y) < rowStep * 0.82)) y += rowStep * 0.68
+        occupied.push(y)
+        occupiedByColumn.set(columnKey, occupied)
+        positions.set(id, {
+          x: x + direction * column * 158,
+          y,
         })
       })
-      cursorY += sorted.length * rowGap + domainGap
     }
   }
 
+  placeStack(primaryEntityIds, 0, 70)
+  placeClusteredLane(secondaryEntityIds, -238, -1, { rowStep: 58 })
+  placeClusteredLane(leftFarIds, -454, -1, {
+    rowStep: 52,
+    yOffset: -20,
+    typeOffsets: { explorer: 0, aliyun_prometheus: 1, event_set: 0, profile_set: 1, trace_set: 1 },
+  })
+  placeClusteredLane(rightIds, 286, 1, {
+    rowStep: 48,
+    typeOffsets: { metric_set: 0, log_set: 1, runbook_set: 0 },
+  })
+  placeClusteredLane(storageIds, 650, 1, {
+    rowStep: 48,
+    yOffset: 8,
+    typeOffsets: { sls_logstore: 0, sls_metricstore: 1 },
+  })
+  placeClusteredLane(fallbackIds, -454, -1, { rowStep: 52, yOffset: 22 })
+
   const minY = Math.min(...[...positions.values()].map((position) => position.y))
-  const maxY = Math.max(...[...positions.values()].map((position) => position.y))
-  const offsetY = Number.isFinite(minY) && Number.isFinite(maxY) ? -((minY + maxY) / 2) : 0
+  const offsetY = Number.isFinite(minY) ? -minY : 0
+  for (const [id, position] of positions) {
+    positions.set(id, { x: position.x, y: position.y + offsetY })
+  }
+
+  if (treeEdgeIds.size === 0) {
+    for (const edge of model.edges) {
+      const source = positions.get(edge.source)
+      const target = positions.get(edge.target)
+      if (!source || !target || source.x >= target.x) continue
+      treeEdgeIds.add(edge.id)
+    }
+  }
+
+  const visibleEdgeIds = new Set(treeEdgeIds)
+  const extraEdgeLimit = 72
+  const extraCandidates = model.edges
+    .filter((edge) => !visibleEdgeIds.has(edge.id))
+    .filter((edge) => {
+      const source = positions.get(edge.source)
+      const target = positions.get(edge.target)
+      if (!source || !target || source.x >= target.x) return false
+      const laneDistance = Math.abs(target.x - source.x)
+      const verticalDistance = Math.abs(target.y - source.y)
+      return laneDistance <= 660 && verticalDistance <= 720
+    })
+    .sort((left, right) => {
+      const leftSource = positions.get(left.source)!
+      const leftTarget = positions.get(left.target)!
+      const rightSource = positions.get(right.source)!
+      const rightTarget = positions.get(right.target)!
+      const leftScore = Math.abs(leftTarget.x - leftSource.x) + Math.abs(leftTarget.y - leftSource.y) * 0.4
+      const rightScore = Math.abs(rightTarget.x - rightSource.x) + Math.abs(rightTarget.y - rightSource.y) * 0.4
+      return leftScore - rightScore
+    })
+    .slice(0, extraEdgeLimit)
+
+  for (const edge of extraCandidates) visibleEdgeIds.add(edge.id)
 
   return {
     ...model,
     nodes: model.nodes.map((node) => {
       const position = positions.get(node.id)
       if (!position) return node
-      return { ...node, position: { x: position.x, y: position.y + offsetY } }
+      return { ...node, position }
+    }),
+    edges: model.edges.map((edge) => {
+      const visible = visibleEdgeIds.has(edge.id)
+      return {
+        ...edge,
+        hidden: !visible,
+        data: edge.data ? { ...edge.data, isTreeEdge: treeEdgeIds.has(edge.id) } : edge.data,
+      }
     }),
   }
 }
@@ -303,42 +452,27 @@ function compareStructuredNodes(left: GraphModel['nodes'][number], right: GraphM
   return left.data.title.localeCompare(right.data.title)
 }
 
+function laneKindOrder(kind: string) {
+  const order: Record<string, number> = {
+    entity_set: 0,
+    aliyun_prometheus: 1,
+    explorer: 2,
+    event_set: 3,
+    profile_set: 4,
+    trace_set: 5,
+    metric_set: 6,
+    log_set: 7,
+    runbook_set: 8,
+    sls_logstore: 9,
+    sls_metricstore: 10,
+  }
+  return order[kind] ?? 99
+}
+
 function depthForKind(kind: string) {
   if (kind === 'entity_set') return 1
   if (kind === 'entity_set_link') return 2
   if (kind === 'metric_set' || kind === 'log_set') return 3
   if (kind === 'trace_set' || kind === 'event_set' || kind === 'profile_set') return 4
   return 5
-}
-
-function getGraphviz(): Promise<Graphviz> {
-  graphvizPromise ||= import('@hpcc-js/wasm-graphviz').then(({ Graphviz }) => Graphviz.load())
-  return graphvizPromise
-}
-
-function graphToDot(model: GraphModel): string {
-  const nodes = model.nodes
-    .map((node) => {
-      const width = node.data.kind === 'entity_set_link' ? 2 : 3
-      const height = node.data.kind === 'entity_set_link' ? 0.5 : 1
-      return `"${dotEscape(node.id)}" [label="${dotEscape(node.data.name)}", fixedsize=true, width=${width}, height=${height}];`
-    })
-    .join('\n')
-  const edges = model.edges
-    .map((edge) => `"${dotEscape(edge.source)}" -> "${dotEscape(edge.target)}" [minlen="1"];`)
-    .join('\n')
-  return `
-digraph G {
-  rankdir="LR";
-  splines=true;
-  graph[sep="1.5", mindist="2.5", oneblock=true, beautify=true, margin=0.5, nodesep=0.5, ranksep=2.5, rankdir="LR"];
-  node [shape=box, style=filled, color=blue, penwidth=5, fontsize=12];
-  edge [arrowhead=vee, color=black, penwidth=5];
-  ${nodes}
-  ${edges}
-}`
-}
-
-function dotEscape(value: string) {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }

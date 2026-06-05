@@ -136,7 +136,7 @@ export const zhCNUModelExplorer = {
   'umodelExplorer.sidebar.links': '链接',
   'umodelExplorer.sidebar.nodes': '节点',
   'umodelExplorer.status.items': '{count} 项',
-  'umodelExplorer.status.limit': '当前结果数据过大不宜全部展示，仅展示 {limit} 个节点',
+  'umodelExplorer.status.limit': '当前结果数据过大不宜全部展示，仅展示{limit}个节点。若要强制展示，请前往左上方设置页面。',
   'umodelExplorer.status.links': '链接',
   'umodelExplorer.status.nodes': '节点',
   'umodelExplorer.status.page': '第 {page}/{total} 页',

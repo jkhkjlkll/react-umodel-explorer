@@ -24,8 +24,6 @@ import {
   colorForKind,
   entityLinkTypeForEdge,
   maxVisibleTags,
-  nodeMinHeight,
-  nodeWidth,
   type BackgroundStyle,
   type ZoomLevel,
   elementKey,
@@ -79,10 +77,16 @@ export function GraphView({
     if (graph.nodes.length === 0 || layouting) return
     const focusNodes = focusIds.length > 0 ? graph.nodes.filter((node) => focusIds.includes(node.id)) : []
     const timer = window.setTimeout(() => {
-      if (focusNodes.length > 0) fitView({ duration: 800, padding: 0.2, nodes: focusNodes })
-      else fitView({ duration: 800, padding: 0.2 })
-    }, 120)
-    return () => window.clearTimeout(timer)
+      if (focusNodes.length > 0) fitView({ duration: 800, padding: 0.18, nodes: focusNodes, maxZoom: 1.1 })
+      else fitView({ duration: 650, padding: 0.18, maxZoom: 0.82 })
+    }, 220)
+    const retryTimer = window.setTimeout(() => {
+      if (focusNodes.length === 0) fitView({ duration: 350, padding: 0.2, maxZoom: 0.72 })
+    }, 720)
+    return () => {
+      window.clearTimeout(timer)
+      window.clearTimeout(retryTimer)
+    }
   }, [fitView, focusKey, nodeIdsKey, layouting])
 
   return (
@@ -92,9 +96,10 @@ export function GraphView({
         edges={displayEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        defaultViewport={{ x: 44, y: 220, zoom: 0.85 }}
-        fitView={false}
-        minZoom={0.04}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.42 }}
+        fitView
+        fitViewOptions={{ padding: 0.2, maxZoom: 0.72 }}
+        minZoom={0.18}
         maxZoom={3}
         onlyRenderVisibleElements={false}
         proOptions={{ hideAttribution: true }}
@@ -103,7 +108,7 @@ export function GraphView({
         onNodesChange={onNodesChange}
         onPaneClick={() => onSelect(null)}
         onMove={(_, viewport) => {
-          const level = forceFullMode ? 'full' : viewport.zoom < 0.35 ? 'mini' : viewport.zoom < 0.55 ? 'compact' : 'full'
+          const level = forceFullMode ? 'full' : viewport.zoom < 0.3 ? 'mini' : viewport.zoom < 0.5 ? 'compact' : 'full'
           if (level !== zoomLevel) onZoomLevelChange(level)
         }}
         ariaLabelConfig={ariaLabelConfig}
@@ -112,7 +117,7 @@ export function GraphView({
         elementsSelectable
         style={{ background: 'var(--ume-color-bg)' }}
       >
-        {backgroundStyle === 'dots' && <Background variant={BackgroundVariant.Dots} gap={28} size={2} color="#b0b0b0" />}
+        {backgroundStyle === 'dots' && <Background variant={BackgroundVariant.Dots} gap={28} size={1.45} color="#d6d1df" />}
         {backgroundStyle === 'lines' && <Background variant={BackgroundVariant.Lines} gap={120} size={1.5} color="#c8c8c8" />}
         {backgroundStyle === 'cross' && <Background variant={BackgroundVariant.Cross} gap={28} size={8} color="#b0b0b0" />}
         <Controls showInteractive={false} aria-label={t('umodelExplorer.flow.controlPanel')} />
@@ -218,7 +223,7 @@ const UModelNodeCard = memo(({ data }: NodeProps<Node<UModelNodeData>>) => {
 
   return (
     <div
-      className={`v2-node-card ${data.draftStatus ? `draft-${data.draftStatus}` : ''}`}
+      className={`v2-node-card ume-map-node ${data.draftStatus ? `draft-${data.draftStatus}` : ''}`}
       style={{ '--node-color': color.color } as CSSProperties}
       onClick={(event) => {
         event.stopPropagation()
@@ -231,13 +236,13 @@ const UModelNodeCard = memo(({ data }: NodeProps<Node<UModelNodeData>>) => {
         </button>
       </div>
 
-      <div className="v2-zoom-mini" style={{ width: nodeWidth, minHeight: nodeMinHeight }}>
+      <div className="v2-zoom-mini">
         <div className="v2-node-card-body ume-node-mini" style={{ borderColor: color.color }}>
           <span style={{ color: color.color }}>{data.title}</span>
         </div>
       </div>
 
-      <div className="v2-zoom-compact" style={{ width: nodeWidth, minHeight: nodeMinHeight }}>
+      <div className="v2-zoom-compact">
         <div className="v2-node-card-body ume-node-compact">
           <div className="ume-node-stripe" style={{ background: color.color }} />
           <div className="ume-node-compact-main">
@@ -336,15 +341,16 @@ function UModelEdge({
   data,
 }: EdgeProps<Edge<UModelEdgeData>>) {
   const { t } = useI18n()
-  const midX = sourceX + Math.max(60, (targetX - sourceX) * 0.52)
+  const midX = (sourceX + targetX) / 2
+  const labelX = (sourceX + targetX) / 2
+  const labelY = (sourceY + targetY) / 2
   const edgePath = source === target
     ? `M ${sourceX - 5} ${sourceY} C ${sourceX + 90} ${sourceY - 120}, ${targetX + 90} ${targetY + 120}, ${targetX + 2} ${targetY}`
     : `M ${sourceX} ${sourceY} C ${midX} ${sourceY}, ${midX} ${targetY}, ${targetX} ${targetY}`
-  const labelX = midX
-  const labelY = (sourceY + targetY) / 2
   const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '_')
-  const sourceColor = data?.sourceColor || colorForKind(data?.sourceKind || 'entity_set').color
+  const sourceColor = data?.sourceColor || colorForKind(data?.sourceKind || data?.kind || 'data_link').color
   const targetColor = data?.targetColor || colorForKind(data?.targetKind || data?.kind || 'data_link').color
+  const linkColor = colorForKind(data?.kind || 'data_link').color
   const isDraft = Boolean(data?.draftStatus)
   const label = data?.kind === 'entity_set_link'
     ? entityLinkTypeForEdge(data.element)
@@ -365,22 +371,35 @@ function UModelEdge({
           y2={targetY}
         >
           <stop offset="0%" stopColor={sourceColor} stopOpacity={0.34} />
-          <stop offset="100%" stopColor={targetColor} stopOpacity={0.72} />
+          <stop offset="48%" stopColor={linkColor} stopOpacity={0.9} />
+          <stop offset="100%" stopColor={targetColor} stopOpacity={0.58} />
         </linearGradient>
       </defs>
       <path className="v2-edge-hitarea" d={edgePath} fill="none" stroke="transparent" strokeWidth={16} />
-      {selected && <path d={edgePath} fill="none" stroke={targetColor} strokeWidth={7} opacity={0.14} pointerEvents="none" />}
       <path
-        id={id}
+        className="react-flow__edge-path v2-edge-underlay"
         d={edgePath}
         fill="none"
         stroke={`url(#v2-edge-grad-${safeId})`}
-        strokeWidth={selected ? 2.1 : 1.35}
-        strokeDasharray={isDraft ? '6 4' : undefined}
-        opacity={selected ? 0.95 : 0.72}
+        style={{ stroke: `url(#v2-edge-grad-${safeId})` }}
+        strokeWidth={selected ? 7 : 4.5}
+        opacity={selected ? 0.24 : 0.15}
         pointerEvents="none"
       />
-      <circle cx={targetX} cy={targetY} r={4.2} fill={targetColor} opacity={selected ? 0.95 : 0.78} />
+      {selected && <path className="react-flow__edge-path v2-edge-glow" d={edgePath} fill="none" stroke={linkColor} strokeWidth={8} opacity={0.16} pointerEvents="none" />}
+      <path
+        className="react-flow__edge-path v2-edge-path"
+        id={id}
+        d={edgePath}
+        fill="none"
+        stroke={linkColor}
+        style={{ stroke: linkColor }}
+        strokeWidth={selected ? 2.8 : 1.8}
+        strokeDasharray={isDraft ? '6 4' : undefined}
+        opacity={selected ? 0.98 : 0.86}
+        pointerEvents="none"
+      />
+      <circle cx={targetX} cy={targetY} r={3.4} fill={linkColor} opacity={selected ? 0.95 : 0.82} />
       {data && label && (
         <EdgeLabelRenderer>
           <div className={`ume-edge-label ${data.draftStatus ? `draft-${data.draftStatus}` : ''}`} style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>

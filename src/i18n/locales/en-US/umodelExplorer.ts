@@ -134,7 +134,7 @@ export const enUSUModelExplorer = {
   'umodelExplorer.sidebar.links': 'Links',
   'umodelExplorer.sidebar.nodes': 'Nodes',
   'umodelExplorer.status.items': '{count} items',
-  'umodelExplorer.status.limit': 'The current result is too large to display in full. Showing {limit} nodes only.',
+  'umodelExplorer.status.limit': 'The current result is too large to display in full. Showing {limit} nodes only. To force full display, use the upper-left settings panel.',
   'umodelExplorer.status.links': 'links',
   'umodelExplorer.status.nodes': 'nodes',
   'umodelExplorer.status.page': 'page {page}/{total}',

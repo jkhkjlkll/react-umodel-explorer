@@ -53,6 +53,7 @@ import {
   descriptionForElement,
   detailShort,
   diffElements,
+  elementActsAsGraphNode,
   elementKey,
   endpointId,
   filterElements,
@@ -64,6 +65,7 @@ import {
   labelForKind,
   linkTouchesElement,
   nodeKindOptions,
+  nodeKindOrder,
   optionalString,
   paginationItems,
   summarize,
@@ -81,7 +83,8 @@ import {
 import './umodel.css'
 
 type SidebarTab = 'summary' | 'settings'
-const UMODEL_DISPLAY_LIMIT = 700
+const UMODEL_DISPLAY_LIMIT = 3000
+const GRAPH_NODE_DISPLAY_LIMIT = 100
 
 export function UModelPage({
   api,
@@ -211,6 +214,12 @@ export function UModelPage({
     [domainFilters, draftElements, entitySetLinkDisplay, filterStacking, focusIds, fullTextFilters, kindFilters, mode],
   )
   const filteredStats = useMemo(() => summarize(filtered), [filtered])
+  const graphDisplay = useMemo(
+    () => selectGraphDisplayElements(filtered, entitySetLinkDisplay, GRAPH_NODE_DISPLAY_LIMIT, forceFullMode),
+    [entitySetLinkDisplay, filtered, forceFullMode],
+  )
+  const graphDisplayStats = useMemo(() => summarize(graphDisplay.elements), [graphDisplay.elements])
+  const graphLimitReached = graphDisplay.truncated
 
   const focusElement = useCallback((element: UModelElement) => {
     setMode('graph')
@@ -357,7 +366,7 @@ export function UModelPage({
 
   const graphSource = useMemo(
     () =>
-      buildGraph(filtered, {
+      buildGraph(graphDisplay.elements, {
         onSelect: setSelected,
         onFocus: focusElement,
         onConnect: openConnectFromNode,
@@ -371,8 +380,8 @@ export function UModelPage({
       deleteDraftElement,
       draftStatusById,
       entitySetLinkDisplay,
-      filtered,
       focusElement,
+      graphDisplay.elements,
       openConnectFromNode,
     ],
   )
@@ -734,10 +743,19 @@ export function UModelPage({
         </div>
 
         <footer className="ume-statusbar">
-          <span><strong>{filteredStats.nodes}</strong> {t('umodelExplorer.status.nodes')}</span>
+          <span><strong>{mode === 'graph' ? graphDisplayStats.nodes : filteredStats.nodes}</strong> {t('umodelExplorer.status.nodes')}</span>
           <span className="ume-status-sep" />
           <span><strong>{filteredStats.links}</strong> {t('umodelExplorer.status.links')}</span>
-          {resultLimitReached && resultLimit && (
+          {mode === 'graph' && graphLimitReached && (
+            <>
+              <span className="ume-status-sep" />
+              <span className="ume-status-warning">
+                <span />
+                {t('umodelExplorer.status.limit', { limit: GRAPH_NODE_DISPLAY_LIMIT.toLocaleString() })}
+              </span>
+            </>
+          )}
+          {mode !== 'graph' && resultLimitReached && resultLimit && (
             <>
               <span className="ume-status-sep" />
               <span className="ume-status-warning">
@@ -790,6 +808,100 @@ export function UModelPage({
       )}
     </div>
   )
+}
+
+function selectGraphDisplayElements(
+  elements: UModelElement[],
+  entitySetLinkDisplay: EntitySetLinkDisplay,
+  limit: number,
+  forceFullMode: boolean,
+) {
+  const graphNodeElements = elements.filter((element) => elementActsAsGraphNode(element, entitySetLinkDisplay))
+  if (forceFullMode || graphNodeElements.length <= limit) {
+    return { elements, truncated: false }
+  }
+
+  const alias = aliasForElements(graphNodeElements)
+  const degreeById = new Map<string, number>()
+  for (const element of graphNodeElements) degreeById.set(elementKey(element), 0)
+
+  for (const link of elements.filter(isLinkElement)) {
+    const source = alias.get(endpointId((link.spec || {}).src)) || endpointId((link.spec || {}).src)
+    const target = alias.get(endpointId((link.spec || {}).dest)) || endpointId((link.spec || {}).dest)
+    if (source && degreeById.has(source)) degreeById.set(source, (degreeById.get(source) || 0) + 1)
+    if (target && degreeById.has(target)) degreeById.set(target, (degreeById.get(target) || 0) + 1)
+  }
+
+  const rankedNodes = [...graphNodeElements].sort((left, right) => compareGraphDisplayNode(left, right, degreeById))
+  const groupedByKind = new Map<string, UModelElement[]>()
+  for (const element of rankedNodes) {
+    if (!groupedByKind.has(element.kind)) groupedByKind.set(element.kind, [])
+    groupedByKind.get(element.kind)!.push(element)
+  }
+
+  const visibleNodeIds = new Set<string>()
+  const orderedKinds = [
+    ...nodeKindOrder.filter((kind) => groupedByKind.has(kind)),
+    ...[...groupedByKind.keys()].filter((kind) => !nodeKindOrder.includes(kind)).sort(),
+  ]
+
+  for (const kind of orderedKinds) {
+    const quota = graphDisplayQuota(kind, limit)
+    for (const element of (groupedByKind.get(kind) || []).slice(0, quota)) {
+      if (visibleNodeIds.size >= limit) break
+      visibleNodeIds.add(elementKey(element))
+    }
+  }
+
+  for (const element of rankedNodes) {
+    if (visibleNodeIds.size >= limit) break
+    visibleNodeIds.add(elementKey(element))
+  }
+
+  const result = new Map<string, UModelElement>()
+  for (const element of graphNodeElements) {
+    const key = elementKey(element)
+    if (visibleNodeIds.has(key)) result.set(key, element)
+  }
+
+  for (const link of elements.filter(isLinkElement)) {
+    const key = elementKey(link)
+    const source = alias.get(endpointId((link.spec || {}).src)) || endpointId((link.spec || {}).src)
+    const target = alias.get(endpointId((link.spec || {}).dest)) || endpointId((link.spec || {}).dest)
+    const linkAsNode = entitySetLinkDisplay === 'relative_link' && isEntitySetLinkElement(link)
+    if (source && target && visibleNodeIds.has(source) && visibleNodeIds.has(target)) result.set(key, link)
+    if (linkAsNode && visibleNodeIds.has(key)) result.set(key, link)
+  }
+
+  return { elements: [...result.values()], truncated: true }
+}
+
+function graphDisplayQuota(kind: string, limit: number) {
+  const ratioByKind: Record<string, number> = {
+    entity_set: 0.24,
+    metric_set: 0.26,
+    log_set: 0.16,
+    sls_logstore: 0.08,
+    aliyun_prometheus: 0.06,
+    runbook_set: 0.08,
+    explorer: 0.06,
+    sls_metricstore: 0.03,
+    event_set: 0.03,
+    profile_set: 0.01,
+    trace_set: 0.01,
+  }
+  return Math.max(1, Math.round(limit * (ratioByKind[kind] || 0.02)))
+}
+
+function compareGraphDisplayNode(left: UModelElement, right: UModelElement, degreeById: Map<string, number>) {
+  const leftDegree = degreeById.get(elementKey(left)) || 0
+  const rightDegree = degreeById.get(elementKey(right)) || 0
+  if (leftDegree !== rightDegree) return rightDegree - leftDegree
+  const kind = kindRank(left.kind) - kindRank(right.kind)
+  if (kind !== 0) return kind
+  const domain = (left.domain || '').localeCompare(right.domain || '')
+  if (domain !== 0) return domain
+  return titleForElement(left).localeCompare(titleForElement(right))
 }
 
 function TableView({
