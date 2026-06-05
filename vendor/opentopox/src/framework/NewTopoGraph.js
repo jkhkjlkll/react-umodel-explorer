@@ -1987,6 +1987,7 @@ export class NewTopoGraph {
         this.suppressNodeClick = null;
         return;
       }
+      if (element.__topoSuppressClickUntil && Date.now() < element.__topoSuppressClickUntil) return;
       this.selectGraphItem("node", currentNode.id, event, currentNode);
     });
     return element;
@@ -2555,11 +2556,14 @@ export class NewTopoGraph {
       moved: false,
     };
     const connectedEdgeIds = this.getConnectedEdgeIds([node.id]);
+    const dragThreshold = Number(this.config.nodeDragThreshold ?? 6);
 
     const move = (moveEvent) => {
-      const dx = (moveEvent.clientX - start.clientX) / this.viewport.zoom;
-      const dy = (moveEvent.clientY - start.clientY) / this.viewport.zoom;
-      if (!start.moved && Math.hypot(dx, dy) < 3) return;
+      const screenDx = moveEvent.clientX - start.clientX;
+      const screenDy = moveEvent.clientY - start.clientY;
+      if (!start.moved && Math.hypot(screenDx, screenDy) < dragThreshold) return;
+      const dx = screenDx / this.viewport.zoom;
+      const dy = screenDy / this.viewport.zoom;
       start.moved = true;
       const nextAbsolutePosition = {
         x: Math.round(start.nodeX + dx),
@@ -2588,14 +2592,14 @@ export class NewTopoGraph {
 
       if (!start.moved) return;
       this.suppressNodeClick = node.id;
+      element.__topoSuppressClickUntil = Date.now() + 220;
       window.setTimeout(() => {
         if (this.suppressNodeClick === node.id) this.suppressNodeClick = null;
-      }, 0);
+      }, 220);
       this.renderEdges(connectedEdgeIds);
       this.scheduleMinimapRender();
       if (this.selectionEnabled) this.setSelection({ nodes: [node.id], edges: [], primary: { type: "node", id: node.id } });
       else this.setSelectedItem({ type: "node", id: node.id });
-      this.handleNodeClick?.(node);
       this.container.dispatchEvent(new CustomEvent("topo:node-drag", {
         detail: { node: { ...cloneGraphItem(node), positionAbsolute: this.getNodeAbsolutePosition(node) } },
         bubbles: true,
