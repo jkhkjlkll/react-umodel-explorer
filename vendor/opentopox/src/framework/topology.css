@@ -113,6 +113,19 @@
   min-width: 42px;
 }
 
+.topo-controls-host {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 9;
+  display: none;
+  pointer-events: auto;
+}
+
+.new-topo-graph.has-controls .topo-controls-host {
+  display: block;
+}
+
 .flow-legend {
   display: grid;
   gap: 7px;

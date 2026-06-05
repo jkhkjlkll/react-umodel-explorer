@@ -76,9 +76,12 @@ export function OpenTopoXGraphView({
           hideEdgesOnViewportMove: false,
           hoverHighlight: false,
           maxZoom: 3,
-          minimap: false,
+          minimap: true,
           minZoom: 0.18,
           nodeDraggable: false,
+          controls: true,
+          controlActions: ['zoom-out', 'zoom-in', 'fit', 'fullscreen', 'minimap'],
+          controlZoomStep: 1.22,
           validateData: false,
           zoomSensitivity: 0.0045,
         }}

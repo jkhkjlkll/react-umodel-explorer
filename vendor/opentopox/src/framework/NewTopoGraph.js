@@ -7,6 +7,7 @@ import {
 } from "./TopologyContextBridge.js";
 import { getEdgeShape, getNodeShape, registerEdgeShape, registerNodeShape } from "./Registry.js";
 import { validateGraphData } from "./TopologyGraphStore.js";
+import { FlowControls } from "./FlowControls.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 let graphInstanceSeed = 0;
@@ -57,6 +58,11 @@ export class NewTopoGraph {
     this.hoverHighlightDegree = config.hoverHighlightDegree ?? 1;
     this.effectiveHoverHighlightDegree = this.hoverHighlightDegree;
     this.minimapEnabled = config.minimap ?? false;
+    this.controlsEnabled = config.controls ?? config.controlsEnabled ?? false;
+    this.controlActions = config.controlActions || ["zoom-out", "zoom-in", "fit", "fullscreen", "minimap"];
+    this.controlOrientation = config.controlOrientation || "horizontal";
+    this.controlClassName = config.controlClassName || "";
+    this.controlZoomStep = config.controlZoomStep ?? 1.22;
     this.gridVisible = config.grid ?? false;
     this.minimapWidth = config.minimapWidth ?? 220;
     this.minimapHeight = config.minimapHeight ?? 150;
@@ -154,6 +160,7 @@ export class NewTopoGraph {
       setNodeDraggable: (enabled) => this.setNodeDraggable(enabled),
       setHoverHighlight: (enabled, options) => this.setHoverHighlight(enabled, options),
       setMinimapVisible: (enabled) => this.setMinimapVisible(enabled),
+      isMinimapVisible: () => this.minimapEnabled,
       setGridVisible: (enabled) => this.setGridVisible(enabled),
       setDebugPanelVisible: (enabled) => this.setDebugPanelVisible(enabled),
       isDebugPanelVisible: () => this.debugPanelEnabled,
@@ -310,6 +317,10 @@ export class NewTopoGraph {
     this.minimapEnabled = Boolean(enabled);
     this.root?.classList.toggle("has-minimap", this.minimapEnabled);
     this.scheduleMinimapRender();
+    this.container.dispatchEvent(new CustomEvent("topo:minimap", {
+      detail: { enabled: this.minimapEnabled },
+      bubbles: true,
+    }));
   }
 
   setGridVisible(enabled) {
@@ -1518,6 +1529,7 @@ export class NewTopoGraph {
     if (this.nodeAnimationFrame) cancelAnimationFrame(this.nodeAnimationFrame);
     if (this.nodeAnimationTimer) clearTimeout(this.nodeAnimationTimer);
     if (this.viewportTimer) clearTimeout(this.viewportTimer);
+    this.controls?.destroy?.();
     document.removeEventListener("fullscreenchange", this.handleFullscreenChange);
     document.removeEventListener("keydown", this.handleKeydown);
     this.nodeElementById.clear();
@@ -1613,13 +1625,27 @@ export class NewTopoGraph {
     this.selectionMarquee.className = "topo-selection-marquee";
     this.selectionMarquee.hidden = true;
 
+    this.controlsHost = document.createElement("div");
+    this.controlsHost.className = "topo-controls-host";
+
     this.viewportEl.append(this.edgeCanvas, this.svg, this.nodeLayer);
-    this.root.append(this.viewportEl, this.selectionMarquee, this.minimap, this.debugPanel);
+    this.root.append(this.viewportEl, this.selectionMarquee, this.controlsHost, this.minimap, this.debugPanel);
     this.root.classList.toggle("has-minimap", this.minimapEnabled);
+    this.root.classList.toggle("has-controls", this.controlsEnabled);
     this.root.classList.toggle("has-debug-panel", this.debugPanelEnabled);
     this.root.classList.toggle("is-selection-enabled", this.selectionEnabled);
     this.root.classList.toggle("is-selection-mode-area", this.selectionMode === "area");
     this.container.append(this.root);
+    if (this.controlsEnabled) {
+      this.controls = new FlowControls({
+        container: this.controlsHost,
+        graph: this,
+        actions: this.controlActions,
+        orientation: this.controlOrientation,
+        className: this.controlClassName,
+        zoomStep: this.controlZoomStep,
+      });
+    }
     this.bindMinimapEvents();
     this.renderDebugPanel();
   }
@@ -1630,6 +1656,7 @@ export class NewTopoGraph {
     let start = null;
 
     this.root.addEventListener("pointerdown", (event) => {
+      if (event.target.closest(".topo-controls-host, .topo-minimap, .topo-debug-panel")) return;
       if (event.target.closest(".topo-node") || event.target.closest(".topo-edge-hit")) return;
       if (this.shouldStartAreaSelection(event)) {
         areaDragging = true;
@@ -1700,6 +1727,7 @@ export class NewTopoGraph {
     this.root.addEventListener("pointercancel", endDrag);
 
     this.root.addEventListener("wheel", (event) => {
+      if (event.target.closest(".topo-controls-host, .topo-minimap, .topo-debug-panel")) return;
       event.preventDefault();
       const rect = this.container.getBoundingClientRect();
       const delta = event.deltaY * (event.deltaMode === 1 ? 16 : 1);

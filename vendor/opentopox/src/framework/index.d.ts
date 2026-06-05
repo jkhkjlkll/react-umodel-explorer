@@ -381,6 +381,7 @@ export interface GraphApi {
   setNodeDraggable(enabled: boolean): void;
   setHoverHighlight(enabled: boolean, options?: { degree?: number }): void;
   setMinimapVisible(enabled: boolean): void;
+  isMinimapVisible(): boolean;
   setGridVisible(enabled: boolean): void;
   setDebugPanelVisible(enabled: boolean): void;
   isDebugPanelVisible(): boolean;
@@ -440,6 +441,12 @@ export interface NewTopoGraphOptions {
     hoverHighlight?: boolean;
     hoverHighlightDegree?: number;
     minimap?: boolean;
+    controls?: boolean;
+    controlsEnabled?: boolean;
+    controlActions?: string[];
+    controlOrientation?: "horizontal" | "vertical" | string;
+    controlClassName?: string;
+    controlZoomStep?: number;
     grid?: boolean;
     debugPanel?: boolean;
     autoPerformanceMode?: boolean;
