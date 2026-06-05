@@ -59,6 +59,7 @@ export const OpenTopoXGraph = forwardRef(function OpenTopoXGraph(
     setData: (nextData) => graphRef.current?.setData(nextData),
     setLayout: (nextLayout, nextNodeType) => graphRef.current?.setLayout(nextLayout, nextNodeType),
     setViewport: (viewport) => graphRef.current?.setViewport(viewport),
+    refreshMeasurements: () => graphRef.current?.refreshMeasurements(),
     destroy: () => topoRef.current?.destroy(),
   }), []);
 
@@ -161,5 +162,6 @@ export function useOpenTopoXGraph() {
     setData: (data) => ref.current?.setData(data),
     setLayout: (layout, nodeType) => ref.current?.setLayout(layout, nodeType),
     setViewport: (viewport) => ref.current?.setViewport(viewport),
+    refreshMeasurements: () => ref.current?.refreshMeasurements(),
   };
 }

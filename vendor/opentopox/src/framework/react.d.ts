@@ -21,6 +21,7 @@ export interface OpenTopoXGraphHandle {
   setData(data: TopologyGraphData & Record<string, unknown>): Promise<unknown> | unknown;
   setLayout(layout: Record<string, unknown>, nodeType?: string): unknown;
   setViewport(viewport: Partial<TopologyViewport>): unknown;
+  refreshMeasurements(): boolean | undefined;
   destroy(): void;
 }
 
@@ -60,6 +61,7 @@ export interface UseOpenTopoXGraphResult {
   setData(data: TopologyGraphData & Record<string, unknown>): Promise<unknown> | unknown;
   setLayout(layout: Record<string, unknown>, nodeType?: string): unknown;
   setViewport(viewport: Partial<TopologyViewport>): unknown;
+  refreshMeasurements(): boolean | undefined;
 }
 
 export function useOpenTopoXGraph(): UseOpenTopoXGraphResult;

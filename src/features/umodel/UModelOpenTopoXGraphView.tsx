@@ -56,6 +56,19 @@ export function OpenTopoXGraphView({
     return () => window.clearTimeout(timer)
   }, [data.nodes.length, focusKey, focusIds, layouting])
 
+  useEffect(() => {
+    let settleFrame: number | null = null
+    const frame = window.requestAnimationFrame(() => {
+      settleFrame = window.requestAnimationFrame(() => {
+        graphRef.current?.refreshMeasurements?.()
+      })
+    })
+    return () => {
+      window.cancelAnimationFrame(frame)
+      if (settleFrame != null) window.cancelAnimationFrame(settleFrame)
+    }
+  }, [forceFullMode, zoomLevel])
+
   return (
     <div
       className="v2-graph-container ume-opentopox-wrap"

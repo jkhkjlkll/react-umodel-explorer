@@ -169,6 +169,7 @@ export class NewTopoGraph {
       getOptions: () => this.getOptions(),
       getPluginInstance: (name) => this.getPluginInstance(name),
       render: () => this.render(),
+      refreshMeasurements: () => this.refreshMeasurements(),
       registerNodeShape: (type, shape) => registerNodeShape(type, shape),
       registerEdgeShape: (type, shape) => registerEdgeShape(type, shape),
       fitView: (options) => this.fitView(options),
@@ -2042,6 +2043,8 @@ export class NewTopoGraph {
 
   syncRenderedNodeSize(element, node, baseSize) {
     if (this.performanceMode) return this.clearMeasuredNodeSize(node, baseSize);
+    element.style.width = `${baseSize.width}px`;
+    element.style.height = `${baseSize.height}px`;
     const measuredWidth = Math.max(Number(baseSize.width) || 0, Math.ceil(element.scrollWidth));
     const measuredHeight = Math.max(Number(baseSize.height) || 0, Math.ceil(element.scrollHeight));
     const nextSize = {
@@ -2067,6 +2070,34 @@ export class NewTopoGraph {
     }
 
     return this.clearMeasuredNodeSize(node, baseSize) || changed;
+  }
+
+  refreshMeasurements() {
+    if (this.performanceMode) {
+      this.renderEdges();
+      this.scheduleMinimapRender();
+      return false;
+    }
+
+    const changedNodeIds = [];
+    for (const node of this.nodes) {
+      const element = this.nodeElementById.get(node.id);
+      if (!element) continue;
+      const type = this.resolveNodeType(node);
+      if (isParentNode(node, type)) continue;
+      const changed = this.syncRenderedNodeSize(element, node, getNodeBaseSize(node));
+      if (changed) changedNodeIds.push(node.id);
+    }
+
+    if (changedNodeIds.length) {
+      const connectedEdgeIds = this.getConnectedEdgeIds(changedNodeIds);
+      if (connectedEdgeIds.length) this.renderEdges(connectedEdgeIds);
+      this.scheduleMinimapRender();
+      return true;
+    }
+
+    this.renderEdgeGeometryUpdates(this.edges.map((edge) => edge.id));
+    return false;
   }
 
   clearMeasuredNodeSize(node, baseSize = getNodeBaseSize(node)) {
@@ -3061,10 +3092,19 @@ export class NewTopoGraph {
   }
 
   getRenderedNode(node) {
-    return {
+    const rendered = {
       ...node,
       position: this.getNodeAbsolutePosition(node),
     };
+    if (node.__topoMeasuredSize) {
+      Object.defineProperty(rendered, "__topoMeasuredSize", {
+        configurable: true,
+        enumerable: false,
+        writable: true,
+        value: node.__topoMeasuredSize,
+      });
+    }
+    return rendered;
   }
 
   toStoredNodePosition(node, absolutePosition) {

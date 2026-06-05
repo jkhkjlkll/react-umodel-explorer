@@ -388,6 +388,7 @@ export interface GraphApi {
   updateDebugMetrics(metrics?: Record<string, unknown>): Record<string, unknown>;
   setTheme(theme: string): void;
   render(): void;
+  refreshMeasurements(): boolean;
   fitView(options?: { padding?: number; nodes?: TopologyNode[]; minZoom?: number; maxZoom?: number }): void;
   fitCenter(): void;
   zoomTo(zoom: number): void;
