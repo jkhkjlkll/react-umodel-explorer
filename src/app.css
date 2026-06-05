@@ -3682,61 +3682,6 @@ html[lang="zh-CN"] .landing .landing-copy p {
   border-radius: inherit;
 }
 
-.landing .landing-react-flow,
-.landing .flow-stage .react-flow {
-  width: 100%;
-  height: 100%;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(30, 41, 59, 0.04), transparent 36%),
-    linear-gradient(90deg, rgba(20, 28, 45, 0.04) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(20, 28, 45, 0.035) 1px, transparent 1px),
-    transparent;
-  background-size: auto, 72px 72px, 72px 72px;
-}
-
-.landing .flow-stage .react-flow__pane {
-  cursor: grab;
-}
-
-.landing .flow-stage .react-flow__pane:active {
-  cursor: grabbing;
-}
-
-.landing .flow-stage .react-flow__node {
-  transition:
-    filter 180ms ease,
-    transform 180ms ease;
-}
-
-.landing .flow-stage .react-flow__node:hover {
-  filter: drop-shadow(0 24px 30px rgba(47, 107, 255, 0.16));
-}
-
-.landing .flow-stage .react-flow__node:hover .landing-flow-node {
-  border-color: color-mix(in srgb, var(--flow-tone), transparent 48%);
-  box-shadow:
-    0 30px 72px rgba(52, 79, 155, 0.18),
-    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
-    0 20px 46px var(--flow-tone-soft);
-  transform: translateY(-6px) scale(1.016);
-}
-
-.landing .flow-stage .react-flow__node.dragging .landing-flow-node {
-  border-color: color-mix(in srgb, var(--flow-tone), transparent 38%);
-  box-shadow:
-    0 42px 92px rgba(52, 79, 155, 0.24),
-    0 0 0 1px rgba(255, 255, 255, 0.92) inset;
-  transform: rotate(-1deg) scale(1.035);
-}
-
-.landing .flow-stage .react-flow__node.selected .landing-flow-node {
-  border-color: color-mix(in srgb, var(--flow-tone), transparent 34%);
-  box-shadow:
-    0 34px 80px rgba(52, 79, 155, 0.2),
-    0 0 0 1px rgba(255, 255, 255, 0.92) inset,
-    0 0 0 5px var(--flow-tone-soft);
-}
-
 .landing .landing-flow-node {
   position: relative;
   width: var(--flow-node-width, 220px);
@@ -4169,14 +4114,6 @@ html[lang="zh-CN"] .landing .landing-copy p {
     box-shadow 160ms ease;
 }
 
-.landing .flow-stage .react-flow__node:hover .landing-flow-handle,
-.landing .flow-stage .react-flow__node.selected .landing-flow-handle,
-.landing .flow-stage .react-flow__node.dragging .landing-flow-handle {
-  opacity: 0.95;
-  transform: scale(1.18);
-  box-shadow: 0 0 0 5px var(--flow-tone-soft);
-}
-
 .landing .landing-flow-handle.side-top,
 .landing .landing-flow-handle.side-bottom {
   left: 50%;
@@ -4211,26 +4148,6 @@ html[lang="zh-CN"] .landing .landing-copy p {
   backdrop-filter: blur(12px);
 }
 
-.landing .flow-stage .react-flow__edge .landing-flow-edge-main {
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.landing .flow-stage .react-flow__edge .landing-flow-edge-glow {
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.landing .flow-stage .react-flow__edge.animated path.landing-flow-edge-main {
-  stroke-dasharray: 7 !important;
-  animation-duration: 1.05s !important;
-}
-
-.landing .flow-stage .react-flow__edge.animated path.landing-flow-edge-glow {
-  stroke-dasharray: none !important;
-  animation: none !important;
-}
-
 @media (max-width: 1280px) {
   .landing .flow-product-shell {
     inset: 0;
@@ -4262,10 +4179,6 @@ html[lang="zh-CN"] .landing .landing-copy p {
     max-width: none;
   }
 
-  .landing .landing-react-flow,
-  .landing .flow-stage .react-flow {
-    min-width: 760px;
-  }
 }
 
 @media (max-width: 860px) and (min-width: 721px) {

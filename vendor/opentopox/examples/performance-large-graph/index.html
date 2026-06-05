@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenTopoX Large Graph Performance</title>
+    <link rel="stylesheet" href="../../src/framework/topology.css" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --page-bg: #f5f7fb;
+        --panel: #ffffff;
+        --line: #d8e1ed;
+        --text: #142033;
+        --muted: #607089;
+        --accent: #005fb8;
+        --good: #087c55;
+        --warn: #b66a00;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        background: var(--page-bg);
+        color: var(--text);
+      }
+
+      .app {
+        min-height: 100%;
+        display: grid;
+        grid-template-rows: auto 1fr;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: minmax(220px, 1fr) auto;
+        gap: 14px;
+        align-items: center;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .title {
+        min-width: 0;
+      }
+
+      .title h1 {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.2;
+      }
+
+      .title p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      label {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      input {
+        width: 86px;
+        height: 32px;
+        padding: 0 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--text);
+        font: inherit;
+        font-size: 12px;
+      }
+
+      button {
+        height: 32px;
+        padding: 0 10px;
+        border: 1px solid #bfd0e3;
+        border-radius: 6px;
+        background: #ffffff;
+        color: var(--text);
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      button.primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #ffffff;
+      }
+
+      button[disabled] {
+        opacity: 0.55;
+        cursor: wait;
+      }
+
+      .workspace {
+        min-height: 0;
+        display: grid;
+        grid-template-rows: auto 1fr;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(9, minmax(84px, 1fr));
+        gap: 1px;
+        border-bottom: 1px solid var(--line);
+        background: var(--line);
+      }
+
+      .metric {
+        min-width: 0;
+        padding: 9px 10px;
+        background: var(--panel);
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 4px;
+        overflow: hidden;
+        color: var(--text);
+        font-size: 17px;
+        line-height: 1.05;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .metric.good strong {
+        color: var(--good);
+      }
+
+      .metric.warn strong {
+        color: var(--warn);
+      }
+
+      #graph {
+        min-height: 0;
+        height: 100%;
+      }
+
+      @media (max-width: 1120px) {
+        .toolbar {
+          grid-template-columns: 1fr;
+        }
+
+        .controls {
+          justify-content: flex-start;
+        }
+
+        .metrics {
+          grid-template-columns: repeat(3, minmax(100px, 1fr));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="toolbar">
+        <div class="title">
+          <h1>OpenTopoX Large Graph Performance</h1>
+          <p>Default profile: 5,000 nodes, 10,000 edges, preset layout, performance mode.</p>
+        </div>
+        <div class="controls">
+          <label>Nodes <input id="nodeCount" type="number" min="100" step="100" value="5000" /></label>
+          <label>Edges <input id="edgeCount" type="number" min="100" step="100" value="10000" /></label>
+          <button id="generate" class="primary" type="button">Generate</button>
+          <button id="panTest" type="button">Pan Test</button>
+          <button id="patchTest" type="button">Patch Test</button>
+          <button id="fit" type="button">Fit</button>
+          <button id="minimap" type="button">Minimap</button>
+        </div>
+      </header>
+      <section class="workspace">
+        <div class="metrics">
+          <div class="metric"><span>Render</span><strong id="renderMs">-</strong></div>
+          <div class="metric"><span>Pan FPS</span><strong id="panFps">-</strong></div>
+          <div class="metric"><span>Patch</span><strong id="patchMs">-</strong></div>
+          <div class="metric"><span>Nodes</span><strong id="nodeDom">-</strong></div>
+          <div class="metric"><span>Edges</span><strong id="edgeDom">-</strong></div>
+          <div class="metric"><span>Mode</span><strong id="mode">-</strong></div>
+          <div class="metric"><span>Viewport</span><strong id="viewport">-</strong></div>
+          <div class="metric"><span>Long Frames</span><strong id="longFrames">-</strong></div>
+          <div class="metric"><span>Status</span><strong id="status">Ready</strong></div>
+        </div>
+        <div id="graph"></div>
+      </section>
+    </main>
+
+    <script type="module">
+      import { NewTopoGraph } from "../../src/framework/index.js";
+
+      const graphHost = document.querySelector("#graph");
+      const controls = {
+        nodeCount: document.querySelector("#nodeCount"),
+        edgeCount: document.querySelector("#edgeCount"),
+        generate: document.querySelector("#generate"),
+        panTest: document.querySelector("#panTest"),
+        patchTest: document.querySelector("#patchTest"),
+        fit: document.querySelector("#fit"),
+        minimap: document.querySelector("#minimap"),
+      };
+      const metrics = {
+        renderMs: document.querySelector("#renderMs"),
+        panFps: document.querySelector("#panFps"),
+        patchMs: document.querySelector("#patchMs"),
+        nodeDom: document.querySelector("#nodeDom"),
+        edgeDom: document.querySelector("#edgeDom"),
+        mode: document.querySelector("#mode"),
+        viewport: document.querySelector("#viewport"),
+        longFrames: document.querySelector("#longFrames"),
+        status: document.querySelector("#status"),
+      };
+
+      const topo = new NewTopoGraph({
+        container: graphHost,
+        config: {
+          animate: false,
+          autoPerformanceMode: true,
+          grid: false,
+          hoverHighlight: false,
+          minimap: false,
+          nodeDraggable: true,
+          canvasEdges: true,
+          canvasEdgeThreshold: 2000,
+          hideEdgesOnViewportMove: true,
+          viewportInteractionSettleMs: 220,
+          performanceEdgeLabelLimit: 0,
+          performanceNodeLimit: 1000,
+          performanceTotalElementLimit: 2500,
+          theme: "neutral",
+        },
+      });
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "preset", rankDir: "LR" });
+
+      const state = {
+        nodes: [],
+        edges: [],
+        lastRenderMs: 0,
+        lastPatchMs: 0,
+        lastPan: null,
+        minimap: false,
+        benchmarking: false,
+      };
+
+      controls.generate.addEventListener("click", () => generateAndRender());
+      controls.fit.addEventListener("click", () => graph.fitView({ padding: 0.08 }));
+      controls.minimap.addEventListener("click", () => {
+        state.minimap = !state.minimap;
+        graph.setMinimapVisible(state.minimap);
+        renderStats();
+      });
+      controls.panTest.addEventListener("click", () => runPanBenchmark());
+      controls.patchTest.addEventListener("click", () => runPatchBenchmark());
+
+      graphHost.addEventListener("topo:viewport", () => {
+        if (state.benchmarking) return;
+        const viewport = graph.getViewport();
+        metrics.viewport.textContent = `${Math.round(viewport.x)},${Math.round(viewport.y)} @ ${viewport.zoom.toFixed(2)}`;
+      });
+
+      await generateAndRender();
+
+      async function generateAndRender() {
+        setBusy(true, "Generating");
+        await nextFrame();
+        const nodeCount = clampInt(controls.nodeCount.value, 100, 50000, 5000);
+        const edgeCount = clampInt(controls.edgeCount.value, 100, 100000, 10000);
+        const generated = createLargeGraph(nodeCount, edgeCount);
+        state.nodes = generated.nodes;
+        state.edges = generated.edges;
+        setBusy(true, "Rendering");
+        await nextFrame();
+        const startedAt = performance.now();
+        await graph.setData({
+          nodes: state.nodes,
+          edges: state.edges,
+          autoFit: false,
+          disableAnimate: true,
+          preserveViewport: true,
+        });
+        state.lastRenderMs = performance.now() - startedAt;
+        renderStats();
+        setBusy(false, "Ready");
+      }
+
+      async function runPanBenchmark({ frames = 120, stepX = 18, stepY = 7 } = {}) {
+        setBusy(true, "Pan");
+        state.benchmarking = true;
+        await nextFrame();
+        const startViewport = graph.getViewport();
+        const samples = [];
+        let previous = performance.now();
+        for (let frame = 0; frame < frames; frame += 1) {
+          await nextFrame();
+          const now = performance.now();
+          samples.push(now - previous);
+          previous = now;
+          graph.setViewport({
+            x: startViewport.x - frame * stepX,
+            y: startViewport.y - frame * stepY,
+            zoom: startViewport.zoom,
+          });
+        }
+        graph.setViewport(startViewport);
+        state.benchmarking = false;
+        state.lastPan = summarizeFrames(samples);
+        const viewport = graph.getViewport();
+        metrics.viewport.textContent = `${Math.round(viewport.x)},${Math.round(viewport.y)} @ ${viewport.zoom.toFixed(2)}`;
+        renderStats();
+        setBusy(false, "Ready");
+        return state.lastPan;
+      }
+
+      async function runPatchBenchmark({ count = 250 } = {}) {
+        setBusy(true, "Patch");
+        await nextFrame();
+        const nodePatches = [];
+        const edgePatches = [];
+        for (let index = 0; index < count; index += 1) {
+          const nodeIndex = (index * 17) % state.nodes.length;
+          const edgeIndex = (index * 31) % state.edges.length;
+          nodePatches.push({
+            id: state.nodes[nodeIndex].id,
+            data: {
+              status: index % 9 === 0 ? "warn" : "ok",
+              metric: { label: "P95", value: `${20 + index % 80} ms` },
+            },
+          });
+          edgePatches.push({
+            id: state.edges[edgeIndex].id,
+            data: { status: index % 13 === 0 ? "warn" : "ok" },
+          });
+        }
+        const startedAt = performance.now();
+        graph.patchGraphData({ nodePatches, edgePatches }, {
+          autoFit: false,
+          preserveViewport: true,
+          silentSelection: true,
+        });
+        state.lastPatchMs = performance.now() - startedAt;
+        await nextFrame();
+        renderStats();
+        setBusy(false, "Ready");
+        return state.lastPatchMs;
+      }
+
+      async function runFullValidation({ regenerate = false } = {}) {
+        if (regenerate || !state.nodes.length) await generateAndRender();
+        const pan = await runPanBenchmark();
+        const patchMs = await runPatchBenchmark();
+        return getSummary({ pan, patchMs });
+      }
+
+      function createLargeGraph(nodeCount, edgeCount) {
+        const columns = Math.max(20, Math.ceil(Math.sqrt(nodeCount * 2)));
+        const nodeWidth = 112;
+        const nodeHeight = 48;
+        const gapX = 150;
+        const gapY = 76;
+        const nodes = Array.from({ length: nodeCount }, (_, index) => {
+          const column = index % columns;
+          const row = Math.floor(index / columns);
+          const domainIndex = index % 8;
+          return {
+            id: `node-${index}`,
+            type: "cardNode",
+            data: {
+              title: `Node ${index}`,
+              subTitle: `Domain ${domainIndex}`,
+              domain: `domain-${domainIndex}`,
+              status: index % 37 === 0 ? "warn" : "ok",
+              metric: { label: "RPS", value: String(100 + index % 900) },
+              position: { x: column * gapX, y: row * gapY },
+              size: { width: nodeWidth, height: nodeHeight },
+            },
+          };
+        });
+        const edges = [];
+        for (let index = 0; index < edgeCount; index += 1) {
+          const sourceIndex = index % nodeCount;
+          const targetIndex = (index * 7 + 1) % nodeCount;
+          if (sourceIndex === targetIndex) continue;
+          edges.push({
+            id: `edge-${index}`,
+            source: `node-${sourceIndex}`,
+            target: `node-${targetIndex}`,
+            data: {
+              status: index % 53 === 0 ? "warn" : "ok",
+            },
+          });
+        }
+        return { nodes, edges };
+      }
+
+      function summarizeFrames(samples) {
+        const sorted = [...samples].sort((a, b) => a - b);
+        const average = samples.reduce((sum, value) => sum + value, 0) / Math.max(1, samples.length);
+        const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] || 0;
+        const longFrames = samples.filter((value) => value > 33.4).length;
+        return {
+          averageMs: average,
+          p95Ms: p95,
+          fps: 1000 / average,
+          longFrames,
+          samples: samples.length,
+        };
+      }
+
+      function renderStats() {
+        const stats = graph.getRenderStats();
+        metrics.renderMs.textContent = `${state.lastRenderMs.toFixed(1)} ms`;
+        metrics.panFps.textContent = state.lastPan ? state.lastPan.fps.toFixed(1) : "-";
+        metrics.patchMs.textContent = state.lastPatchMs ? `${state.lastPatchMs.toFixed(1)} ms` : "-";
+        metrics.nodeDom.textContent = String(graphHost.querySelectorAll(".topo-node").length);
+        metrics.edgeDom.textContent = String(graphHost.querySelectorAll(".topo-edge").length);
+        const canvasEdges = graphHost.querySelector(".new-topo-graph")?.classList.contains("is-canvas-edges");
+        metrics.mode.textContent = stats.performanceMode ? (canvasEdges ? "canvas" : "performance") : "standard";
+        metrics.longFrames.textContent = state.lastPan ? String(state.lastPan.longFrames) : "-";
+        metrics.panFps.parentElement.classList.toggle("good", Boolean(state.lastPan && state.lastPan.fps >= 30));
+        metrics.panFps.parentElement.classList.toggle("warn", Boolean(state.lastPan && state.lastPan.fps < 30));
+        metrics.patchMs.parentElement.classList.toggle("good", Boolean(state.lastPatchMs && state.lastPatchMs < 16));
+        metrics.patchMs.parentElement.classList.toggle("warn", Boolean(state.lastPatchMs && state.lastPatchMs >= 16));
+      }
+
+      function getSummary(extra = {}) {
+        const stats = graph.getRenderStats();
+        return {
+          nodes: state.nodes.length,
+          edges: state.edges.length,
+          nodeElements: graphHost.querySelectorAll(".topo-node").length,
+          edgeElements: graphHost.querySelectorAll(".topo-edge").length,
+          canvasEdges: graphHost.querySelector(".new-topo-graph")?.classList.contains("is-canvas-edges") || false,
+          renderMs: Number(state.lastRenderMs.toFixed(1)),
+          patchMs: Number(state.lastPatchMs.toFixed(1)),
+          performanceMode: stats.performanceMode,
+          pan: state.lastPan,
+          viewport: graph.getViewport(),
+          pageErrors: [],
+          ...extra,
+        };
+      }
+
+      function setBusy(busy, label) {
+        Object.values(controls).forEach((control) => {
+          control.disabled = busy;
+        });
+        metrics.status.textContent = label;
+      }
+
+      function clampInt(value, min, max, fallback) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return fallback;
+        return Math.max(min, Math.min(max, Math.round(number)));
+      }
+
+      function nextFrame() {
+        return new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+
+      window.__opentopoxPerf = {
+        graph,
+        topo,
+        generateAndRender,
+        runPanBenchmark,
+        runPatchBenchmark,
+        runFullValidation,
+        getSummary,
+      };
+    </script>
+  </body>
+</html>

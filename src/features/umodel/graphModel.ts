@@ -1,4 +1,3 @@
-import { Position, type Edge, type Node } from '@xyflow/react'
 import type { UModelElement } from '../../api/types'
 import {
   aliasForElements,
@@ -53,8 +52,32 @@ export interface UModelEdgeData extends Record<string, unknown> {
 }
 
 export interface GraphModel {
-  nodes: Array<Node<UModelNodeData>>
-  edges: Array<Edge<UModelEdgeData>>
+  nodes: Array<GraphNode<UModelNodeData>>
+  edges: Array<GraphEdge<UModelEdgeData>>
+}
+
+export interface GraphNode<TData extends Record<string, unknown> = Record<string, unknown>> {
+  id: string
+  type?: string
+  position: { x: number; y: number }
+  draggable?: boolean
+  width?: number
+  height?: number
+  initialWidth?: number
+  initialHeight?: number
+  measured?: { width: number; height: number }
+  data: TData
+}
+
+export interface GraphEdge<TData extends Record<string, unknown> = Record<string, unknown>> {
+  id: string
+  type?: string
+  source: string
+  target: string
+  sourceHandle?: string
+  targetHandle?: string
+  data?: TData
+  hidden?: boolean
 }
 
 export function buildGraph(
@@ -124,17 +147,11 @@ export function buildGraph(
       type: 'umodel',
       position,
       draggable: true,
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
       width,
       height,
       initialWidth: width,
       initialHeight: height,
       measured: { width, height },
-      handles: [
-        { id: 'source', nodeId: key, type: 'source' as const, position: Position.Right, x: width, y: height / 2, width: 1, height: 1 },
-        { id: 'target', nodeId: key, type: 'target' as const, position: Position.Left, x: 0, y: height / 2, width: 1, height: 1 },
-      ],
       data: {
         element,
         title: titleForElement(element),
@@ -150,7 +167,7 @@ export function buildGraph(
     }
   })
 
-  const edges: Array<Edge<UModelEdgeData>> = validEdges.map(({ id, element, source, target, sourceElement, targetElement, kind }) => ({
+  const edges: Array<GraphEdge<UModelEdgeData>> = validEdges.map(({ id, element, source, target, sourceElement, targetElement, kind }) => ({
     id,
     type: 'umodel',
     source,

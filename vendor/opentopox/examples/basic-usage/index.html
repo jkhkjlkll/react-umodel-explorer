@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenTopoX Basic Usage</title>
+    <link rel="stylesheet" href="../../src/framework/topology.css" />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        background: #f6f8fb;
+        color: #172033;
+      }
+
+      .app {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        min-height: 100%;
+      }
+
+      .bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 18px;
+        border-bottom: 1px solid #d9e2ef;
+        background: #ffffff;
+      }
+
+      .title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      button {
+        border: 1px solid #c8d4e4;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #172033;
+        cursor: pointer;
+        font: inherit;
+        padding: 7px 10px;
+      }
+
+      button:hover {
+        border-color: #2563eb;
+      }
+
+      #graph {
+        width: 100%;
+        min-height: 520px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="bar">
+        <h1 class="title">Basic Service Topology</h1>
+        <div class="actions">
+          <button id="fit" type="button">Fit</button>
+          <button id="toggle-theme" type="button">Theme</button>
+        </div>
+      </header>
+      <div id="graph"></div>
+    </main>
+
+    <script type="module">
+      import { NewTopoGraph } from "../../src/framework/index.js";
+
+      const topo = new NewTopoGraph({
+        container: document.querySelector("#graph"),
+        config: {
+          theme: "neutral",
+          grid: true,
+          minimap: true,
+          nodeDraggable: true,
+        },
+        handleNodeClick(node) {
+          console.log("node", node.id, node.data?.title);
+        },
+        handleEdgeClick(edge) {
+          console.log("edge", edge.id);
+        },
+      });
+
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 220, nodeSep: 72 });
+
+      await graph.setData({
+        autoFit: true,
+        nodes: [
+          { id: "gateway", type: "componentNode", data: { title: "Gateway", domain: "network", status: "ok", metric: { label: "RPS", value: "8.4k" } } },
+          { id: "checkout", type: "cardLayerNode", data: { title: "Checkout", domain: "service", status: "ok", metric: { label: "P95", value: "42 ms" }, tags: ["core"] } },
+          { id: "payment", type: "cardLayerNode", data: { title: "Payment", domain: "service", status: "warn", metric: { label: "Errors", value: "0.8%" } } },
+          { id: "orders", type: "cardLayerNode", data: { title: "Orders DB", domain: "database", status: "ok", metric: { label: "QPS", value: "530" } } },
+        ],
+        edges: [
+          { id: "gateway-checkout", source: "gateway", target: "checkout", label: "HTTP", data: { status: "ok", latency: "18 ms" } },
+          { id: "checkout-payment", source: "checkout", target: "payment", label: "RPC", data: { status: "warn", latency: "96 ms" } },
+          { id: "checkout-orders", source: "checkout", target: "orders", label: "SQL", data: { status: "ok", latency: "24 ms" } },
+        ],
+      });
+
+      document.querySelector("#fit").addEventListener("click", () => graph.fitView({ padding: 64 }));
+
+      let severity = false;
+      document.querySelector("#toggle-theme").addEventListener("click", () => {
+        severity = !severity;
+        graph.setTheme(severity ? "severity" : "neutral");
+      });
+    </script>
+  </body>
+</html>

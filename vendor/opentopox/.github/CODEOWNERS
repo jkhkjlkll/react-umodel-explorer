@@ -1,0 +1,5 @@
+# Default review ownership for OpenTopoX.
+#
+# If the repository is published under a different GitHub account or team,
+# update this entry before enabling branch protection rules.
+* @java67-art

@@ -1,0 +1,2764 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenTopoX Feature Showcase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../src/framework/topology.css" />
+  <style>
+    /* ── Design Tokens ───────────────────────────────────────────── */
+    :root {
+      --bg-primary: #0b0f1a;
+      --bg-secondary: #111827;
+      --bg-tertiary: #1a2236;
+      --bg-elevated: #1e293b;
+      --bg-card: #141c2e;
+      --bg-code: #080c16;
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-default: rgba(255, 255, 255, 0.1);
+      --border-active: rgba(255, 255, 255, 0.2);
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-tertiary: #71717a;
+      --text-muted: #52525b;
+      --accent-blue: #3b82f6;
+      --accent-blue-dim: #2563eb;
+      --accent-cyan: #06b6d4;
+      --accent-green: #22c55e;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --accent-violet: #8b5cf6;
+      --gradient-hero: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 40%, #06b6d4 100%);
+      --gradient-subtle: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, transparent 60%);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-xl: 20px;
+      --font-display: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+      --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.25);
+      --shadow-glow: 0 0 40px rgba(59, 130, 246, 0.08);
+      --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-smooth: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ── Reset ───────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Noise Overlay ───────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      pointer-events: none;
+      opacity: 0.018;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+      background-size: 256px 256px;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────── */
+    .page-wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── Hero ────────────────────────────────────────────────────── */
+    .hero {
+      padding: 80px 0 48px;
+      text-align: center;
+      position: relative;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -120px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-title {
+      font-size: clamp(40px, 6vw, 64px);
+      font-weight: 700;
+      letter-spacing: 0;
+      background: var(--gradient-hero);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.1;
+      margin-bottom: 12px;
+    }
+    .hero-tagline {
+      font-size: 18px;
+      color: var(--text-secondary);
+      font-weight: 400;
+      letter-spacing: 0.01em;
+      margin-bottom: 20px;
+    }
+    .hero-graph-wrap {
+      position: relative;
+      width: 100%;
+      height: 620px;
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-secondary);
+      overflow: hidden;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-card), var(--shadow-glow);
+    }
+    #hero-graph {
+      width: 100%;
+      height: 100%;
+    }
+    .hero-stats {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      padding: 0 0 24px;
+    }
+    .hero-stats span {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.02em;
+    }
+    .hero-stats span strong {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    /* ── Tabs ────────────────────────────────────────────────────── */
+    .tabs-section {
+      padding: 0 0 64px;
+    }
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      padding: 4px;
+      border-radius: var(--radius-lg);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      margin-bottom: 32px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 9px 6px;
+      border: none;
+      background: transparent;
+      color: var(--text-tertiary);
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: var(--radius-md);
+      transition: all var(--transition-fast);
+      white-space: nowrap;
+      text-align: center;
+    }
+    .tab-btn:hover {
+      color: var(--text-secondary);
+      background: var(--bg-tertiary);
+    }
+    .tab-btn.active {
+      color: var(--text-primary);
+      background: var(--bg-elevated);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+    .tab-panel {
+      display: none;
+      animation: fadeIn 200ms ease-out;
+    }
+    .tab-panel.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ── Panel Layout ────────────────────────────────────────────── */
+    .panel-graph-area {
+      position: relative;
+      width: 100%;
+      height: 640px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-secondary);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .panel-graph-area .graph-mount {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Controls bar within panels ──────────────────────────────── */
+    .panel-controls {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .panel-controls button {
+      padding: 7px 14px;
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm);
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .panel-controls button:hover {
+      border-color: var(--border-active);
+      color: var(--text-primary);
+    }
+    .panel-controls button.active {
+      background: var(--accent-blue-dim);
+      border-color: var(--accent-blue);
+      color: #fff;
+    }
+    .panel-controls .controls-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-right: 8px;
+    }
+    .panel-controls .controls-spacer {
+      flex: 1;
+    }
+    .panel-controls .search-input {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 6px 12px;
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: var(--font-mono);
+      width: 180px;
+      outline: none;
+      transition: border-color 160ms ease;
+    }
+    .panel-controls .search-input:focus {
+      border-color: var(--accent-blue);
+    }
+    .panel-controls .search-input::placeholder {
+      color: var(--text-muted);
+    }
+    .degree-context {
+      padding: 6px 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      min-height: 24px;
+    }
+    .degree-context strong {
+      color: var(--text-secondary);
+    }
+
+    /* ── Code Block ──────────────────────────────────────────────── */
+    .code-block {
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-code);
+      overflow: hidden;
+    }
+    .code-block-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      background: var(--bg-secondary);
+    }
+    .code-block-lang {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .code-block-body {
+      padding: 16px 20px;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.7;
+      color: #c9d1d9;
+      tab-size: 2;
+    }
+    .code-block-body .kw { color: #ff7b72; }
+    .code-block-body .str { color: #a5d6ff; }
+    .code-block-body .num { color: #79c0ff; }
+    .code-block-body .cmt { color: #546170; font-style: italic; }
+    .code-block-body .fn { color: #d2a8ff; }
+    .code-block-body .prop { color: #ffa657; }
+    .code-block-body .op { color: #79c0ff; }
+
+    /* ── Side Panel (Interaction tab) ────────────────────────────── */
+    .split-layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 16px;
+      height: 640px;
+    }
+    .split-layout .panel-graph-area {
+      margin-bottom: 0;
+    }
+    .side-panel {
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-secondary);
+      padding: 24px;
+      overflow-y: auto;
+    }
+    .side-panel-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 16px;
+    }
+    .side-panel-empty {
+      color: var(--text-tertiary);
+      font-size: 14px;
+      text-align: center;
+      padding: 40px 0;
+    }
+    .node-detail-card {
+      animation: fadeIn 150ms ease-out;
+    }
+    .node-detail-card h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .node-detail-card .node-id {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+    .node-detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 13px;
+    }
+    .node-detail-row .label { color: var(--text-tertiary); }
+    .node-detail-row .value { color: var(--text-primary); font-weight: 500; font-family: var(--font-mono); }
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .status-dot.ok { background: var(--accent-green); }
+    .status-dot.warn { background: var(--accent-amber); }
+    .status-dot.critical { background: var(--accent-rose); }
+
+    /* ── Theme Cards ─────────────────────────────────────────────── */
+    .theme-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .theme-card {
+      padding: 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-tertiary);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .theme-card:hover { border-color: var(--border-active); }
+    .theme-card.active {
+      border-color: var(--accent-blue);
+      background: rgba(59, 130, 246, 0.06);
+      box-shadow: 0 0 0 1px var(--accent-blue);
+    }
+    .theme-card-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .theme-card-desc {
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+    .theme-dots {
+      display: flex;
+      gap: 4px;
+      margin-top: 10px;
+    }
+    .theme-dots span {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+    }
+
+    /* ── Controls tab overlay ────────────────────────────────────── */
+    #controls-toolbar-slot {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 10;
+      width: auto;
+      height: auto;
+      pointer-events: none;
+    }
+    #controls-toolbar-slot .flow-toolbar { pointer-events: auto; }
+    #controls-legend-slot {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 10;
+    }
+
+    /* ── Realtime Status ─────────────────────────────────────────── */
+    .realtime-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .realtime-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .realtime-indicator.paused {
+      background: var(--accent-amber);
+      animation: none;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .speed-btns {
+      display: flex;
+      gap: 4px;
+    }
+    .speed-btn {
+      padding: 4px 10px;
+      border: 1px solid var(--border-default);
+      border-radius: 4px;
+      background: var(--bg-tertiary);
+      color: var(--text-tertiary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .speed-btn:hover { color: var(--text-secondary); border-color: var(--border-active); }
+    .speed-btn.active { background: var(--accent-blue-dim); border-color: var(--accent-blue); color: #fff; }
+
+    /* ── Footer ──────────────────────────────────────────────────── */
+    footer {
+      padding: 40px 0;
+      text-align: center;
+      border-top: 1px solid var(--border-subtle);
+      margin-top: 48px;
+    }
+    footer p {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    footer a {
+      color: var(--text-tertiary);
+      text-decoration: none;
+      transition: color var(--transition-fast);
+    }
+    footer a:hover { color: var(--text-primary); }
+
+    /* ── Agent Bridge Tab ────────────────────────────────────────── */
+    .agent-split-layout {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 16px;
+      height: 640px;
+    }
+    .agent-split-layout .panel-graph-area { margin-bottom: 0; height: 100%; }
+    .agent-actions-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .agent-actions-col .side-panel { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+    .action-group-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+      margin-top: 4px;
+    }
+    .action-group-label:first-child { margin-top: 0; }
+    .action-btn-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-bottom: 12px;
+    }
+    .action-btn {
+      padding: 6px 10px;
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm);
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .action-btn:hover {
+      border-color: var(--border-active);
+      color: var(--text-primary);
+      background: var(--bg-elevated);
+    }
+    .action-btn.ctx {
+      border-left: 2px solid var(--accent-cyan);
+    }
+    .action-btn.ctx:hover {
+      border-left-color: var(--accent-cyan);
+      background: rgba(6, 182, 212, 0.06);
+    }
+    .sel-mode-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .sel-mode-badge.default { background: rgba(34, 197, 94, 0.1); color: var(--accent-green); }
+    .sel-mode-badge.area { background: rgba(245, 158, 11, 0.1); color: var(--accent-amber); }
+
+    .agent-event-log {
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-code);
+      max-height: 180px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .log-entry {
+      padding: 4px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+    }
+    .log-entry:last-child { border-bottom: none; }
+    .log-time { color: var(--text-muted); flex-shrink: 0; }
+    .log-event { flex-shrink: 0; font-weight: 500; }
+    .log-event.selection { color: var(--accent-blue); }
+    .log-event.context { color: var(--accent-cyan); }
+    .log-event.area { color: var(--accent-amber); }
+    .log-event.mode { color: var(--accent-violet); }
+    .log-detail { color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .agent-bridge-toolbar-slot {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 10;
+      width: auto;
+      height: auto;
+      pointer-events: none;
+    }
+    .agent-bridge-toolbar-slot .flow-toolbar { pointer-events: auto; }
+    .agent-context-output {
+      margin-top: 16px;
+    }
+
+    /* ── Responsive Layout ───────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .page-wrap {
+        padding: 0 18px;
+      }
+
+      .hero {
+        padding: 56px 0 36px;
+      }
+
+      .hero-graph-wrap,
+      .panel-graph-area {
+        height: min(58vh, 540px);
+      }
+
+      .tab-bar {
+        overflow-x: auto;
+        justify-content: flex-start;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .tab-bar::-webkit-scrollbar {
+        display: none;
+      }
+
+      .tab-btn {
+        flex: 0 0 auto;
+        min-width: max-content;
+        padding: 9px 14px;
+        scroll-snap-align: start;
+      }
+
+      .split-layout,
+      .agent-split-layout {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+
+      .split-layout .panel-graph-area,
+      .agent-split-layout .panel-graph-area {
+        height: min(60vh, 520px);
+      }
+
+      .agent-actions-col {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        font-size: 14px;
+        overflow-x: hidden;
+      }
+
+      .page-wrap {
+        max-width: 100%;
+        padding: 0 12px;
+      }
+
+      .hero {
+        padding: 30px 0 24px;
+      }
+
+      .hero::before {
+        top: -90px;
+        width: 320px;
+        height: 320px;
+      }
+
+      .hero-title {
+        font-size: clamp(34px, 14vw, 46px);
+        line-height: 1.05;
+        margin-bottom: 8px;
+      }
+
+      .hero-tagline {
+        margin-bottom: 16px;
+        font-size: 14px;
+      }
+
+      .hero-stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px 10px;
+        padding-bottom: 16px;
+      }
+
+      .hero-stats span {
+        min-width: 0;
+        font-size: 11px;
+        line-height: 1.35;
+        text-align: center;
+        white-space: normal;
+      }
+
+      .hero-graph-wrap {
+        height: min(52vh, 390px);
+        min-height: 300px;
+        margin-bottom: 18px;
+        border-radius: 12px;
+      }
+
+      .hero-graph-wrap .new-topo-graph,
+      .panel-graph-area .new-topo-graph {
+        min-height: 0;
+      }
+
+      .tabs-section {
+        padding-bottom: 36px;
+      }
+
+      .tab-bar {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        margin: 0 -12px 20px;
+        padding: 4px 12px;
+        border-right: 0;
+        border-left: 0;
+        border-radius: 0;
+        background: rgba(17, 24, 39, 0.94);
+        backdrop-filter: blur(10px);
+      }
+
+      .tab-btn {
+        min-height: 34px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+      }
+
+      .panel-controls {
+        gap: 8px;
+        align-items: stretch;
+        margin-bottom: 12px;
+      }
+
+      .panel-controls .controls-label {
+        flex: 0 0 100%;
+        margin: 0 0 2px;
+        font-size: 11px;
+      }
+
+      .panel-controls .controls-spacer {
+        display: none;
+      }
+
+      .panel-controls button {
+        min-height: 34px;
+        padding: 7px 10px;
+        font-size: 12px;
+      }
+
+      .panel-controls .search-input {
+        flex: 1 1 100%;
+        width: 100%;
+        min-height: 36px;
+      }
+
+      .realtime-status {
+        flex: 1 1 100%;
+        justify-content: space-between;
+        width: 100%;
+        margin-left: 0;
+      }
+
+      .speed-btns {
+        margin-left: auto;
+      }
+
+      .degree-context {
+        padding: 0 2px 10px;
+        overflow-wrap: anywhere;
+        font-size: 11px;
+      }
+
+      .theme-cards {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .theme-card {
+        padding: 12px;
+      }
+
+      .panel-graph-area {
+        height: min(54vh, 390px);
+        min-height: 300px;
+        margin-bottom: 14px;
+        border-radius: 12px;
+      }
+
+      #panel-agentic-obs .panel-graph-area {
+        height: min(50vh, 360px) !important;
+      }
+
+      .split-layout,
+      .agent-split-layout {
+        gap: 12px;
+      }
+
+      .split-layout .panel-graph-area,
+      .agent-split-layout .panel-graph-area {
+        height: min(54vh, 390px);
+        min-height: 300px;
+      }
+
+      .side-panel {
+        max-height: 280px;
+        padding: 14px;
+        border-radius: 12px;
+      }
+
+      .side-panel-empty {
+        padding: 22px 0;
+        font-size: 13px;
+      }
+
+      .node-detail-row {
+        gap: 10px;
+        align-items: flex-start;
+      }
+
+      .node-detail-row .value {
+        overflow-wrap: anywhere;
+        text-align: right;
+      }
+
+      .agent-actions-col {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .agent-actions-col .side-panel {
+        min-height: 0;
+      }
+
+      .action-btn {
+        min-height: 34px;
+        line-height: 1.25;
+        white-space: normal;
+      }
+
+      .action-btn-grid {
+        gap: 6px;
+      }
+
+      .agent-event-log {
+        max-height: 150px;
+      }
+
+      .log-entry {
+        flex-wrap: wrap;
+        gap: 4px 6px;
+        padding: 5px 8px;
+      }
+
+      .log-detail {
+        flex-basis: 100%;
+        white-space: normal;
+      }
+
+      .code-block {
+        border-radius: 10px;
+      }
+
+      .code-block-header {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px 10px;
+      }
+
+      .code-block-lang {
+        font-size: 10px;
+      }
+
+      .code-block-body {
+        max-height: 320px;
+        padding: 12px;
+        overflow: auto;
+        font-size: 11px;
+        line-height: 1.55;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .agent-context-output {
+        margin-top: 12px;
+      }
+
+      #agent-bridge-context-md,
+      #agent-bridge-context-json {
+        max-height: 220px !important;
+        font-size: 11px !important;
+      }
+
+      #agent-bridge-include-mode {
+        max-width: 160px;
+      }
+
+      .section-header {
+        align-items: flex-start !important;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      #agentic-obs-chat-block {
+        padding: 10px !important;
+        border-radius: 12px !important;
+      }
+
+      .topo-chat-topology-header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .topo-chat-topology-graph {
+        min-height: 160px;
+      }
+
+      #controls-toolbar-slot,
+      .agent-bridge-toolbar-slot {
+        top: 8px;
+        right: 8px;
+        left: 8px;
+        max-width: calc(100% - 16px);
+        overflow-x: auto;
+      }
+
+      #controls-toolbar-slot .flow-toolbar,
+      .agent-bridge-toolbar-slot .flow-toolbar {
+        flex-direction: row;
+        max-width: 100%;
+        gap: 5px;
+        overflow-x: auto;
+        padding: 6px;
+        pointer-events: auto;
+        scrollbar-width: none;
+      }
+
+      #controls-toolbar-slot .flow-toolbar::-webkit-scrollbar,
+      .agent-bridge-toolbar-slot .flow-toolbar::-webkit-scrollbar {
+        display: none;
+      }
+
+      #controls-toolbar-slot .flow-toolbar button,
+      .agent-bridge-toolbar-slot .flow-toolbar button {
+        width: auto;
+        min-width: 38px;
+        min-height: 30px;
+        padding: 0 8px;
+      }
+
+      #controls-toolbar-slot .toolbar-zoom,
+      .agent-bridge-toolbar-slot .toolbar-zoom {
+        width: auto;
+        min-width: 40px;
+        min-height: 30px;
+      }
+
+      #controls-toolbar-slot .toolbar-divider,
+      .agent-bridge-toolbar-slot .toolbar-divider {
+        width: 1px;
+        height: 28px;
+        margin: 0 2px;
+      }
+
+      #controls-legend-slot {
+        top: auto;
+        right: 8px;
+        bottom: 8px;
+        left: 8px;
+        max-width: calc(100% - 16px);
+        overflow-x: auto;
+      }
+
+      #controls-legend-slot .flow-legend {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      #controls-legend-slot .flow-legend::-webkit-scrollbar {
+        display: none;
+      }
+
+      #controls-legend-slot .flow-legend-item {
+        min-width: max-content;
+        min-height: 30px;
+        padding: 0 8px;
+        font-size: 12px;
+      }
+
+      .topo-minimap {
+        display: none !important;
+      }
+
+      footer {
+        margin-top: 28px;
+        padding: 28px 0;
+      }
+
+      footer p {
+        font-size: 12px;
+        line-height: 1.5;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .hero-stats {
+        gap: 6px;
+      }
+
+      .hero-graph-wrap,
+      .panel-graph-area,
+      .split-layout .panel-graph-area,
+      .agent-split-layout .panel-graph-area {
+        min-height: 280px;
+      }
+
+      .code-block-body {
+        font-size: 10.5px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Hero ─────────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="page-wrap">
+      <h1 class="hero-title">OpenTopoX</h1>
+      <p class="hero-tagline">AI Observability Topology Framework</p>
+      <div class="hero-stats">
+        <span><strong>AI</strong> Ready</span>
+        <span><strong>8</strong> Layouts</span>
+        <span><strong>High</strong> Performance</span>
+        <span><strong>Realtime</strong> Streaming</span>
+        <span><strong>Beautiful</strong> Out-of-Box</span>
+        <span><strong>0</strong> Dependencies</span>
+      </div>
+      <div class="hero-graph-wrap">
+        <div id="hero-graph"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Tabs Section ─────────────────────────────────────────────── -->
+  <section class="tabs-section">
+    <div class="page-wrap">
+      <nav class="tab-bar" id="tab-bar"></nav>
+
+      <!-- 1. Layouts -->
+      <div class="tab-panel" id="panel-layouts">
+        <div class="panel-controls" id="layout-controls"></div>
+        <div class="panel-graph-area">
+          <div class="graph-mount" id="layout-graph"></div>
+        </div>
+        <div class="code-block">
+          <div class="code-block-header"><span class="code-block-lang">JavaScript</span></div>
+          <pre class="code-block-body" id="layout-code"></pre>
+        </div>
+      </div>
+
+      <!-- 2. Themes -->
+      <div class="tab-panel" id="panel-themes">
+        <div class="theme-cards" id="theme-cards"></div>
+        <div class="panel-graph-area">
+          <div class="graph-mount" id="theme-graph"></div>
+        </div>
+        <div class="code-block">
+          <div class="code-block-header"><span class="code-block-lang">JavaScript</span></div>
+          <pre class="code-block-body" id="theme-code"></pre>
+        </div>
+      </div>
+
+      <!-- 3. Controls -->
+      <div class="tab-panel" id="panel-controls">
+        <div class="panel-graph-area">
+          <div id="controls-toolbar-slot"></div>
+          <div id="controls-legend-slot"></div>
+          <div class="graph-mount" id="controls-graph"></div>
+        </div>
+        <div class="code-block">
+          <div class="code-block-header"><span class="code-block-lang">JavaScript</span></div>
+          <pre class="code-block-body" id="controls-code"></pre>
+        </div>
+      </div>
+
+      <!-- 4. Realtime -->
+      <div class="tab-panel" id="panel-realtime">
+        <div class="panel-controls" id="realtime-controls"></div>
+        <div class="panel-graph-area">
+          <div class="graph-mount" id="realtime-graph"></div>
+        </div>
+        <div class="code-block">
+          <div class="code-block-header"><span class="code-block-lang">JavaScript</span></div>
+          <pre class="code-block-body" id="realtime-code"></pre>
+        </div>
+      </div>
+
+      <!-- 5. Interaction -->
+      <div class="tab-panel" id="panel-interaction">
+        <div class="split-layout">
+          <div class="panel-graph-area">
+            <div class="graph-mount" id="interaction-graph"></div>
+          </div>
+          <div class="side-panel">
+            <div class="side-panel-title">Node Inspector</div>
+            <div id="interaction-detail">
+              <div class="side-panel-empty">Click a node to inspect</div>
+            </div>
+          </div>
+        </div>
+        <div class="code-block" style="margin-top:16px;">
+          <div class="code-block-header"><span class="code-block-lang">JavaScript</span></div>
+          <pre class="code-block-body" id="interaction-code"></pre>
+        </div>
+      </div>
+
+      <!-- 6. Custom Shapes -->
+      <div class="tab-panel" id="panel-shapes">
+        <div class="panel-graph-area">
+          <div class="graph-mount" id="shapes-graph"></div>
+        </div>
+        <div class="code-block">
+          <div class="code-block-header"><span class="code-block-lang">JavaScript</span></div>
+          <pre class="code-block-body" id="shapes-code"></pre>
+        </div>
+      </div>
+
+      <!-- 7. Cloud Resources -->
+      <div class="tab-panel" id="panel-cloud">
+        <div class="panel-graph-area">
+          <div class="graph-mount" id="cloud-graph"></div>
+        </div>
+        <div class="code-block">
+          <div class="code-block-header"><span class="code-block-lang">JavaScript</span></div>
+          <pre class="code-block-body" id="cloud-code"></pre>
+        </div>
+      </div>
+
+      <!-- 8. Degree -->
+      <div class="tab-panel" id="panel-degree">
+        <div class="panel-controls" id="degree-controls"></div>
+        <div id="degree-context" class="degree-context"></div>
+        <div class="panel-graph-area">
+          <div class="graph-mount" id="degree-graph"></div>
+        </div>
+        <div class="code-block">
+          <div class="code-block-header"><span class="code-block-lang">JavaScript</span></div>
+          <pre class="code-block-body" id="degree-code"></pre>
+        </div>
+      </div>
+
+      <!-- 9. Performance -->
+      <div class="tab-panel" id="panel-performance">
+        <div class="panel-controls" id="perf-controls"></div>
+        <div class="panel-graph-area">
+          <div class="graph-mount" id="perf-graph"></div>
+        </div>
+        <div class="code-block">
+          <div class="code-block-header"><span class="code-block-lang">JavaScript</span></div>
+          <pre class="code-block-body" id="perf-code"></pre>
+        </div>
+      </div>
+
+      <!-- 10. Agent Bridge -->
+      <div class="tab-panel" id="panel-agent-bridge">
+        <div class="agent-split-layout">
+          <div class="panel-graph-area">
+            <div class="agent-bridge-toolbar-slot" id="agent-bridge-toolbar-slot"></div>
+            <div class="graph-mount" id="agent-bridge-graph"></div>
+          </div>
+          <div class="agent-actions-col">
+            <div class="side-panel" style="flex: 0 0 auto;">
+              <div class="side-panel-title">Current Selection</div>
+              <div id="agent-bridge-sel-info">
+                <div class="side-panel-empty">Click nodes to select</div>
+              </div>
+            </div>
+            <div class="side-panel" style="flex: 1 1 0; min-height: 0;">
+              <div class="side-panel-title">Actions</div>
+              <div class="action-group-label">Selection</div>
+              <div class="action-btn-grid" id="agent-sel-actions"></div>
+              <div class="action-group-label">Context</div>
+              <div class="action-btn-grid" id="agent-ctx-actions"></div>
+            </div>
+          </div>
+        </div>
+        <div class="agent-context-output">
+          <div class="code-block">
+            <div class="code-block-header">
+              <span class="code-block-lang">Agent Context (Markdown)</span>
+              <button class="action-btn" id="agent-bridge-copy-btn" style="padding:3px 10px;font-size:11px;">Copy</button>
+            </div>
+            <pre class="code-block-body" id="agent-bridge-context-md" style="max-height:240px;overflow-y:auto;font-size:12px;line-height:1.6;"></pre>
+          </div>
+          <div class="code-block" style="margin-top:12px;">
+            <div class="code-block-header">
+              <span class="code-block-lang">Context JSON</span>
+              <div style="display:flex;gap:6px;">
+                <select id="agent-bridge-include-mode" style="background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:4px;color:var(--text-secondary);font-family:var(--font-mono);font-size:11px;padding:2px 6px;">
+                  <option value="connectedEdges">connectedEdges</option>
+                  <option value="oneHop">oneHop</option>
+                  <option value="explicit">explicit</option>
+                </select>
+              </div>
+            </div>
+            <pre class="code-block-body" id="agent-bridge-context-json" style="max-height:300px;overflow-y:auto;font-size:12px;line-height:1.6;"></pre>
+          </div>
+        </div>
+        <div class="code-block" style="margin-top:16px;">
+          <div class="code-block-header"><span class="code-block-lang">JavaScript</span></div>
+          <pre class="code-block-body" id="agent-bridge-code"></pre>
+        </div>
+      </div>
+
+      <!-- 11. Agentic Observability -->
+      <div class="tab-panel" id="panel-agentic-obs">
+        <div class="panel-controls" id="agentic-obs-controls"></div>
+        <div class="panel-graph-area" style="height:480px;">
+          <div class="graph-mount" id="agentic-obs-graph"></div>
+        </div>
+        <div style="margin-top:20px;">
+          <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <div class="section-title" style="font-size:14px;font-weight:600;color:var(--text-primary);">Chat Topology Block Preview</div>
+            <div style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);">renderAgentTopologyBlock()</div>
+          </div>
+          <div id="agentic-obs-chat-block" style="border-radius:var(--radius-lg);border:1px solid var(--border-subtle);background:var(--bg-secondary);padding:16px;overflow:hidden;"></div>
+        </div>
+        <div class="code-block" style="margin-top:16px;">
+          <div class="code-block-header"><span class="code-block-lang">JavaScript</span></div>
+          <pre class="code-block-body" id="agentic-obs-code"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ───────────────────────────────────────────────────── -->
+  <footer>
+    <div class="page-wrap">
+      <p>OpenTopoX &middot; MIT License &middot; <a href="https://github.com">GitHub</a></p>
+    </div>
+  </footer>
+
+  <!-- ── Application Logic ────────────────────────────────────────── -->
+  <script type="module">
+    import {
+      NewTopoGraph,
+      registerNodeShape,
+      FlowToolbar,
+      FlowLegend,
+      FlowControls,
+      ContextMenu,
+      buildCloudResourceTopology,
+      filterTopologyData,
+      getDataByNodeGroup,
+      createTopologyGraphStore,
+      createTopologyUpdateScheduler,
+      createRealtimeNodePatch,
+      createAgentActivityAdapter,
+      createChatTopologyBlockPayload,
+      renderAgentTopologyBlock,
+    } from "../src/framework/index.js";
+
+    // ── Shared Data ────────────────────────────────────────────────
+    const HERO_NODES = [
+      { id: "gateway", type: "componentNode", data: { title: "Gateway", icon: "GW", domain: "network", status: "ok", metric: { label: "RPS", value: "24.6k" } } },
+      { id: "auth", type: "cardLayerNode", data: { title: "Auth Service", icon: "AUTH", domain: "service", group: "security", status: "ok", metric: { label: "P99", value: "12ms" } } },
+      { id: "api", type: "cardLayerNode", data: { title: "API Server", icon: "API", domain: "service", group: "backend", status: "ok", metric: { label: "QPS", value: "12.8k" } } },
+      { id: "orders", type: "cardLayerNode", data: { title: "Order Service", icon: "ORD", domain: "service", group: "business", status: "ok", metric: { label: "QPS", value: "3.2k" } } },
+      { id: "payment", type: "cardLayerNode", data: { title: "Payment", icon: "PAY", domain: "service", group: "business", status: "warn", metric: { label: "Errors", value: "0.8%" } } },
+      { id: "db", type: "cardLayerNode", data: { title: "Orders DB", icon: "DB", domain: "database", group: "data", status: "ok", metric: { label: "QPS", value: "860" } } },
+      { id: "cache", type: "cardLayerNode", data: { title: "Redis Cluster", icon: "RDS", domain: "cache", group: "data", status: "ok", metric: { label: "Hit Rate", value: "98.9%" } } },
+      { id: "queue", type: "cardLayerNode", data: { title: "Message Queue", icon: "MQ", domain: "queue", group: "infra", status: "ok", metric: { label: "Throughput", value: "18k/s" } } },
+    ];
+
+    const HERO_EDGES = [
+      { id: "gw-auth", source: "gateway", target: "auth", label: "gRPC", data: { status: "ok", latency: "5ms" } },
+      { id: "gw-api", source: "gateway", target: "api", label: "HTTP/2", data: { status: "ok", latency: "8ms" } },
+      { id: "api-orders", source: "api", target: "orders", label: "gRPC", data: { status: "ok", latency: "22ms" } },
+      { id: "api-payment", source: "api", target: "payment", label: "gRPC", data: { status: "warn", latency: "96ms" } },
+      { id: "api-cache", source: "api", target: "cache", label: "TCP", data: { status: "ok", latency: "1ms" } },
+      { id: "orders-db", source: "orders", target: "db", label: "SQL", data: { status: "ok", latency: "24ms" } },
+      { id: "orders-queue", source: "orders", target: "queue", label: "Kafka", data: { status: "ok", latency: "3ms" } },
+      { id: "payment-db", source: "payment", target: "db", label: "SQL", data: { status: "warn", latency: "42ms" } },
+      { id: "auth-cache", source: "auth", target: "cache", label: "TCP", data: { status: "ok", latency: "1ms" } },
+    ];
+
+    // ── Syntax Highlighter ─────────────────────────────────────────
+    const JS_KEYWORDS = new Set([
+      "const", "let", "var", "function", "return", "if", "else", "for",
+      "while", "new", "await", "async", "import", "from", "export", "true",
+      "false", "null", "undefined", "class", "extends", "typeof", "this",
+    ]);
+
+    function highlight(code) {
+      const tokens = [];
+      let i = 0;
+      while (i < code.length) {
+        // Single-line comments
+        if (code[i] === "/" && code[i + 1] === "/") {
+          let end = code.indexOf("\n", i);
+          if (end === -1) end = code.length;
+          tokens.push(`<span class="cmt">${esc(code.slice(i, end))}</span>`);
+          i = end;
+          continue;
+        }
+        // Strings
+        if (code[i] === '"' || code[i] === "'" || code[i] === "`") {
+          const q = code[i];
+          let j = i + 1;
+          while (j < code.length && code[j] !== q) {
+            if (code[j] === "\\") j++;
+            j++;
+          }
+          tokens.push(`<span class="str">${esc(code.slice(i, j + 1))}</span>`);
+          i = j + 1;
+          continue;
+        }
+        // Numbers
+        if (/\d/.test(code[i]) && (i === 0 || !/\w/.test(code[i - 1]))) {
+          let j = i;
+          while (j < code.length && /[\d.xXa-fA-FeE]/.test(code[j])) j++;
+          tokens.push(`<span class="num">${esc(code.slice(i, j))}</span>`);
+          i = j;
+          continue;
+        }
+        // Identifiers / keywords
+        if (/[a-zA-Z_$]/.test(code[i])) {
+          let j = i;
+          while (j < code.length && /[\w$]/.test(code[j])) j++;
+          const word = code.slice(i, j);
+          if (JS_KEYWORDS.has(word)) {
+            tokens.push(`<span class="kw">${esc(word)}</span>`);
+          } else if (
+            j < code.length && code[j] === "(" &&
+            !word.startsWith("$")
+          ) {
+            tokens.push(`<span class="fn">${esc(word)}</span>`);
+          } else if (
+            j < code.length && code[j] === ":"
+          ) {
+            tokens.push(`<span class="prop">${esc(word)}</span>`);
+          } else {
+            tokens.push(esc(word));
+          }
+          i = j;
+          continue;
+        }
+        // Operators and punctuation
+        if (/[=<>!+\-*/&|?:]/.test(code[i])) {
+          tokens.push(`<span class="op">${esc(code[i])}</span>`);
+          i++;
+          continue;
+        }
+        tokens.push(esc(code[i]));
+        i++;
+      }
+      return tokens.join("");
+    }
+    function esc(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function fillCode(id, code) {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = highlight(code.trim());
+    }
+
+    // ── Helper: create a topo instance ─────────────────────────────
+    function createTopo(containerId, config = {}, handleNodeClick) {
+      const container = document.getElementById(containerId);
+      if (!container) return null;
+      return new NewTopoGraph({
+        container,
+        config: {
+          theme: "neutral",
+          grid: true,
+          minimap: true,
+          nodeDraggable: true,
+          hoverHighlight: true,
+          ...config,
+        },
+        handleNodeClick: handleNodeClick || (() => {}),
+      });
+    }
+
+    // ── Lifecycle State ────────────────────────────────────────────
+    const tabCleanup = {};
+    const initialized = new Set();
+    let currentTabName = null;
+    let realtimeRunning = false;
+    let realtimeInterval = null;
+
+    // ── Tab Definitions ────────────────────────────────────────────
+    const TABS = [
+      { key: "agentic-obs", label: "Agentic Observability" },
+      { key: "agent-bridge", label: "Agent Bridge" },
+      { key: "layouts", label: "Layouts" },
+      { key: "themes", label: "Themes" },
+      { key: "controls", label: "Controls" },
+      { key: "realtime", label: "Realtime" },
+      { key: "interaction", label: "Interaction" },
+      { key: "shapes", label: "Custom Shapes" },
+      { key: "cloud", label: "Cloud Resources" },
+      { key: "degree", label: "Degree" },
+      { key: "performance", label: "Performance" },
+    ];
+
+    // ── Build Tab Bar ──────────────────────────────────────────────
+    const tabBar = document.getElementById("tab-bar");
+    TABS.forEach((tab) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "tab-btn";
+      btn.textContent = tab.label;
+      btn.dataset.tab = tab.key;
+      btn.addEventListener("click", () => switchTab(tab.key));
+      tabBar.appendChild(btn);
+    });
+
+    function switchTab(tabName) {
+      if (currentTabName === tabName) return;
+
+      // Cleanup previous tab
+      if (currentTabName && currentTabName !== tabName && tabCleanup[currentTabName]) {
+        tabCleanup[currentTabName]();
+        tabCleanup[currentTabName] = null;
+        initialized.delete(currentTabName);
+      }
+
+      // Stop realtime if leaving that tab
+      if (tabName !== "realtime" && realtimeRunning) {
+        clearInterval(realtimeInterval);
+        realtimeRunning = false;
+      }
+
+      // Stop agentic-obs replay if leaving that tab
+      if (tabName !== "agentic-obs" && tabCleanup["agentic-obs"]) {
+        tabCleanup["agentic-obs"]();
+      }
+
+      // Update tab bar UI
+      document.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.tab === tabName);
+      });
+      document.querySelectorAll(".tab-panel").forEach((panel) => {
+        panel.classList.toggle("active", panel.id === `panel-${tabName}`);
+      });
+
+      currentTabName = tabName;
+
+      // Lazy init
+      if (!initialized.has(tabName)) {
+        initialized.add(tabName);
+        const initFn = tabInit[tabName];
+        if (initFn) initFn();
+      }
+    }
+
+    const tabInit = {
+      layouts: initLayouts,
+      themes: initThemes,
+      controls: initControls,
+      realtime: initRealtime,
+      interaction: initInteraction,
+      shapes: initShapes,
+      cloud: initCloud,
+      degree: initDegree,
+      performance: initPerformance,
+      "agent-bridge": initAgentBridge,
+      "agentic-obs": initAgenticObservability,
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // HERO GRAPH
+    // ═══════════════════════════════════════════════════════════════
+    (function initHero() {
+      const topo = createTopo("hero-graph", { debugPanel: false });
+      if (!topo) return;
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 320, nodeSep: 90 });
+      graph.setData({ nodes: HERO_NODES, edges: HERO_EDGES, autoFit: true });
+    })();
+
+    // ═══════════════════════════════════════════════════════════════
+    // 1. LAYOUTS TAB
+    // ═══════════════════════════════════════════════════════════════
+    function initLayouts() {
+      const controlsEl = document.getElementById("layout-controls");
+      controlsEl.innerHTML = "";
+
+      const label = document.createElement("span");
+      label.className = "controls-label";
+      label.textContent = "Layout";
+      controlsEl.appendChild(label);
+
+      const LAYOUTS = [
+        { key: "dot", label: "DOT" },
+        { key: "fdp", label: "FDP" },
+        { key: "layer", label: "Layer" },
+        { key: "xyFlow", label: "XYFlow" },
+        { key: "radial", label: "Radial" },
+        { key: "grid", label: "Grid" },
+        { key: "entityFlow", label: "EntityFlow" },
+        { key: "preset", label: "Preset" },
+      ];
+
+      let activeLayout = "dot";
+
+      const topo = createTopo("layout-graph");
+      if (!topo) return;
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 240, nodeSep: 70 });
+      graph.setData({ nodes: HERO_NODES, edges: HERO_EDGES, autoFit: true });
+
+      LAYOUTS.forEach((l) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = l.label;
+        btn.className = l.key === activeLayout ? "active" : "";
+        btn.addEventListener("click", () => {
+          activeLayout = l.key;
+          controlsEl.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          graph.setLayout({ topoType: l.key, rankDir: "LR", rankSep: 240, nodeSep: 70 });
+          graph.setData({ nodes: HERO_NODES, edges: HERO_EDGES, autoFit: true });
+        });
+        controlsEl.appendChild(btn);
+      });
+
+      fillCode("layout-code", `
+const topo = new NewTopoGraph({ container, config: { theme: "neutral", grid: true, minimap: true } });
+const graph = topo.getGraph();
+
+// Switch between 8 layout algorithms
+graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 240, nodeSep: 70 });
+await graph.setData({ nodes, edges, autoFit: true });
+
+// Available: dot, fdp, layer, xyFlow, radial, grid, entityFlow, preset
+graph.setLayout({ topoType: "radial" });
+await graph.setData({ nodes, edges, autoFit: true });
+      `);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 2. THEMES TAB
+    // ═══════════════════════════════════════════════════════════════
+    function initThemes() {
+      const cardsEl = document.getElementById("theme-cards");
+      cardsEl.innerHTML = "";
+
+      const THEMES = [
+        { key: "neutral", label: "Neutral", desc: "Clean monochrome grid", colors: ["#3f3f46", "#71717a", "#a1a1aa"] },
+        { key: "aurora", label: "Aurora", desc: "Subtle cool-tone grid", colors: ["#2563eb", "#06b6d4", "#8b5cf6"] },
+        { key: "severity", label: "Severity", desc: "Status-aware grid dots", colors: ["#22c55e", "#f59e0b", "#f43f5e"] },
+      ];
+
+      let activeTheme = "neutral";
+
+      const topo = createTopo("theme-graph");
+      if (!topo) return;
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 240, nodeSep: 70 });
+      graph.setData({ nodes: HERO_NODES, edges: HERO_EDGES, autoFit: true });
+
+      THEMES.forEach((t) => {
+        const card = document.createElement("div");
+        card.className = `theme-card${t.key === activeTheme ? " active" : ""}`;
+        card.innerHTML = `
+          <div class="theme-card-name">${t.label}</div>
+          <div class="theme-card-desc">${t.desc}</div>
+          <div class="theme-dots">
+            ${t.colors.map((c) => `<span style="background:${c}"></span>`).join("")}
+          </div>
+        `;
+        card.addEventListener("click", () => {
+          activeTheme = t.key;
+          cardsEl.querySelectorAll(".theme-card").forEach((c) => c.classList.remove("active"));
+          card.classList.add("active");
+          graph.setTheme(t.key);
+        });
+        cardsEl.appendChild(card);
+      });
+
+      fillCode("theme-code", `
+// Switch themes at runtime — changes grid dot colors
+graph.setTheme("neutral");  // Clean monochrome
+graph.setTheme("aurora");   // Cool-tone accent
+graph.setTheme("severity"); // Status-aware coloring
+
+// Note: themes currently affect grid dot appearance
+      `);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 3. CONTROLS TAB
+    // ═══════════════════════════════════════════════════════════════
+    function initControls() {
+      const topo = createTopo("controls-graph");
+      if (!topo) return;
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 240, nodeSep: 70 });
+
+      // Build slightly richer data for legend filtering
+      const controlsNodes = HERO_NODES.map((n) => ({ ...n }));
+      const controlsEdges = HERO_EDGES.map((e) => ({ ...e }));
+      graph.setData({ nodes: controlsNodes, edges: controlsEdges, autoFit: true });
+
+      // FlowToolbar overlay
+      const toolbarSlot = document.getElementById("controls-toolbar-slot");
+      toolbarSlot.innerHTML = "";
+      new FlowToolbar({
+        container: toolbarSlot,
+        graph: topo,
+        enableReLayout: true,
+        enableFullscreen: true,
+        onLayoutChange(layout) {
+          graph.setLayout({ topoType: layout, rankDir: "LR", rankSep: 240, nodeSep: 70 });
+          graph.setData({ nodes: controlsNodes, edges: controlsEdges, autoFit: true });
+        },
+        handleReset() {
+          graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 240, nodeSep: 70 });
+          graph.setData({ nodes: controlsNodes, edges: controlsEdges, autoFit: true });
+        },
+        layouts: [
+          { key: "dot", label: "DOT", title: "Hierarchical (DOT)" },
+          { key: "fdp", label: "FDP", title: "Force-directed" },
+          { key: "layer", label: "Layer", title: "Layered" },
+          { key: "radial", label: "Radial", title: "Radial" },
+        ],
+      });
+
+      // FlowLegend for domain filtering
+      const legendSlot = document.getElementById("controls-legend-slot");
+      legendSlot.innerHTML = "";
+      const domains = [...new Set(HERO_NODES.map((n) => n.data.domain))];
+      const domainColors = {
+        network: "#3b82f6",
+        service: "#8b5cf6",
+        database: "#f59e0b",
+        cache: "#06b6d4",
+        queue: "#ec4899",
+      };
+      new FlowLegend({
+        container: legendSlot,
+        multi: true,
+        items: domains.map((d) => ({ key: d, label: d, color: domainColors[d] || "#71717a" })),
+        onChange(activeKeys) {
+          const filtered = filterTopologyData({
+            nodes: controlsNodes,
+            edges: controlsEdges,
+            domains: activeKeys,
+          });
+          graph.setData({ ...filtered, autoFit: true });
+        },
+      });
+
+      fillCode("controls-code", `
+// FlowToolbar — layout switching, fullscreen, reset
+new FlowToolbar({
+  container: toolbarSlot,
+  graph: topo,
+  enableReLayout: true,
+  enableFullscreen: true,
+  onLayoutChange(layout) { /* switch layout */ },
+  handleReset() { /* reset to default */ },
+  layouts: [
+    { key: "dot", label: "DOT", title: "Hierarchical" },
+    { key: "radial", label: "Radial", title: "Radial" },
+  ],
+});
+
+// FlowLegend — domain-based node filtering
+new FlowLegend({
+  container: legendSlot,
+  multi: true,
+  items: [{ key: "service", label: "service", color: "#8b5cf6" }],
+  onChange(activeKeys) {
+    const filtered = filterTopologyData({ nodes, edges, domains: activeKeys });
+    graph.setData({ ...filtered, autoFit: true });
+  },
+});
+      `);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 4. REALTIME TAB
+    // ═══════════════════════════════════════════════════════════════
+    function initRealtime() {
+      const controlsEl = document.getElementById("realtime-controls");
+      controlsEl.innerHTML = "";
+
+      // Controls: pause/resume + speed
+      const label = document.createElement("span");
+      label.className = "controls-label";
+      label.textContent = "Realtime";
+      controlsEl.appendChild(label);
+
+      const pauseBtn = document.createElement("button");
+      pauseBtn.type = "button";
+      pauseBtn.textContent = "Pause";
+      controlsEl.appendChild(pauseBtn);
+
+      const statusDiv = document.createElement("div");
+      statusDiv.className = "realtime-status";
+      const indicator = document.createElement("div");
+      indicator.className = "realtime-indicator";
+      const statusLabel = document.createElement("span");
+      statusLabel.style.cssText = "font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono);";
+      statusLabel.textContent = "LIVE";
+      statusDiv.appendChild(indicator);
+      statusDiv.appendChild(statusLabel);
+
+      const spacer = document.createElement("div");
+      spacer.className = "controls-spacer";
+      controlsEl.appendChild(spacer);
+      controlsEl.appendChild(statusDiv);
+
+      // Speed buttons
+      const speedDiv = document.createElement("div");
+      speedDiv.className = "speed-btns";
+      speedDiv.style.marginLeft = "12px";
+      const speeds = [
+        { label: "1x", ms: 1200 },
+        { label: "2x", ms: 600 },
+        { label: "5x", ms: 240 },
+      ];
+      let currentSpeed = 1200;
+      speeds.forEach((s) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `speed-btn${s.ms === 1200 ? " active" : ""}`;
+        btn.textContent = s.label;
+        btn.addEventListener("click", () => {
+          currentSpeed = s.ms;
+          speedDiv.querySelectorAll(".speed-btn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          if (realtimeRunning) {
+            clearInterval(realtimeInterval);
+            startUpdates();
+          }
+        });
+        speedDiv.appendChild(btn);
+      });
+      controlsEl.appendChild(speedDiv);
+
+      // Graph setup
+      const topo = createTopo("realtime-graph", { debugPanel: true });
+      if (!topo) return;
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 240, nodeSep: 70 });
+
+      const store = createTopologyGraphStore({ nodes: HERO_NODES, edges: HERO_EDGES });
+      const scheduler = createTopologyUpdateScheduler({ graph, store });
+
+      graph.setData({ ...store.getData(), autoFit: true });
+
+      let seq = 0;
+      let paused = false;
+
+      function generatePatch() {
+        seq += 1;
+        const patchNodes = HERO_NODES.map((n) => {
+          const statuses = ["ok", "ok", "ok", "warn", "critical"];
+          const newStatus = statuses[Math.floor(Math.random() * statuses.length)];
+          const metricBase = Math.floor(Math.random() * 900 + 100);
+          return {
+            id: n.id,
+            data: {
+              status: newStatus,
+              metric: { label: n.data.metric.label, value: `${metricBase}` },
+            },
+          };
+        });
+        scheduler.enqueueMessage(createRealtimeNodePatch({
+          version: seq,
+          seq,
+          source: "showcase-demo",
+          patches: patchNodes,
+        }));
+      }
+
+      function startUpdates() {
+        realtimeInterval = setInterval(generatePatch, currentSpeed);
+        realtimeRunning = true;
+      }
+
+      pauseBtn.addEventListener("click", () => {
+        paused = !paused;
+        pauseBtn.textContent = paused ? "Resume" : "Pause";
+        indicator.className = paused ? "realtime-indicator paused" : "realtime-indicator";
+        statusLabel.textContent = paused ? "PAUSED" : "LIVE";
+        if (paused) {
+          clearInterval(realtimeInterval);
+          realtimeRunning = false;
+        } else {
+          startUpdates();
+        }
+      });
+
+      startUpdates();
+
+      tabCleanup.realtime = () => {
+        clearInterval(realtimeInterval);
+        realtimeRunning = false;
+        paused = false;
+      };
+
+      fillCode("realtime-code", `
+// Create a realtime graph store and scheduler
+const store = createTopologyGraphStore({ nodes, edges });
+const scheduler = createTopologyUpdateScheduler({ graph, store });
+await graph.setData({ ...store.getData(), autoFit: true });
+
+// Simulate live updates
+setInterval(() => {
+  seq += 1;
+  scheduler.enqueueMessage(createRealtimeNodePatch({
+    version: seq,
+    seq,
+    source: "demo",
+    patches: [{
+      id: "service",
+      data: { status: "warn", metric: { label: "P95", value: "180ms" } },
+    }],
+  }));
+}, 1200);
+      `);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 5. INTERACTION TAB
+    // ═══════════════════════════════════════════════════════════════
+    function initInteraction() {
+      const detailEl = document.getElementById("interaction-detail");
+
+      const topo = createTopo("interaction-graph", {}, (node) => {
+        showNodeDetail(node);
+      });
+      if (!topo) return;
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 240, nodeSep: 70 });
+      graph.setData({ nodes: HERO_NODES, edges: HERO_EDGES, autoFit: true });
+
+      function showNodeDetail(node) {
+        const d = node.data || {};
+        const statusClass = d.status || "ok";
+        detailEl.innerHTML = `
+          <div class="node-detail-card">
+            <h3>${d.title || node.id}</h3>
+            <div class="node-id">${node.id}</div>
+            <div class="node-detail-row">
+              <span class="label">Status</span>
+              <span class="value"><span class="status-dot ${statusClass}"></span>${statusClass}</span>
+            </div>
+            ${d.domain ? `<div class="node-detail-row"><span class="label">Domain</span><span class="value">${d.domain}</span></div>` : ""}
+            ${d.group ? `<div class="node-detail-row"><span class="label">Group</span><span class="value">${d.group}</span></div>` : ""}
+            ${d.metric ? `<div class="node-detail-row"><span class="label">${d.metric.label}</span><span class="value">${d.metric.value}</span></div>` : ""}
+            ${d.icon ? `<div class="node-detail-row"><span class="label">Icon</span><span class="value">${d.icon}</span></div>` : ""}
+            <div class="node-detail-row">
+              <span class="label">Type</span>
+              <span class="value">${node.type}</span>
+            </div>
+          </div>
+        `;
+      }
+
+      fillCode("interaction-code", `
+// Click handler receives the full node object
+const topo = new NewTopoGraph({
+  container,
+  config: { theme: "neutral", grid: true, minimap: true },
+  handleNodeClick(node) {
+    console.log(node.id, node.data?.title);
+    // Access: node.id, node.type, node.data.title, node.data.status,
+    //         node.data.domain, node.data.metric, node.data.tags
+  },
+});
+      `);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 6. CUSTOM SHAPES TAB
+    // ═══════════════════════════════════════════════════════════════
+    function initShapes() {
+      // Register a custom hex-service node shape
+      registerNodeShape("hex-service", {
+        render(node, { escapeHtml }) {
+          const d = node.data || {};
+          const title = escapeHtml(d.title || node.id);
+          const icon = d.icon ? escapeHtml(d.icon) : "";
+          const statusColor = d.status === "warn" ? "#f59e0b"
+            : d.status === "critical" ? "#f43f5e" : "#22c55e";
+          const metricLabel = d.metric ? escapeHtml(d.metric.label) : "";
+          const metricValue = d.metric ? escapeHtml(d.metric.value) : "";
+          return `
+            <div style="
+              background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+              border: 1px solid rgba(255,255,255,0.08);
+              border-left: 3px solid ${statusColor};
+              border-radius: 10px;
+              padding: 12px 16px;
+              min-width: 200px;
+              font-family: 'DM Sans', sans-serif;
+              color: #fafafa;
+            ">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="
+                  background: ${statusColor}22;
+                  color: ${statusColor};
+                  padding: 2px 8px;
+                  border-radius: 4px;
+                  font-size: 10px;
+                  font-weight: 700;
+                  font-family: 'JetBrains Mono', monospace;
+                  letter-spacing: 0.04em;
+                ">${icon}</span>
+                <span style="font-weight:600;font-size:13px;">${title}</span>
+              </div>
+              ${metricLabel ? `<div style="font-size:11px;color:#71717a;font-family:'JetBrains Mono',monospace;">
+                ${metricLabel}: <span style="color:#a1a1aa;">${metricValue}</span>
+              </div>` : ""}
+            </div>
+          `;
+        },
+      });
+
+      const topo = createTopo("shapes-graph");
+      if (!topo) return;
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 260, nodeSep: 80 });
+
+      const customNodes = [
+        { id: "hex-gw", type: "hex-service", data: { title: "API Gateway", icon: "GW", status: "ok", metric: { label: "RPS", value: "42k" } } },
+        { id: "hex-svc-a", type: "hex-service", data: { title: "User Service", icon: "USR", status: "ok", metric: { label: "P99", value: "18ms" } } },
+        { id: "hex-svc-b", type: "hex-service", data: { title: "Order Service", icon: "ORD", status: "warn", metric: { label: "Errors", value: "2.1%" } } },
+        { id: "hex-svc-c", type: "hex-service", data: { title: "Payment Service", icon: "PAY", status: "ok", metric: { label: "QPS", value: "5.8k" } } },
+        { id: "hex-db", type: "hex-service", data: { title: "Primary DB", icon: "DB", status: "ok", metric: { label: "QPS", value: "1.2k" } } },
+      ];
+      const customEdges = [
+        { id: "hex-e1", source: "hex-gw", target: "hex-svc-a", label: "HTTP", data: { status: "ok" } },
+        { id: "hex-e2", source: "hex-gw", target: "hex-svc-b", label: "gRPC", data: { status: "warn" } },
+        { id: "hex-e3", source: "hex-gw", target: "hex-svc-c", label: "gRPC", data: { status: "ok" } },
+        { id: "hex-e4", source: "hex-svc-a", target: "hex-db", label: "SQL", data: { status: "ok" } },
+        { id: "hex-e5", source: "hex-svc-b", target: "hex-db", label: "SQL", data: { status: "ok" } },
+      ];
+      graph.setData({ nodes: customNodes, edges: customEdges, autoFit: true });
+
+      fillCode("shapes-code", `
+// Register a custom node shape with full rendering control
+registerNodeShape("hex-service", {
+  render(node, { escapeHtml }) {
+    const d = node.data || {};
+    const title = escapeHtml(d.title || node.id);
+    const statusColor = d.status === "warn" ? "#f59e0b" : "#22c55e";
+    return '<div style="...">'
+      + '<span>' + title + '</span>'
+      + '<span>' + d.metric.value + '</span>'
+      + '</div>';
+  },
+});
+
+// Use it in graph data
+await graph.setData({
+  nodes: [
+    { id: "gw", type: "hex-service", data: { title: "Gateway", status: "ok" } },
+  ],
+  edges: [],
+  autoFit: true,
+});
+      `);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 7. CLOUD RESOURCES TAB
+    // ═══════════════════════════════════════════════════════════════
+    function initCloud() {
+      const topo = createTopo("cloud-graph", { performanceEdgeLabelLimit: 80 });
+      if (!topo) return;
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "layer", rankDir: "LR", rankSep: 240, nodeSep: 70 });
+
+      const cloudData = buildCloudResourceTopology({
+        connectedResources: [
+          { id: "slb-main", name: "Public SLB", type: "slb", regionId: "cn-hangzhou", layer: 0, metric: { label: "QPS", value: "12.2k" } },
+          { id: "ecs-api-a", name: "API ECS A", type: "ecs", regionId: "cn-hangzhou", layer: 1, metric: { label: "CPU", value: "42%" } },
+          { id: "ecs-api-b", name: "API ECS B", type: "ecs", regionId: "cn-hangzhou", layer: 1, metric: { label: "CPU", value: "37%" } },
+          { id: "rds-orders", name: "Orders RDS", type: "rds", regionId: "cn-hangzhou", layer: 2, metric: { label: "QPS", value: "860" } },
+          { id: "redis-session", name: "Session Redis", type: "redis", regionId: "cn-hangzhou", layer: 2, metric: { label: "Hit", value: "98.9%" } },
+        ],
+        unconnectedResources: [
+          { id: "oss-audit", name: "Audit OSS", type: "oss", regionId: "cn-hangzhou" },
+          { id: "fc-worker", name: "Async FC", type: "fc", regionId: "cn-shanghai" },
+        ],
+        connections: [
+          { source: "slb-main", target: "ecs-api-a", label: "balances", latency: "11ms" },
+          { source: "slb-main", target: "ecs-api-b", label: "balances", latency: "14ms" },
+          { source: "ecs-api-a", target: "rds-orders", label: "queries", latency: "22ms" },
+          { source: "ecs-api-b", target: "rds-orders", label: "queries", latency: "25ms" },
+          { source: "ecs-api-a", target: "redis-session", label: "cache", latency: "3ms" },
+          { source: "ecs-api-b", target: "redis-session", label: "cache", latency: "4ms" },
+        ],
+      });
+
+      graph.setData({ ...cloudData, autoFit: true });
+
+      fillCode("cloud-code", `
+// Build cloud resource topology with connected + unconnected resources
+const topology = buildCloudResourceTopology({
+  connectedResources: [
+    { id: "slb", name: "Public SLB", type: "slb", layer: 0, metric: { label: "QPS", value: "12.2k" } },
+    { id: "ecs-a", name: "API ECS A", type: "ecs", layer: 1, metric: { label: "CPU", value: "42%" } },
+    { id: "rds", name: "Orders RDS", type: "rds", layer: 2, metric: { label: "QPS", value: "860" } },
+  ],
+  unconnectedResources: [
+    { id: "oss", name: "Audit OSS", type: "oss" },
+    { id: "fc", name: "Async FC", type: "fc" },
+  ],
+  connections: [
+    { source: "slb", target: "ecs-a", label: "balances", latency: "11ms" },
+    { source: "ecs-a", target: "rds", label: "queries", latency: "22ms" },
+  ],
+});
+
+graph.setLayout({ topoType: "layer", rankDir: "LR" });
+await graph.setData({ ...topology, autoFit: true });
+      `);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 8. PERFORMANCE TAB
+    // ═══════════════════════════════════════════════════════════════
+    function initDegree() {
+      const controlsEl = document.getElementById("degree-controls");
+      controlsEl.innerHTML = "";
+      const contextEl = document.getElementById("degree-context");
+      contextEl.textContent = "";
+
+      const DEGREES = [1, 2, 3, 4];
+      const allNodes = HERO_NODES.map(n => ({ ...n }));
+      const allEdges = HERO_EDGES.map(e => ({ ...e }));
+
+      const searchInput = document.createElement("input");
+      searchInput.type = "text";
+      searchInput.className = "search-input";
+      searchInput.placeholder = "Search service...";
+      controlsEl.appendChild(searchInput);
+
+      const spacer = document.createElement("span");
+      spacer.className = "controls-spacer";
+      controlsEl.appendChild(spacer);
+
+      const topo = createTopo("degree-graph", {}, (node) => {
+        searchInput.value = node.data?.title || node.id;
+        applySearch(node.id);
+      });
+      if (!topo) return;
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 240, nodeSep: 70 });
+      graph.setData({ nodes: allNodes, edges: allEdges, autoFit: true });
+
+      let currentDegree = 1;
+
+      function updateContext(matchTitle, nodeCount, edgeCount) {
+        if (!matchTitle) {
+          contextEl.innerHTML = "Showing all <strong>" + nodeCount + "</strong> nodes";
+        } else {
+          contextEl.innerHTML = "Showing <strong>" + currentDegree + "-hop</strong> neighbors of <strong>" + matchTitle + "</strong> (" + nodeCount + " nodes, " + edgeCount + " edges)";
+        }
+      }
+
+      async function applySearch(focusId) {
+        if (!focusId) {
+          await graph.setData({ nodes: allNodes, edges: allEdges, autoFit: true });
+          updateContext(null, allNodes.length);
+          return;
+        }
+        const result = await graph.handleFocusNode(focusId, { degree: currentDegree, direction: "both" });
+        if (!result || !result.nodes.length) {
+          await graph.setData({ nodes: allNodes, edges: allEdges, autoFit: true });
+          await graph.handleFocusNode(focusId, { degree: currentDegree, direction: "both" });
+        }
+        const focusNode = allNodes.find(n => n.id === focusId);
+        const title = focusNode?.data?.title || focusId;
+        const mount = document.getElementById("degree-graph");
+        const nc = mount.querySelectorAll(".topo-node").length;
+        const ec = mount.querySelectorAll(".topo-edge").length;
+        updateContext(title, nc, ec);
+      }
+
+      async function handleSearch() {
+        const query = searchInput.value.trim().toLowerCase();
+        if (!query) {
+          await applySearch(null);
+          return;
+        }
+        const match = allNodes.find(n => {
+          const text = [n.id, n.data?.title, n.data?.domain, n.data?.group, n.data?.icon].join(" ").toLowerCase();
+          return text.includes(query);
+        });
+        if (match) {
+          await applySearch(match.id);
+        } else {
+          const result = filterTopologyData({ nodes: allNodes, edges: allEdges, query, degree: currentDegree });
+          await graph.setData({ nodes: result.nodes, edges: result.edges, autoFit: true });
+          updateContext('"' + query + '"', result.nodes.length, result.edges.length);
+        }
+      }
+
+      let debounceTimer;
+      searchInput.addEventListener("input", () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(handleSearch, 200);
+      });
+
+      DEGREES.forEach((deg) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ctrl-btn" + (deg === currentDegree ? " active" : "");
+        btn.textContent = deg + "-Hop";
+        btn.addEventListener("click", () => {
+          currentDegree = deg;
+          controlsEl.querySelectorAll(".ctrl-btn").forEach(b => b.classList.toggle("active", b.textContent === deg + "-Hop"));
+          handleSearch();
+        });
+        controlsEl.appendChild(btn);
+      });
+
+      const resetBtn = document.createElement("button");
+      resetBtn.type = "button";
+      resetBtn.className = "ctrl-btn";
+      resetBtn.textContent = "Reset";
+      resetBtn.addEventListener("click", () => {
+        searchInput.value = "";
+        applySearch(null);
+      });
+      controlsEl.appendChild(resetBtn);
+
+      updateContext(null, allNodes.length);
+
+      fillCode("degree-code", `
+const result = filterTopologyData({
+  nodes, edges,
+  query: "payment",
+  degree: 2,
+});
+await graph.setData({ nodes: result.nodes, edges: result.edges });
+
+graph.handleFocusNode("payment", {
+  degree: 2,
+  direction: "both",
+});
+graph.showOriginData();
+      `);
+    }
+
+    function initPerformance() {
+      const controlsEl = document.getElementById("perf-controls");
+      controlsEl.innerHTML = "";
+
+      const label = document.createElement("span");
+      label.className = "controls-label";
+      label.textContent = "Nodes";
+      controlsEl.appendChild(label);
+
+      const topo = createTopo("perf-graph", {
+        performanceEdgeLabelLimit: 80,
+        debugPanel: true,
+      });
+      if (!topo) return;
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "grid" });
+
+      // Generate ~120 nodes in a grid
+      const GRID_COLS = 12;
+      const GRID_ROWS = 10;
+      const perfNodes = [];
+      const perfEdges = [];
+
+      for (let r = 0; r < GRID_ROWS; r++) {
+        for (let c = 0; c < GRID_COLS; c++) {
+          const idx = r * GRID_COLS + c;
+          const statuses = ["ok", "ok", "ok", "ok", "warn"];
+          perfNodes.push({
+            id: `n-${idx}`,
+            type: "componentNode",
+            data: {
+              title: `svc-${idx}`,
+              domain: idx % 3 === 0 ? "service" : idx % 3 === 1 ? "database" : "cache",
+              status: statuses[idx % statuses.length],
+              metric: { label: "QPS", value: `${Math.floor(Math.random() * 2000)}` },
+            },
+          });
+
+          // Connect to right neighbor
+          if (c < GRID_COLS - 1) {
+            perfEdges.push({
+              id: `e-h-${idx}`,
+              source: `n-${idx}`,
+              target: `n-${idx + 1}`,
+              label: "tcp",
+              data: { status: "ok", latency: `${Math.floor(Math.random() * 50)}ms` },
+            });
+          }
+          // Connect to bottom neighbor
+          if (r < GRID_ROWS - 1) {
+            perfEdges.push({
+              id: `e-v-${idx}`,
+              source: `n-${idx}`,
+              target: `n-${idx + GRID_COLS}`,
+              label: "grpc",
+              data: { status: "ok", latency: `${Math.floor(Math.random() * 30)}ms` },
+            });
+          }
+        }
+      }
+
+      let currentCount = perfNodes.length;
+
+      // Node count buttons
+      const sizes = [30, 60, 120];
+      sizes.forEach((count) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = `${count}`;
+        btn.className = count === 120 ? "active" : "";
+        btn.addEventListener("click", () => {
+          currentCount = count;
+          controlsEl.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          const subset = {
+            nodes: perfNodes.slice(0, count),
+            edges: perfEdges.filter((e) => {
+              const srcIdx = parseInt(e.source.split("-")[1], 10);
+              const tgtIdx = parseInt(e.target.split("-")[1], 10);
+              return srcIdx < count && tgtIdx < count;
+            }),
+          };
+          graph.setData({ ...subset, autoFit: true });
+        });
+        controlsEl.appendChild(btn);
+      });
+
+      const spacer = document.createElement("div");
+      spacer.className = "controls-spacer";
+      controlsEl.appendChild(spacer);
+
+      const countLabel = document.createElement("span");
+      countLabel.style.cssText = "font-family:var(--font-mono);font-size:12px;color:var(--text-muted);";
+      countLabel.textContent = `${perfNodes.length} nodes, ${perfEdges.length} edges`;
+      controlsEl.appendChild(countLabel);
+
+      graph.setData({ nodes: perfNodes, edges: perfEdges, autoFit: true });
+
+      fillCode("perf-code", `
+// Performance config for large graphs
+const topo = new NewTopoGraph({
+  container,
+  config: {
+    performanceEdgeLabelLimit: 80,  // Hide labels above 80 edges
+    debugPanel: true,
+    theme: "neutral",
+  },
+});
+const graph = topo.getGraph();
+graph.setLayout({ topoType: "grid" });
+
+// Generate 120 nodes programmatically
+const nodes = [];
+const edges = [];
+for (let i = 0; i < 120; i++) {
+  nodes.push({ id: 'n-' + i, type: "componentNode", data: { title: "svc-" + i } });
+  if (i > 0) edges.push({ id: "e-" + i, source: "n-" + (i - 1), target: "n-" + i });
+}
+await graph.setData({ nodes, edges, autoFit: true });
+      `);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 10. AGENT BRIDGE TAB
+    // ═══════════════════════════════════════════════════════════════
+    function initAgentBridge() {
+      const graphContainer = document.getElementById("agent-bridge-graph");
+      if (!graphContainer) return;
+
+      const topo = new NewTopoGraph({
+        container: graphContainer,
+        config: {
+          theme: "neutral",
+          grid: true,
+          minimap: true,
+          nodeDraggable: true,
+          hoverHighlight: true,
+          enableSelection: true,
+          selectionMode: "default",
+        },
+      });
+
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 240, nodeSep: 70 });
+
+      const bridgeNodes = [
+        ...HERO_NODES,
+        { id: "lb", type: "componentNode", data: { title: "Load Balancer", icon: "LB", domain: "network", status: "ok", metric: { label: "RPS", value: "45.2k" } } },
+        { id: "inventory", type: "cardLayerNode", data: { title: "Inventory", icon: "INV", domain: "service", group: "business", status: "ok", metric: { label: "QPS", value: "1.4k" } } },
+        { id: "monitor", type: "cardLayerNode", data: { title: "Monitoring", icon: "MON", domain: "observability", group: "infra", status: "ok", metric: { label: "Scrape", value: "15s" } } },
+      ];
+      const bridgeEdges = [
+        ...HERO_EDGES,
+        { id: "lb-gw", source: "lb", target: "gateway", label: "HTTP/2", data: { status: "ok", latency: "2ms" } },
+        { id: "orders-inventory", source: "orders", target: "inventory", label: "gRPC", data: { status: "ok", latency: "15ms" } },
+        { id: "monitor-gw", source: "monitor", target: "gateway", label: "Prom", data: { status: "ok", latency: "-" } },
+      ];
+
+      graph.setData({ nodes: bridgeNodes, edges: bridgeEdges, autoFit: true });
+
+      // FlowToolbar with Agent Bridge options
+      const toolbarSlot = document.getElementById("agent-bridge-toolbar-slot");
+      toolbarSlot.innerHTML = "";
+      new FlowToolbar({
+        container: toolbarSlot,
+        graph: topo,
+        enableReLayout: true,
+        enableFullscreen: true,
+        enableContextCopy: true,
+        enableAreaSelection: true,
+        contextOptions: {
+          scope: "selected",
+          includeMode: "connectedEdges",
+          maxNodes: 80,
+          maxEdges: 160,
+        },
+        onLayoutChange(layout) {
+          graph.setLayout({ topoType: layout, rankDir: "LR", rankSep: 240, nodeSep: 70 });
+          graph.setData({ nodes: bridgeNodes, edges: bridgeEdges, autoFit: true });
+        },
+        handleReset() {
+          graph.setLayout({ topoType: "dot", rankDir: "LR", rankSep: 240, nodeSep: 70 });
+          graph.setData({ nodes: bridgeNodes, edges: bridgeEdges, autoFit: true });
+        },
+        layouts: [
+          { key: "dot", label: "DOT", title: "Hierarchical (DOT)" },
+          { key: "fdp", label: "FDP", title: "Force-directed" },
+          { key: "radial", label: "Radial", title: "Radial" },
+        ],
+      });
+
+      // ContextMenu with Agent Bridge
+      new ContextMenu({
+        container: graphContainer,
+        graph: topo,
+        enableContextCopy: true,
+        contextOptions: { scope: "selected", includeMode: "connectedEdges" },
+      });
+
+      // -- JSON highlighter --
+      function highlightJSON(obj) {
+        const raw = JSON.stringify(obj, null, 2);
+        return raw
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+          .replace(/("(?:\\.|[^"\\])*")\s*:/g, '<span class="prop">$1</span>:')
+          .replace(/:\s*("(?:\\.|[^"\\])*")/g, ': <span class="str">$1</span>')
+          .replace(/:\s*(\d+\.?\d*)/g, ': <span class="num">$1</span>')
+          .replace(/:\s*(true|false)/g, ': <span class="kw">$1</span>')
+          .replace(/:\s*(null)/g, ': <span class="cmt">$1</span>');
+      }
+
+      // -- Selection Info --
+      const selInfoEl = document.getElementById("agent-bridge-sel-info");
+      const ctxMdEl = document.getElementById("agent-bridge-context-md");
+      const ctxJsonEl = document.getElementById("agent-bridge-context-json");
+      const includeModeSelect = document.getElementById("agent-bridge-include-mode");
+
+      function getIncludeMode() {
+        return includeModeSelect.value || "connectedEdges";
+      }
+
+      function updateSelInfo() {
+        const sel = graph.getSelection();
+        const nc = sel.nodes?.length ?? 0;
+        const ec = sel.edges?.length ?? 0;
+        if (nc === 0 && ec === 0) {
+          selInfoEl.innerHTML = '<div class="side-panel-empty">Click nodes to select</div>';
+          ctxMdEl.textContent = "Select nodes or edges to extract agent context.";
+          ctxJsonEl.textContent = "";
+          return;
+        }
+        let mode = "default";
+        try { mode = graph.getSelectionMode?.() || "default"; } catch (_) { /* */ }
+
+        let html = "";
+        html += '<div class="node-detail-row"><span class="label">Nodes</span><span class="value">' + nc + '</span></div>';
+        html += '<div class="node-detail-row"><span class="label">Edges</span><span class="value">' + ec + '</span></div>';
+        if (sel.primary) {
+          html += '<div class="node-detail-row"><span class="label">Primary</span><span class="value">' + (sel.primary.type || "") + " " + (sel.primary.id || "") + '</span></div>';
+        }
+        html += '<div class="node-detail-row"><span class="label">Mode</span><span class="sel-mode-badge ' + mode + '">' + mode + '</span></div>';
+        if (nc > 0 && nc <= 12) {
+          html += '<div style="margin-top:6px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);word-break:break-all;line-height:1.4;">' + sel.nodes.join(", ") + '</div>';
+        }
+        selInfoEl.innerHTML = html;
+
+        // Auto-extract context when selection changes
+        updateContextOutput();
+      }
+
+      function updateContextOutput() {
+        const sel = graph.getSelection();
+        const nc = sel.nodes?.length ?? 0;
+        const scope = nc > 0 ? "selected" : "visible";
+        const includeMode = getIncludeMode();
+
+        // Extract with format "both" to get markdown + JSON envelope
+        const result = graph.extractContext({ scope, includeMode, format: "both" });
+
+        // Show Markdown output
+        ctxMdEl.textContent = result.markdown || "(no markdown)";
+
+        // Show JSON output
+        ctxJsonEl.innerHTML = highlightJSON(result.envelope || result.json || result);
+      }
+
+      // Re-extract when includeMode changes
+      includeModeSelect.addEventListener("change", () => {
+        const sel = graph.getSelection();
+        if ((sel.nodes?.length ?? 0) > 0 || (sel.edges?.length ?? 0) > 0) {
+          updateContextOutput();
+        }
+      });
+
+      // Listen for selection changes
+      graphContainer.addEventListener("topo:selection-change", () => updateSelInfo());
+
+      // -- Copy button --
+      document.getElementById("agent-bridge-copy-btn").addEventListener("click", async () => {
+        const sel = graph.getSelection();
+        const scope = (sel.nodes?.length ?? 0) > 0 ? "selected" : "visible";
+        const result = await graph.copyContext({ scope, includeMode: getIncludeMode() });
+        const btn = document.getElementById("agent-bridge-copy-btn");
+        if (result.copied) {
+          btn.textContent = "Copied!";
+          setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+        }
+      });
+
+      // -- API Action Buttons --
+      const selActionsEl = document.getElementById("agent-sel-actions");
+      const ctxActionsEl = document.getElementById("agent-ctx-actions");
+
+      const selButtons = [
+        { label: "Select All Visible", action() { graph.selectVisible(); } },
+        { label: "Invert Selection", action() { graph.invertSelection({ scope: "visible" }); } },
+        { label: "Clear Selection", action() { graph.clearSelection(); } },
+        { label: "Select Status: warn", action() { graph.selectByCriteria({ status: "warn" }); } },
+        { label: "Select Domain: service", action() { graph.selectByCriteria({ domain: "service" }); } },
+        { label: "Mode: Area Select", action() { graph.setSelectionMode("area"); } },
+        { label: "Mode: Default", action() { graph.setSelectionMode("default"); } },
+      ];
+
+      const ctxButtons = [
+        { label: "Extract Context (visible)", action() {
+          const result = graph.extractContext({ scope: "visible", includeMode: getIncludeMode(), format: "both" });
+          ctxMdEl.textContent = result.markdown || "(no markdown)";
+          ctxJsonEl.innerHTML = highlightJSON(result.envelope || result.json || result);
+        }},
+        { label: "Get Visible Graph Data", action() {
+          const result = graph.getVisibleGraphData();
+          ctxMdEl.textContent = "Visible nodes: " + (result.nodes?.length ?? 0) + ", edges: " + (result.edges?.length ?? 0);
+          ctxJsonEl.innerHTML = highlightJSON(result);
+        }},
+      ];
+
+      selButtons.forEach(b => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "action-btn";
+        btn.textContent = b.label;
+        btn.addEventListener("click", b.action);
+        selActionsEl.appendChild(btn);
+      });
+
+      ctxButtons.forEach(b => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "action-btn ctx";
+        btn.textContent = b.label;
+        btn.addEventListener("click", b.action);
+        ctxActionsEl.appendChild(btn);
+      });
+
+      // Code example
+      fillCode("agent-bridge-code", `
+const topo = new NewTopoGraph({
+  container,
+  config: {
+    enableSelection: true,
+    selectionMode: "default",
+  },
+});
+const graph = topo.getGraph();
+
+new FlowToolbar({
+  container: toolbarSlot,
+  graph: topo,
+  enableContextCopy: true,
+  enableAreaSelection: true,
+  contextOptions: {
+    scope: "selected",
+    includeMode: "connectedEdges",
+    maxNodes: 80,
+    maxEdges: 160,
+  },
+});
+
+new ContextMenu({
+  container,
+  graph: topo,
+  enableContextCopy: true,
+  contextOptions: { scope: "selected", includeMode: "connectedEdges" },
+});
+
+// Auto-extract context when user selects nodes
+container.addEventListener("topo:selection-change", () => {
+  const sel = graph.getSelection();
+  const scope = sel.nodes.length ? "selected" : "visible";
+  const context = graph.extractContext({ scope, includeMode: "connectedEdges" });
+  // Send context.markdown to your AI agent
+});
+
+// Or copy directly to clipboard
+await graph.copyContext({
+  scope: graph.getSelection().nodes.length ? "selected" : "visible",
+  includeMode: "oneHop",
+});
+      `);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 11. AGENTIC OBSERVABILITY TAB
+    // ═══════════════════════════════════════════════════════════════
+    function initAgenticObservability() {
+      const controlsEl = document.getElementById("agentic-obs-controls");
+      controlsEl.innerHTML = "";
+
+      const label = document.createElement("span");
+      label.className = "controls-label";
+      label.textContent = "Simulate";
+      controlsEl.appendChild(label);
+
+      const graphContainer = document.getElementById("agentic-obs-graph");
+      if (!graphContainer) return;
+
+      const topo = new NewTopoGraph({
+        container: graphContainer,
+        config: {
+          type: "agentTrace",
+          theme: "neutral",
+          grid: true,
+          nodeDraggable: false,
+          minimap: true,
+          hoverHighlight: true,
+        },
+      });
+
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "dot", rankDir: "TB", rankSep: 200, nodeSep: 60 });
+
+      const adapter = createAgentActivityAdapter({ source: "showcase-demo" });
+      const scheduler = createTopologyUpdateScheduler({ graph });
+
+      function ingest(event) {
+        const result = adapter.ingest(event);
+        if (result.valid && result.patch) {
+          const data = adapter.getGraphData();
+          graph.setData({ nodes: data.nodes, edges: data.edges, autoFit: true });
+        }
+        return result;
+      }
+
+      let agentInterval = null;
+      let replayIndex = 0;
+      let replayRunning = false;
+
+      const REPLAY_EVENTS = [
+        { type: "agent.run.started", runId: "run-001", name: "Investigate payment latency" },
+        { type: "agent.step.started", runId: "run-001", stepId: "step-1", name: "Inspect topology" },
+        { type: "agent.context.used", runId: "run-001", stepId: "step-1", targetId: "ctx-prod-topo", name: "Selected topology context", contextRef: { id: "ctx-prod-topo", summary: "12 nodes, 18 edges", nodeCount: 12, edgeCount: 18 } },
+        { type: "agent.tool.started", runId: "run-001", stepId: "step-1", targetId: "exec-1", name: "exec_command" },
+        { type: "agent.tool.completed", runId: "run-001", stepId: "step-1", targetId: "exec-1", name: "exec_command", durationMs: 340 },
+        { type: "agent.step.completed", runId: "run-001", stepId: "step-1", name: "Inspect topology", durationMs: 1580 },
+        { type: "agent.step.started", runId: "run-001", stepId: "step-2", name: "Analyze metrics" },
+        { type: "agent.tool.started", runId: "run-001", stepId: "step-2", targetId: "exec-2", name: "query_metrics" },
+        { type: "agent.tool.completed", runId: "run-001", stepId: "step-2", targetId: "exec-2", name: "query_metrics", durationMs: 820 },
+        { type: "agent.mcp.requested", runId: "run-001", stepId: "step-2", targetId: "prometheus-mcp", name: "Prometheus MCP", mcpRef: { id: "prometheus-mcp", name: "Prometheus Server" } },
+        { type: "agent.mcp.completed", runId: "run-001", stepId: "step-2", targetId: "prometheus-mcp", name: "Prometheus MCP", durationMs: 450 },
+        { type: "agent.tool.started", runId: "run-001", stepId: "step-2", targetId: "exec-3", name: "patch_service" },
+        { type: "agent.tool.failed", runId: "run-001", stepId: "step-2", targetId: "exec-3", name: "patch_service", error: { message: "Connection refused" } },
+        { type: "agent.step.completed", runId: "run-001", stepId: "step-2", name: "Analyze metrics", durationMs: 4200 },
+        { type: "agent.skill.used", runId: "run-001", stepId: "step-2", targetId: "retry-strategy", name: "Retry with backoff", skillRef: { id: "retry-strategy", name: "Retry Strategy" } },
+        { type: "agent.step.started", runId: "run-001", stepId: "step-3", name: "Apply fix" },
+        { type: "agent.tool.started", runId: "run-001", stepId: "step-3", targetId: "exec-4", name: "patch_service" },
+        { type: "agent.tool.completed", runId: "run-001", stepId: "step-3", targetId: "exec-4", name: "patch_service", durationMs: 1200 },
+        { type: "agent.artifact.created", runId: "run-001", stepId: "step-3", targetId: "artifact-config", name: "Updated config", artifactRef: { id: "artifact-config", name: "payment-config.yaml" } },
+        { type: "agent.step.completed", runId: "run-001", stepId: "step-3", name: "Apply fix", durationMs: 2100 },
+        { type: "agent.run.completed", runId: "run-001", name: "Investigate payment latency", durationMs: 12000 },
+      ];
+
+      function startReplay() {
+        if (replayRunning) return;
+        adapter.reset();
+        graph.setData({ nodes: [], edges: [], autoFit: true });
+        chatBlockContainer.innerHTML = '<div class="side-panel-empty">Running…</div>';
+        chatBlockInstance = null;
+        replayRunning = true;
+        replayIndex = 0;
+        agentInterval = setInterval(() => {
+          if (replayIndex >= REPLAY_EVENTS.length) {
+            clearInterval(agentInterval);
+            replayRunning = false;
+            replayBtn.textContent = "Replay";
+            return;
+          }
+          ingest(REPLAY_EVENTS[replayIndex]);
+          replayIndex++;
+          eventCountLabel.textContent = replayIndex + " / " + REPLAY_EVENTS.length + " events";
+        }, 600);
+        replayBtn.textContent = "Stop";
+      }
+
+      function stopReplay() {
+        clearInterval(agentInterval);
+        replayRunning = false;
+        replayBtn.textContent = "Replay";
+      }
+
+      const replayBtn = document.createElement("button");
+      replayBtn.type = "button";
+      replayBtn.textContent = "Replay";
+      replayBtn.addEventListener("click", () => {
+        if (replayRunning) stopReplay();
+        else startReplay();
+      });
+      controlsEl.appendChild(replayBtn);
+
+      const resetBtn = document.createElement("button");
+      resetBtn.type = "button";
+      resetBtn.textContent = "Reset";
+      resetBtn.addEventListener("click", () => {
+        stopReplay();
+        adapter.reset();
+        graph.setData({ nodes: [], edges: [], autoFit: true });
+        replayIndex = 0;
+        eventCountLabel.textContent = "0 / " + REPLAY_EVENTS.length + " events";
+      });
+      controlsEl.appendChild(resetBtn);
+
+      const spacer = document.createElement("div");
+      spacer.className = "controls-spacer";
+      controlsEl.appendChild(spacer);
+
+      const eventCountLabel = document.createElement("span");
+      eventCountLabel.style.cssText = "font-family:var(--font-mono);font-size:12px;color:var(--text-muted);";
+      eventCountLabel.textContent = "0 / " + REPLAY_EVENTS.length + " events";
+      controlsEl.appendChild(eventCountLabel);
+
+      tabCleanup["agentic-obs"] = () => {
+        stopReplay();
+      };
+
+      // Chat Topology Block
+      const chatBlockContainer = document.getElementById("agentic-obs-chat-block");
+      let chatBlockInstance = null;
+
+      function updateChatBlock() {
+        const data = adapter.getGraphData();
+        if (data.nodes.length === 0) {
+          chatBlockContainer.innerHTML = '<div class="side-panel-empty">Run replay to see chat topology block</div>';
+          return;
+        }
+        const payload = createChatTopologyBlockPayload({
+          kind: "activity-trace",
+          title: "Agent Activity Trace",
+          summary: replayIndex + " events ingested",
+          events: REPLAY_EVENTS.slice(0, replayIndex),
+          view: { compact: true, readonly: true, maxHeight: 260 },
+        });
+        if (chatBlockInstance) {
+          chatBlockInstance.update(payload);
+        } else {
+          chatBlockInstance = renderAgentTopologyBlock(chatBlockContainer, payload);
+        }
+      }
+
+      adapter.subscribe((event) => {
+        if (event.type === "patch") {
+          setTimeout(updateChatBlock, 50);
+        }
+      });
+
+      updateChatBlock();
+
+      fillCode("agentic-obs-code", `
+const adapter = createAgentActivityAdapter({ source: "my-agent" });
+const scheduler = createTopologyUpdateScheduler({ graph: topo.getGraph() });
+
+function ingestAgentEvent(event) {
+  const result = adapter.ingest(event);
+  if (result.valid) {
+    const data = adapter.getGraphData();
+    graph.setData({ nodes: data.nodes, edges: data.edges });
+  }
+}
+
+ingestAgentEvent({
+  type: "agent.run.started",
+  runId: "run-001",
+  name: "Investigate payment latency",
+});
+
+ingestAgentEvent({
+  type: "agent.tool.started",
+  runId: "run-001",
+  stepId: "inspect",
+  targetId: "exec-1",
+  name: "exec_command",
+});
+
+// Chat block for AI messages
+const payload = createChatTopologyBlockPayload({
+  kind: "activity-trace",
+  title: "Agent activity",
+  summary: "Key execution trace",
+  events: agentEvents,
+  view: { compact: true, readonly: true, maxHeight: 220 },
+});
+
+renderAgentTopologyBlock(messageElement, payload);
+      `);
+
+      startReplay();
+    }
+
+    // ── Activate first tab on load ─────────────────────────────────
+    switchTab("agentic-obs");
+  </script>
+</body>
+</html>

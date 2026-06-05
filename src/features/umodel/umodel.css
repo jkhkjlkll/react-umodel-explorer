@@ -510,6 +510,15 @@
 
 .ume-topbar-left {
   flex: 0 0 auto;
+  gap: 8px;
+}
+
+.ume-engine-segmented {
+  background: #f4f6f8;
+}
+
+.ume-engine-segmented button {
+  min-width: 82px;
 }
 
 .ume-topbar-actions {
@@ -1531,68 +1540,6 @@
   color: var(--ume-color-text-tertiary);
 }
 
-.ume-v2 .react-flow {
-  background-color: var(--ume-color-bg-subtle);
-  color: var(--ume-color-text-primary);
-}
-
-.ume-v2 .react-flow__node {
-  transition: opacity 400ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.ume-v2 .react-flow__node:hover {
-  z-index: 100 !important;
-}
-
-.ume-v2 .react-flow__node:focus {
-  outline: none;
-}
-
-.ume-v2 .react-flow__pane {
-  cursor: grab;
-}
-
-.ume-v2 .react-flow__pane:active {
-  cursor: grabbing;
-}
-
-.ume-v2 .react-flow__controls,
-.ume-v2 .react-flow__minimap {
-  overflow: hidden;
-  border: 1px solid var(--ume-color-border);
-  border-radius: var(--ume-radius-lg);
-  box-shadow: var(--ume-shadow-card);
-}
-
-.ume-v2 .react-flow__controls-button {
-  width: 30px;
-  height: 30px;
-  border-bottom-color: var(--ume-color-border);
-  background: var(--ume-color-surface);
-}
-
-.ume-v2 .react-flow__controls-button:hover {
-  background: var(--ume-color-bg-hover);
-}
-
-.ume-v2 .react-flow__background {
-  opacity: 0.5;
-}
-
-.ume-v2 .react-flow__attribution {
-  display: none;
-}
-
-.ume-v2 .v2-handle-source,
-.ume-v2 .v2-handle-target {
-  width: 1px !important;
-  height: 1px !important;
-  border: none !important;
-  background: transparent !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
 .ume-v2 .v2-node-card {
   position: relative;
   cursor: pointer;
@@ -1605,14 +1552,6 @@
 
 .ume-v2 .v2-node-card:hover .v2-node-card-body {
   box-shadow: var(--ume-shadow-card-hover);
-}
-
-.ume-v2 .react-flow__node.selected .v2-node-card-body {
-  box-shadow: 0 0 0 2.5px var(--node-color, var(--ume-color-accent)), 0 4px 12px rgba(91, 91, 214, 0.15);
-}
-
-.ume-v2 .react-flow__node.selected .ume-entity-link-pill {
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.34), 0 10px 24px rgba(99, 102, 241, 0.24);
 }
 
 .ume-node-top-menu {
@@ -1969,20 +1908,6 @@
   pointer-events: none;
   transform: translate(-50%, -100%);
   white-space: nowrap;
-}
-
-.v2-edge-hitarea {
-  cursor: pointer;
-  pointer-events: stroke;
-}
-
-.ume-v2 .react-flow__edge .react-flow__edge-path {
-  transition: opacity 400ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.ume-v2 .react-flow__edge:hover .react-flow__edge-path {
-  opacity: 1 !important;
-  stroke-width: 3 !important;
 }
 
 .ume-edge-label {
@@ -2510,41 +2435,6 @@ body.ume-resizing-detail .ume-detail-panel {
 }
 
 /* Aliyun playground inspired compact graph and form detail overrides. */
-.ume-v2 .react-flow {
-  background: #fbfbfc !important;
-}
-
-.ume-v2 .react-flow__background {
-  opacity: 0.66;
-}
-
-.ume-v2 .react-flow__controls {
-  left: 18px;
-  bottom: 38px;
-  overflow: hidden;
-  border: 1px solid #ececf1;
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
-}
-
-.ume-v2 .react-flow__controls-button {
-  width: 34px;
-  height: 34px;
-  color: #24272d;
-}
-
-.ume-v2 .react-flow__minimap {
-  right: 28px;
-  bottom: 48px;
-  width: 226px;
-  height: 172px;
-  border: 1px solid #e8e8e8;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92) !important;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
-}
-
 .ume-v2 .v2-node-card-body {
   border: 1px solid color-mix(in srgb, var(--node-color, #8b5cf6) 58%, #ffffff);
   border-radius: 3px;
@@ -2554,8 +2444,7 @@ body.ume-resizing-detail .ume-detail-panel {
   box-shadow: none;
 }
 
-.ume-v2 .v2-node-card:hover .v2-node-card-body,
-.ume-v2 .react-flow__node.selected .v2-node-card-body {
+.ume-v2 .v2-node-card:hover .v2-node-card-body {
   box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--node-color, #8b5cf6) 34%, transparent);
 }
 
@@ -2679,30 +2568,98 @@ body.ume-resizing-detail .ume-detail-panel {
   line-height: 12px;
 }
 
-.ume-v2 .react-flow__handle {
-  width: 4px;
-  height: 4px;
+.ume-opentopox-wrap {
+  overflow: hidden;
+  background-color: var(--ume-color-bg);
+}
+
+.ume-opentopox-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ume-opentopox-wrap[data-background="dots"]::before {
+  background-image: radial-gradient(#d6d1df 1.45px, transparent 1.45px);
+  background-size: 28px 28px;
+  opacity: 0.5;
+}
+
+.ume-opentopox-wrap[data-background="lines"]::before {
+  background-image: linear-gradient(rgba(200, 200, 200, 0.48) 1px, transparent 1px);
+  background-size: 120px 120px;
+}
+
+.ume-opentopox-wrap[data-background="cross"]::before {
+  background-image:
+    linear-gradient(rgba(176, 176, 176, 0.36) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(176, 176, 176, 0.36) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.ume-opentopox-container,
+.ume-opentopox-container .opentopox-react-host,
+.ume-opentopox-container .new-topo-graph {
+  width: 100%;
+  height: 100%;
+}
+
+.ume-opentopox-container .new-topo-graph {
+  background: transparent;
+  color: var(--ume-color-text-primary);
+}
+
+.ume-opentopox-container .topo-node.umodelNode {
+  padding: 0;
   border: 0;
-  background: var(--node-color);
-  opacity: 0.72;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
-.ume-v2 .react-flow__edge path:not(.v2-edge-hitarea) {
-  vector-effect: non-scaling-stroke;
+.ume-opentopox-container .topo-node.umodelNode:hover {
+  z-index: 100;
+}
+
+.ume-opentopox-container .topo-node.umodelNode.is-selected .v2-node-card-body {
+  box-shadow: 0 0 0 2.5px var(--node-color, var(--ume-color-accent)), 0 4px 12px rgba(91, 91, 214, 0.15);
+}
+
+.ume-opentopox-container .topo-edge-path {
   stroke-linecap: round;
+  stroke-width: 1.8px;
+  opacity: 0.86;
 }
 
-.ume-v2 .react-flow__edge .v2-edge-path {
+.ume-opentopox-container .topo-edge-target-dot {
+  fill: currentColor;
+  opacity: 0.82;
+}
+
+.ume-opentopox-container .topo-edge.is-selected .topo-edge-path {
+  stroke: currentColor;
+  stroke-width: 2.8px;
+  opacity: 0.98;
   filter: none;
 }
 
-.ume-v2 .react-flow__edge .v2-edge-underlay {
-  filter: none;
+.ume-opentopox-container .topo-edge.is-selected .topo-edge-target-dot {
+  opacity: 0.95;
 }
 
-.ume-v2 .react-flow__edge:hover .v2-edge-path {
-  opacity: 1 !important;
-  stroke-width: 2.8px !important;
+.ume-opentopox-container .topo-edge-hit {
+  stroke-width: 16;
+}
+
+.ume-opentopox-wrap[data-zoom="mini"] .topo-edge:not(.is-selected) .topo-edge-path {
+  stroke-width: 1.2px;
+  opacity: 0.58;
+}
+
+.ume-opentopox-wrap[data-zoom="compact"] .topo-edge:not(.is-selected) .topo-edge-path {
+  stroke-width: 1.45px;
+  opacity: 0.72;
 }
 
 .ume-edge-label {

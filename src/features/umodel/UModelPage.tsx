@@ -23,22 +23,15 @@ import {
   Undo2,
   X,
 } from 'lucide-react'
-import {
-  ReactFlowProvider,
-  applyNodeChanges,
-  type Node,
-  type NodeChange,
-} from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
 import type { QueryResult, UModelElement } from '../../api/types'
 import type { UModelApiClient } from '../../api/client'
 import { Button, EmptyState, IconButton, SegmentedControl } from '../../design/components'
 import { useI18n, type TFunction } from '../../i18n'
 import { asArray, formatError, parseJson, stringify } from '../../lib/json'
-import { buildGraph, layoutGraphWithGraphviz, type UModelNodeData, type GraphModel } from './graphModel'
+import { buildGraph, layoutGraphWithGraphviz, type GraphModel } from './graphModel'
 import { SearchPanel } from './UModelSearchPanel'
 import { FilterBar, SettingsSidebar, SummarySidebar } from './UModelSidebar'
-import { GraphView } from './UModelGraphView'
+import { OpenTopoXGraphView } from './UModelOpenTopoXGraphView'
 import {
   aliasForElements,
   asUnknownArray,
@@ -406,13 +399,6 @@ export function UModelPage({
     }
   }, [graphSource, mode])
 
-  const handleGraphNodesChange = useCallback((changes: NodeChange<Node<UModelNodeData>>[]) => {
-    setGraph((current) => ({
-      ...current,
-      nodes: applyNodeChanges(changes, current.nodes),
-    }))
-  }, [])
-
   const hasChanges = diff.added.length + diff.modified.length + diff.deleted.length > 0
   const activeCount =
     kindFilters.length + domainFilters.length + focusIds.length + fullTextFilters.length
@@ -711,20 +697,17 @@ export function UModelPage({
               </div>
             )}
             {draftElements.length > 0 && mode === 'graph' && (
-              <ReactFlowProvider>
-                <GraphView
-                  graph={graph}
-                  focusIds={focusIds}
-                  zoomLevel={zoomLevel}
-                  layouting={layouting}
-                  backgroundStyle={backgroundStyle}
-                  forceFullMode={forceFullMode}
-                  selectedId={selected ? elementKey(selected) : null}
-                  onZoomLevelChange={setZoomLevel}
-                  onNodesChange={handleGraphNodesChange}
-                  onSelect={setSelected}
-                />
-              </ReactFlowProvider>
+              <OpenTopoXGraphView
+                graph={graph}
+                focusIds={focusIds}
+                zoomLevel={zoomLevel}
+                layouting={layouting}
+                backgroundStyle={backgroundStyle}
+                forceFullMode={forceFullMode}
+                selectedId={selected ? elementKey(selected) : null}
+                onZoomLevelChange={setZoomLevel}
+                onSelect={setSelected}
+              />
             )}
             {draftElements.length > 0 && mode === 'table' && (
               <TableView elements={filtered} selected={selected} onDelete={deleteDraftElement} onSelect={setSelected} />

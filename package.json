@@ -13,10 +13,10 @@
   "dependencies": {
     "@hpcc-js/wasm-graphviz": "^1.7.0",
     "@monaco-editor/react": "^4.6.0",
-    "@xyflow/react": "^12.7.0",
     "js-yaml": "^4.1.1",
     "lucide-react": "^0.468.0",
     "monaco-editor": "^0.52.2",
+    "opentopox": "file:vendor/opentopox",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

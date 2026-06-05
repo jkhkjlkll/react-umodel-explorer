@@ -1,0 +1,104 @@
+{
+  "name": "opentopox",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "OpenTopoX standalone DOM/SVG observability topology framework with realtime adapters.",
+  "license": "MIT",
+  "author": {
+    "name": "OpenTopoX contributors",
+    "url": "https://github.com/java67-art/OpenTopoX"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/java67-art/OpenTopoX.git"
+  },
+  "bugs": {
+    "url": "https://github.com/java67-art/OpenTopoX/issues"
+  },
+  "homepage": "https://github.com/java67-art/OpenTopoX#readme",
+  "keywords": [
+    "opentopox",
+    "o11y",
+    "observability",
+    "topology",
+    "graph",
+    "svg",
+    "dom",
+    "visualization",
+    "realtime"
+  ],
+  "main": "./src/framework/index.js",
+  "module": "./src/framework/index.js",
+  "types": "./src/framework/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "react": [
+        "./src/framework/react.d.ts"
+      ],
+      "framework/*": [
+        "./src/framework/*"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./src/framework/index.d.ts",
+      "import": "./src/framework/index.js",
+      "default": "./src/framework/index.js"
+    },
+    "./react": {
+      "types": "./src/framework/react.d.ts",
+      "import": "./src/framework/react.js",
+      "default": "./src/framework/react.js"
+    },
+    "./style.css": "./src/framework/topology.css",
+    "./framework/*": "./src/framework/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src/framework",
+    "dist/framework",
+    "dist/examples",
+    "scripts",
+    "benchmarks",
+    "README.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "USAGE.md",
+    "DEVELOPER_GUIDE.md",
+    "MAINTAINERS.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "docs/security-guidelines.md",
+    "docs/topology-data-adapter.md",
+    "docs/realtime-topology-protocol.md",
+    "docs/performance-and-troubleshooting.md",
+    "docs/realtime-topology-runtime.md",
+    "examples",
+    "tests/unit"
+  ],
+  "sideEffects": [
+    "./src/framework/topology.css"
+  ],
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "benchmark:topology": "node benchmarks/topology-performance.mjs",
+    "build": "node scripts/build-package.mjs",
+    "check": "npm run check:syntax && npm run test:unit && npm run build && npm run check:examples",
+    "check:examples": "node scripts/check-examples.mjs",
+    "check:syntax": "node --check src/framework/*.js && node --check scripts/*.mjs && node --check benchmarks/*.mjs",
+    "prepack": "npm run build",
+    "serve": "python3 -m http.server 5177",
+    "test:unit": "node --test tests/unit/*.test.mjs"
+  }
+}

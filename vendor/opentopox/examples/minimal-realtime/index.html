@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Minimal Realtime Topology</title>
+    <link rel="stylesheet" href="../../src/framework/topology.css" />
+    <style>
+      html,
+      body,
+      #graph {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="graph"></div>
+    <script type="module">
+      import {
+        NewTopoGraph,
+        createRealtimeNodePatch,
+        createTopologyGraphStore,
+        createTopologyUpdateScheduler,
+      } from "../../src/framework/index.js";
+
+      const topo = new NewTopoGraph({
+        container: document.querySelector("#graph"),
+        config: {
+          debugPanel: true,
+          minimap: true,
+          theme: "neutral",
+        },
+      });
+      const graph = topo.getGraph();
+      graph.setLayout({ topoType: "dot", rankDir: "LR" });
+
+      const store = createTopologyGraphStore({
+        nodes: [
+          { id: "gateway", type: "componentNode", data: { title: "Gateway", status: "ok", metric: { label: "RPS", value: "1.2k" } } },
+          { id: "service", type: "cardNode", data: { title: "Service", status: "ok", metric: { label: "P95", value: "32 ms" } } },
+          { id: "db", type: "cardNode", data: { title: "Database", status: "ok", metric: { label: "QPS", value: "380" } } },
+        ],
+        edges: [
+          { id: "gateway-service", source: "gateway", target: "service", label: "HTTP", data: { status: "ok" } },
+          { id: "service-db", source: "service", target: "db", label: "SQL", data: { status: "ok" } },
+        ],
+      });
+      const scheduler = createTopologyUpdateScheduler({ graph, store });
+
+      await graph.setData({ ...store.getData(), autoFit: true });
+
+      let seq = 0;
+      window.setInterval(() => {
+        seq += 1;
+        const warn = seq % 5 === 0;
+        scheduler.enqueueMessage(createRealtimeNodePatch({
+          version: seq,
+          seq,
+          source: "minimal-example",
+          patches: [{
+            id: "service",
+            data: {
+              status: warn ? "warn" : "ok",
+              metric: { label: "P95", value: warn ? "180 ms" : `${28 + seq % 12} ms` },
+            },
+          }],
+        }));
+      }, 1200);
+    </script>
+  </body>
+</html>

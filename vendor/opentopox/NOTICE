@@ -1,0 +1,7 @@
+OpenTopoX
+
+This package provides a standalone observability topology graph framework
+implemented with native DOM, SVG, and JavaScript modules.
+
+The distributed framework files do not bundle third-party graph rendering,
+layout, or application framework runtime libraries.
