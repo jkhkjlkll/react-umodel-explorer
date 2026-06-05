@@ -353,6 +353,7 @@ function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
     const yOffset = options?.yOffset || 0
     const typeOffsets = options?.typeOffsets || {}
     const columnStep = options?.columnStep || 158
+    const minGap = Math.max(rowStep, 74)
     const anchorGroups = new Map<string, string[]>()
     for (const id of ids) {
       const anchor = bestEntityAnchor(id) || '__none__'
@@ -375,7 +376,7 @@ function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
         const occupied = occupiedByColumn.get(columnKey) || []
         const desiredY = positionedAnchorY(anchor) + (index - (sortedGroup.length - 1) / 2) * rowStep + yOffset
         let y = desiredY
-        while (occupied.some((value) => Math.abs(value - y) < rowStep * 0.82)) y += rowStep * 0.68
+        while (occupied.some((value) => Math.abs(value - y) < minGap)) y += minGap
         occupied.push(y)
         occupiedByColumn.set(columnKey, occupied)
         positions.set(id, {
@@ -386,26 +387,26 @@ function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
     }
   }
 
-  placeStack(primaryEntityIds, 0, 58)
-  placeClusteredLane(secondaryEntityIds, -250, -1, { rowStep: 56 })
+  placeStack(primaryEntityIds, 0, 76)
+  placeClusteredLane(secondaryEntityIds, -250, -1, { rowStep: 74 })
   placeClusteredLane(leftFarIds, -540, -1, {
-    rowStep: 56,
+    rowStep: 74,
     yOffset: -20,
     columnStep: 132,
     typeOffsets: { explorer: 0, event_set: 0, aliyun_prometheus: 1, trace_set: 1, profile_set: 2 },
   })
   placeClusteredLane(rightIds, 260, 1, {
-    rowStep: 56,
+    rowStep: 74,
     columnStep: 132,
     typeOffsets: { metric_set: 0, runbook_set: 0, log_set: 1 },
   })
   placeClusteredLane(storageIds, 640, 1, {
-    rowStep: 56,
+    rowStep: 74,
     yOffset: 8,
     columnStep: 132,
     typeOffsets: { sls_logstore: 0, sls_metricstore: 1 },
   })
-  placeClusteredLane(fallbackIds, -540, -1, { rowStep: 56, yOffset: 22, columnStep: 132 })
+  placeClusteredLane(fallbackIds, -540, -1, { rowStep: 74, yOffset: 22, columnStep: 132 })
 
   const minY = Math.min(...[...positions.values()].map((position) => position.y))
   const offsetY = Number.isFinite(minY) ? -minY : 0

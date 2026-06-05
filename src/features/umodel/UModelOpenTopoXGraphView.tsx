@@ -91,7 +91,7 @@ export function OpenTopoXGraphView({
         autoFit
         preserveViewport={false}
         onViewportChange={(viewport) => {
-          const next = forceFullMode ? 'full' : viewport.zoom < 0.3 ? 'mini' : viewport.zoom < 0.5 ? 'compact' : 'full'
+          const next = forceFullMode ? 'full' : viewport.zoom < 0.34 ? 'mini' : viewport.zoom < 0.74 ? 'compact' : 'full'
           if (next !== zoomLevel) onZoomLevelChange(next)
         }}
         onNodeClick={(node) => onSelect((node.data as { element?: UModelElement }).element || null)}
