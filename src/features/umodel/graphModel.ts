@@ -80,6 +80,12 @@ export interface GraphEdge<TData extends Record<string, unknown> = Record<string
   hidden?: boolean
 }
 
+export const UMODEL_NODE_WIDTH = 176
+export const UMODEL_NODE_HEIGHT = 56
+const ENTITY_LINK_NODE_MAX_WIDTH = 170
+const ENTITY_LINK_NODE_MIN_WIDTH = 86
+const ENTITY_LINK_NODE_HEIGHT = 34
+
 export function buildGraph(
   elements: UModelElement[],
   actions: GraphActions,
@@ -140,8 +146,10 @@ export function buildGraph(
     const key = elementKey(element)
     const color = colorForKind(element.kind)
     const entityLinkNode = entitySetLinkDisplay === 'relative_link' && isEntitySetLinkElement(element)
-    const width = entityLinkNode ? Math.min(170, Math.max(86, entityLinkTypeForEdge(element).length * 7 + 44)) : 250
-    const height = entityLinkNode ? 34 : 64
+    const width = entityLinkNode
+      ? Math.min(ENTITY_LINK_NODE_MAX_WIDTH, Math.max(ENTITY_LINK_NODE_MIN_WIDTH, entityLinkTypeForEdge(element).length * 7 + 44))
+      : UMODEL_NODE_WIDTH
+    const height = entityLinkNode ? ENTITY_LINK_NODE_HEIGHT : UMODEL_NODE_HEIGHT
     return {
       id: key,
       type: 'umodel',

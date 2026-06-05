@@ -4,7 +4,7 @@ import { registerNodeShape } from 'opentopox'
 import type { TopologyGraphData } from 'opentopox'
 import 'opentopox/style.css'
 import type { UModelElement } from '../../api/types'
-import type { GraphModel, UModelEdgeData, UModelNodeData } from './graphModel'
+import { UMODEL_NODE_HEIGHT, UMODEL_NODE_WIDTH, type GraphModel, type UModelEdgeData, type UModelNodeData } from './graphModel'
 import { colorForKind, elementKey, type BackgroundStyle, type ZoomLevel } from './model'
 
 registerNodeShape('umodelNode', (node: { data?: Record<string, unknown> }) => renderUModelNode(node.data || {}))
@@ -138,7 +138,11 @@ function toOpenTopoXData(graph: GraphModel): TopologyGraphData & Record<string, 
           colorBg: color.bg,
           colorText: color.text,
           label: color.label,
-          size: { width: Number(node.width || node.measured?.width || 250), height: Number(node.height || node.measured?.height || 64) },
+          anchorSelector: '.v2-zoom-full .v2-node-card-body, .v2-zoom-compact .v2-node-card-body, .v2-zoom-mini .v2-node-card-body',
+          size: {
+            width: Number(node.width || node.measured?.width || UMODEL_NODE_WIDTH),
+            height: Number(node.height || node.measured?.height || UMODEL_NODE_HEIGHT),
+          },
         },
       }
     }),
@@ -214,11 +218,11 @@ function offsetsForGroups<T extends { id: string }>(groups: Map<string, T[]>, ra
 }
 
 function centerX(node: GraphModel['nodes'][number]) {
-  return node.position.x + Number(node.width || node.measured?.width || 250) / 2
+  return node.position.x + Number(node.width || node.measured?.width || UMODEL_NODE_WIDTH) / 2
 }
 
 function centerY(node: GraphModel['nodes'][number]) {
-  return node.position.y + Number(node.height || node.measured?.height || 64) / 2
+  return node.position.y + Number(node.height || node.measured?.height || UMODEL_NODE_HEIGHT) / 2
 }
 
 function clamp(value: number, min: number, max: number) {

@@ -3100,7 +3100,16 @@ export class NewTopoGraph {
       ...node,
       position: this.getNodeAbsolutePosition(node),
     };
-    if (node.__topoMeasuredSize) {
+    const anchorRect = this.getNodeAnchorRect(node, rendered.position);
+    if (anchorRect) {
+      rendered.position = anchorRect.position;
+      Object.defineProperty(rendered, "__topoMeasuredSize", {
+        configurable: true,
+        enumerable: false,
+        writable: true,
+        value: anchorRect.size,
+      });
+    } else if (node.__topoMeasuredSize) {
       Object.defineProperty(rendered, "__topoMeasuredSize", {
         configurable: true,
         enumerable: false,
@@ -3109,6 +3118,35 @@ export class NewTopoGraph {
       });
     }
     return rendered;
+  }
+
+  getNodeAnchorRect(node, absolutePosition = this.getNodeAbsolutePosition(node)) {
+    const selector = node.data?.anchorSelector;
+    if (!selector || typeof selector !== "string") return null;
+    const element = this.nodeElementById.get(node.id);
+    if (!element) return null;
+    const anchor = [...element.querySelectorAll(selector)].find((candidate) => {
+      const rect = candidate.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    if (!anchor) return null;
+
+    const nodeRect = element.getBoundingClientRect();
+    const anchorRect = anchor.getBoundingClientRect();
+    const zoom = this.viewport.zoom || 1;
+    const width = anchorRect.width / zoom;
+    const height = anchorRect.height / zoom;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+    return {
+      position: {
+        x: absolutePosition.x + (anchorRect.left - nodeRect.left) / zoom,
+        y: absolutePosition.y + (anchorRect.top - nodeRect.top) / zoom,
+      },
+      size: {
+        width: Math.ceil(width),
+        height: Math.ceil(height),
+      },
+    };
   }
 
   toStoredNodePosition(node, absolutePosition) {

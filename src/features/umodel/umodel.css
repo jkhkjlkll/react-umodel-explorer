@@ -1730,8 +1730,6 @@
 
 .v2-node-card .v2-zoom-full {
   display: block;
-  padding-top: 20px;
-  margin-top: -20px;
 }
 
 .v2-graph-container[data-zoom="compact"] .v2-node-card .v2-zoom-full,
@@ -2449,8 +2447,9 @@ body.ume-resizing-detail .ume-detail-panel {
 }
 
 .ume-v2 .ume-node-full {
-  width: 164px !important;
-  min-height: 52px;
+  box-sizing: border-box;
+  width: 176px !important;
+  min-height: 56px;
   display: flex;
   overflow: hidden;
   align-items: stretch;
@@ -2489,8 +2488,8 @@ body.ume-resizing-detail .ume-detail-panel {
 
 .v2-graph-container[data-zoom="mini"] .ume-map-node,
 .v2-graph-container[data-zoom="compact"] .ume-map-node {
-  width: 250px;
-  height: 64px;
+  width: 176px;
+  height: 56px;
   align-items: center;
 }
 
