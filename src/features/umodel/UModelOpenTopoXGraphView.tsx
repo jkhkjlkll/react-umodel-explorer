@@ -78,7 +78,7 @@ export function OpenTopoXGraphView({
           maxZoom: 3,
           minimap: true,
           minZoom: 0.18,
-          nodeDraggable: false,
+          nodeDraggable: true,
           controls: true,
           controlActions: ['zoom-out', 'zoom-in', 'fit', 'fullscreen', 'minimap'],
           controlZoomStep: 1.22,
@@ -185,7 +185,7 @@ function pushGroup<T>(groups: Map<string, T[]>, key: string, value: T) {
   groups.get(key)!.push(value)
 }
 
-function offsetsForGroups<T extends { id: string }>(groups: Map<string, T[]>, rankValue: (item: T) => number, step = 4.8, max = 24) {
+function offsetsForGroups<T extends { id: string }>(groups: Map<string, T[]>, rankValue: (item: T) => number, step = 3.8, max = 18) {
   const result = new Map<string, number>()
   for (const items of groups.values()) {
     const sorted = [...items].sort((left, right) => rankValue(left) - rankValue(right) || left.id.localeCompare(right.id))

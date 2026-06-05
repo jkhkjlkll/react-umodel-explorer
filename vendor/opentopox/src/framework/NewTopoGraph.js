@@ -3328,14 +3328,26 @@ function buildFlowEdgeGeometry(source, target, edge = {}) {
   const normal = getNormal(dx, dy);
   const shiftedFrom = offsetPoint(from, normal, parallelOffset);
   const shiftedTo = offsetPoint(to, normal, parallelOffset);
-  const midX = (from.x + to.x) / 2;
+  const distance = Math.max(1, Math.abs(dx));
+  const bend = clamp(distance * 0.42, 42, Math.max(42, distance * 0.48));
+  const yBend = clamp(Math.abs(dy) * 0.08, 0, 22) * Math.sign(dy || 1);
+  const c1 = {
+    x: from.x + direction * bend,
+    y: from.y + yBend,
+  };
+  const c2 = {
+    x: to.x - direction * bend,
+    y: to.y - yBend,
+  };
+  const shiftedC1 = offsetPoint(c1, normal, parallelOffset);
+  const shiftedC2 = offsetPoint(c2, normal, parallelOffset);
 
   return {
     from: shiftedFrom,
-    c1: offsetPoint({ x: midX, y: from.y }, normal, parallelOffset),
-    c2: offsetPoint({ x: midX, y: to.y }, normal, parallelOffset),
+    c1: shiftedC1,
+    c2: shiftedC2,
     to: shiftedTo,
-    label: { x: midX, y: (shiftedFrom.y + shiftedTo.y) / 2 - 8 },
+    label: { x: (shiftedC1.x + shiftedC2.x) / 2, y: (shiftedFrom.y + shiftedTo.y) / 2 - 8 },
   };
 }
 

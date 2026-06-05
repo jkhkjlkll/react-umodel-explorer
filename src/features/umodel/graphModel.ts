@@ -385,28 +385,38 @@ function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
     }
   }
 
-  placeStack(primaryEntityIds, 0, 70)
-  placeClusteredLane(secondaryEntityIds, -238, -1, { rowStep: 58 })
-  placeClusteredLane(leftFarIds, -454, -1, {
-    rowStep: 52,
+  placeStack(primaryEntityIds, 0, 58)
+  placeClusteredLane(secondaryEntityIds, -250, -1, { rowStep: 56 })
+  placeClusteredLane(leftFarIds, -500, -1, {
+    rowStep: 56,
     yOffset: -20,
     typeOffsets: { explorer: 0, aliyun_prometheus: 1, event_set: 0, profile_set: 1, trace_set: 1 },
   })
-  placeClusteredLane(rightIds, 286, 1, {
-    rowStep: 48,
+  placeClusteredLane(rightIds, 260, 1, {
+    rowStep: 56,
     typeOffsets: { metric_set: 0, log_set: 1, runbook_set: 0 },
   })
-  placeClusteredLane(storageIds, 650, 1, {
-    rowStep: 48,
+  placeClusteredLane(storageIds, 668, 1, {
+    rowStep: 56,
     yOffset: 8,
     typeOffsets: { sls_logstore: 0, sls_metricstore: 1 },
   })
-  placeClusteredLane(fallbackIds, -454, -1, { rowStep: 52, yOffset: 22 })
+  placeClusteredLane(fallbackIds, -500, -1, { rowStep: 56, yOffset: 22 })
 
   const minY = Math.min(...[...positions.values()].map((position) => position.y))
   const offsetY = Number.isFinite(minY) ? -minY : 0
   for (const [id, position] of positions) {
     positions.set(id, { x: position.x, y: position.y + offsetY })
+  }
+
+  const edgeById = new Map(model.edges.map((edge) => [edge.id, edge]))
+  const isDrawableEdge = (edge: GraphModel['edges'][number]) => {
+    const source = positions.get(edge.source)
+    const target = positions.get(edge.target)
+    if (!source || !target) return false
+    const laneDistance = Math.abs(target.x - source.x)
+    const verticalDistance = Math.abs(target.y - source.y)
+    return laneDistance >= 130 && laneDistance <= 760 && verticalDistance <= 900
   }
 
   if (treeEdgeIds.size === 0) {
@@ -418,18 +428,14 @@ function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
     }
   }
 
-  const visibleEdgeIds = new Set(treeEdgeIds)
-  const extraEdgeLimit = 72
+  const visibleEdgeIds = new Set([...treeEdgeIds].filter((id) => {
+    const edge = edgeById.get(id)
+    return edge ? isDrawableEdge(edge) : false
+  }))
+  const extraEdgeLimit = 96
   const extraCandidates = model.edges
     .filter((edge) => !visibleEdgeIds.has(edge.id))
-    .filter((edge) => {
-      const source = positions.get(edge.source)
-      const target = positions.get(edge.target)
-      if (!source || !target || source.x >= target.x) return false
-      const laneDistance = Math.abs(target.x - source.x)
-      const verticalDistance = Math.abs(target.y - source.y)
-      return laneDistance <= 660 && verticalDistance <= 720
-    })
+    .filter(isDrawableEdge)
     .sort((left, right) => {
       const leftSource = positions.get(left.source)!
       const leftTarget = positions.get(left.target)!
