@@ -25,6 +25,7 @@ await rewriteDistExamples(join(distDir, "examples"));
 
 for (const file of [
   "README.md",
+  "README.zh-CN.md",
   "CODE_OF_CONDUCT.md",
   "CONTRIBUTING.md",
   "USAGE.md",

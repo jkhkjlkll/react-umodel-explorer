@@ -9,13 +9,6 @@
   gap: 8px;
 }
 
-.standalone-sidebar-footer .om-badge {
-  width: 100%;
-  justify-content: flex-start;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .standalone-error-text {
   max-height: 120px;
   overflow: auto;
@@ -26,13 +19,4 @@
   color: var(--om-danger);
   font-size: 11px;
   line-height: 1.45;
-}
-
-.standalone-reset-button.om-button {
-  color: var(--om-text-faint);
-}
-
-.workspace-shell.collapsed .standalone-sidebar-footer .om-badge {
-  justify-content: center;
-  padding-inline: 0;
 }

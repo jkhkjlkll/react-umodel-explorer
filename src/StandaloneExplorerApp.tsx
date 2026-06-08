@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, GitBranch, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
+import { GitBranch, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
 import { UModelApi, type UModelApiClient } from './api/client'
 import { MockUModelApi } from './api/mockClient'
-import type { HealthResponse, WorkspaceMetadata } from './api/types'
-import { Badge, Button, IconButton, StatusDot } from './design/components'
+import type { WorkspaceMetadata } from './api/types'
+import { Button, IconButton } from './design/components'
 import { useI18n } from './i18n'
 import { formatError } from './lib/json'
 import { useLocalStorageState } from './lib/storage'
@@ -23,7 +23,6 @@ export function StandaloneExplorerApp() {
   const [workspaceId, setWorkspaceId] = useLocalStorageState(storageKeys.workspace, 'demo')
   const [dataSource, setDataSource] = useLocalStorageState<DataSource>(storageKeys.dataSource, 'mock')
   const [workspace, setWorkspace] = useState<WorkspaceMetadata | null>(null)
-  const [health, setHealth] = useState<HealthResponse | null>(null)
   const [error, setError] = useState('')
   const [refreshToken, setRefreshToken] = useState(0)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -34,11 +33,7 @@ export function StandaloneExplorerApp() {
   const refresh = useCallback(async () => {
     setError('')
     try {
-      const [nextHealth, nextWorkspace] = await Promise.all([
-        api.health().catch(() => null),
-        api.getWorkspace(workspaceId),
-      ])
-      setHealth(nextHealth)
+      const nextWorkspace = await api.getWorkspace(workspaceId)
       setWorkspace(nextWorkspace)
       setRefreshToken((value) => value + 1)
     } catch (nextError) {
@@ -59,8 +54,6 @@ export function StandaloneExplorerApp() {
     if (nextWorkspaceId) setWorkspaceId(nextWorkspaceId.trim())
     if (nextDataSource === 'api' || nextDataSource === 'mock') setDataSource(nextDataSource)
   }, [setApiBase, setDataSource, setWorkspaceId])
-
-  const healthOk = health?.status === 'ok' && health.graphstore.status === 'ok'
 
   return (
     <div className={`workspace-shell app-shell canvas-host ${sidebarCollapsed ? 'collapsed' : ''}`}>
@@ -89,31 +82,11 @@ export function StandaloneExplorerApp() {
           </button>
         </nav>
         <div className="workspace-sidebar-footer standalone-sidebar-footer">
-          <Badge tone={healthOk ? 'success' : health ? 'warning' : 'default'}>
-            <StatusDot status={healthOk ? 'ok' : health ? 'warn' : undefined} />
-            {health?.graphstore.provider || t('common.health.unknown')}
-          </Badge>
-          <Badge tone={dataSource === 'mock' ? 'indigo' : 'default'}>
-            <StatusDot status={dataSource === 'mock' ? 'ok' : undefined} />
-            {dataSource}
-          </Badge>
           <Button className="workspace-back-button" variant="ghost" onClick={() => void refresh()}>
             <RefreshCcw size={16} />
             <span className="workspace-back-label">{t('common.refresh')}</span>
           </Button>
           {error && !sidebarCollapsed && <div className="standalone-error-text">{error}</div>}
-          <Button
-            className="workspace-back-button standalone-reset-button"
-            variant="ghost"
-            onClick={() => {
-              setApiBase('')
-              setWorkspaceId('demo')
-              setDataSource('mock')
-            }}
-          >
-            <ArrowLeft size={16} />
-            <span className="workspace-back-label">demo</span>
-          </Button>
         </div>
       </aside>
 
