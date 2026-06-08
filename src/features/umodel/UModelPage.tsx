@@ -384,7 +384,7 @@ export function UModelPage({
     setGraph(graphSource)
     if (mode !== 'graph' || graphSource.nodes.length === 0) return
     setLayouting(true)
-    layoutGraphWithGraphviz(graphSource)
+    layoutGraphWithGraphviz(graphSource, { showAllEdges: forceFullMode })
       .then((nextGraph) => {
         if (!cancelled) setGraph(nextGraph)
       })
@@ -397,7 +397,7 @@ export function UModelPage({
     return () => {
       cancelled = true
     }
-  }, [graphSource, mode])
+  }, [forceFullMode, graphSource, mode])
 
   const hasChanges = diff.added.length + diff.modified.length + diff.deleted.length > 0
   const activeCount =
@@ -728,7 +728,7 @@ export function UModelPage({
         <footer className="ume-statusbar">
           <span><strong>{mode === 'graph' ? graphDisplayStats.nodes : filteredStats.nodes}</strong> {t('umodelExplorer.status.nodes')}</span>
           <span className="ume-status-sep" />
-          <span><strong>{filteredStats.links}</strong> {t('umodelExplorer.status.links')}</span>
+          <span><strong>{mode === 'graph' ? graph.edges.filter((edge) => !edge.hidden).length : filteredStats.links}</strong> {t('umodelExplorer.status.links')}</span>
           {mode === 'graph' && graphLimitReached && (
             <>
               <span className="ume-status-sep" />

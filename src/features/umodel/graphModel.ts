@@ -224,11 +224,14 @@ function fallbackLayoutNodes(elements: UModelElement[]) {
   return result
 }
 
-export async function layoutGraphWithGraphviz(model: GraphModel): Promise<GraphModel> {
-  return layoutGraphAsStructuredTree(model)
+export async function layoutGraphWithGraphviz(
+  model: GraphModel,
+  options: { showAllEdges?: boolean } = {},
+): Promise<GraphModel> {
+  return layoutGraphAsStructuredTree(model, options)
 }
 
-function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
+function layoutGraphAsStructuredTree(model: GraphModel, { showAllEdges = false }: { showAllEdges?: boolean } = {}): GraphModel {
   if (model.nodes.length === 0) return model
 
   const outgoing = new Map<string, Array<{ id: string; target: string }>>()
@@ -462,6 +465,8 @@ function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
 
   for (const edge of extraCandidates) visibleEdgeIds.add(edge.id)
 
+  const shouldShowEdge = (edge: GraphModel['edges'][number]) => showAllEdges || visibleEdgeIds.has(edge.id)
+
   return {
     ...model,
     nodes: model.nodes.map((node) => {
@@ -470,10 +475,9 @@ function layoutGraphAsStructuredTree(model: GraphModel): GraphModel {
       return { ...node, position }
     }),
     edges: model.edges.map((edge) => {
-      const visible = visibleEdgeIds.has(edge.id)
       return {
         ...edge,
-        hidden: !visible,
+        hidden: !shouldShowEdge(edge),
         data: edge.data ? { ...edge.data, isTreeEdge: treeEdgeIds.has(edge.id) } : edge.data,
       }
     }),
