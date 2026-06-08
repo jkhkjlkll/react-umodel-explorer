@@ -1,0 +1,10 @@
+.git
+.gradle
+build
+**/build
+data
+logs
+out
+target
+*.iml
+

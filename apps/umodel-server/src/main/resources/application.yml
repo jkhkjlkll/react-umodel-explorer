@@ -1,0 +1,14 @@
+server:
+  port: ${UMODEL_PORT:8080}
+
+spring:
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+
+umodel:
+  graphstore: ${GRAPHSTORE:memory}
+  data-root: ${UMODEL_DATA_ROOT:data}
+  agent:
+    write-enabled: ${UMODEL_AGENT_WRITE_ENABLED:false}
+
