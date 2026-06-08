@@ -1,10 +1,7 @@
 .git
-.gradle
-build
-**/build
 data
 logs
 out
 target
+**/target
 *.iml
-

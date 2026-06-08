@@ -7,7 +7,7 @@ UModel Java Backend 是 UModel 后端的 JDK 21 实现线。项目以公共契�
 ## 当前能力
 
 - JDK 21 + Spring Boot 3。
-- 多模块 Gradle 工程。
+- 多模块 Maven 工程。
 - REST 路由覆盖 `compat/openapi/openapi.yaml` 中的核心 `/api/v1/**` 路径。
 - `memory` GraphStore provider。
 - `file.memory` provider 扩展点。
@@ -43,14 +43,14 @@ docs                      兼容计划和兼容矩阵
 ## 环境要求
 
 - JDK 21。
-- Gradle 8.x。
+- Maven 3.9.x。
 - 可选：Docker 24+。
 
 检查环境：
 
 ```bash
 java -version
-gradle --version
+mvn -version
 ```
 
 ## 本地启动
@@ -58,7 +58,7 @@ gradle --version
 在仓库根目录执行：
 
 ```bash
-gradle :apps:umodel-server:bootRun
+mvn spring-boot:run -pl apps/umodel-server -am
 ```
 
 默认配置：
@@ -77,7 +77,7 @@ UMODEL_PORT=8080 \
 GRAPHSTORE=memory \
 UMODEL_DATA_ROOT=data \
 UMODEL_AGENT_WRITE_ENABLED=false \
-gradle :apps:umodel-server:bootRun
+mvn spring-boot:run -pl apps/umodel-server -am
 ```
 
 健康检查：
@@ -135,13 +135,13 @@ curl http://localhost:8080/api/v1/agent/demo/discover
 构建可运行 jar：
 
 ```bash
-gradle :apps:umodel-server:bootJar
+mvn package -pl apps/umodel-server -am
 ```
 
 运行 jar：
 
 ```bash
-java -jar apps/umodel-server/build/libs/umodel-server-0.1.0-SNAPSHOT.jar
+java -jar apps/umodel-server/target/umodel-server-0.1.0-SNAPSHOT.jar
 ```
 
 生产环境推荐显式传入配置：
@@ -151,7 +151,7 @@ UMODEL_PORT=8080 \
 GRAPHSTORE=memory \
 UMODEL_DATA_ROOT=/var/lib/umodel-java \
 UMODEL_AGENT_WRITE_ENABLED=false \
-java -jar apps/umodel-server/build/libs/umodel-server-0.1.0-SNAPSHOT.jar
+java -jar apps/umodel-server/target/umodel-server-0.1.0-SNAPSHOT.jar
 ```
 
 ## Docker 部署
@@ -232,9 +232,8 @@ curl -X POST http://localhost:8080/api/v1/query/demo/explain \
 ## 开发验证
 
 ```bash
-gradle test
-gradle :apps:umodel-server:bootRun
+mvn test
+mvn spring-boot:run -pl apps/umodel-server -am
 ```
 
-如果本机没有 JDK 21 或 Gradle，先安装环境再执行上述命令。
-
+如果本机没有 JDK 21 或 Maven，先安装环境再执行上述命令。
