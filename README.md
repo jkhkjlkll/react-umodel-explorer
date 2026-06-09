@@ -2,7 +2,7 @@
 
 UModel Java Backend 是 UModel 后端的 JDK 21 实现线。项目以公共契约兼容为目标，不做 Go 源码的机械翻译，而是用 Java 和 Spring Boot 重新实现同一套后端服务边界。
 
-当前版本是第一阶段子集兼容实现，已经跑通 quickstart、核心 REST API、Query Service 子集、AgentGateway REST、HTTP MCP 子集和 `file.memory` JSON 持久化。后续继续补齐完整 Query、stdio MCP、更多 GraphStore provider 和搜索能力。
+当前版本已经完成可运行的 JDK 21 / Spring Boot 替代后端子集，覆盖 quickstart、核心 REST API、Query Service 子集、AgentGateway REST、HTTP MCP 子集和 `file.memory` JSON 持久化。它可以作为独立后端启动、部署和验证，并继续按公共契约扩展到完整替代。
 
 ## 当前能力
 
@@ -19,7 +19,7 @@ UModel Java Backend 是 UModel 后端的 JDK 21 实现线。项目以公共契�
 - AgentGateway REST：discover、resource read、query tools、validate tool、可选写工具。
 - MCP streamable HTTP JSON-RPC 子集：`/mcp` 支持 initialize、ping、tools/list、tools/call、resources/list、resources/read、discovery。
 
-暂未完成：完整 Cypher、完整 MCP stdio/SSE transport、`local.ladybug`、vector/hybrid search、完整 schema spec validation、完整 Query/topology graph-call 覆盖。
+后续增强范围：完整 Cypher、MCP stdio/SSE transport、`local.ladybug`、vector/hybrid search、完整 schema spec validation、完整 Query/topology graph-call 覆盖。
 
 ## 目录结构
 
