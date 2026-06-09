@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { GitBranch, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
+import { GitBranch, Network, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
 import { UModelApi, type UModelApiClient } from './api/client'
 import { MockUModelApi } from './api/mockClient'
 import type { WorkspaceMetadata } from './api/types'
@@ -8,6 +8,7 @@ import { useI18n } from './i18n'
 import { formatError } from './lib/json'
 import { useLocalStorageState } from './lib/storage'
 import { UModelPage } from './features/umodel/UModelPage'
+import { TopologyExplorerPage } from './features/topology/TopologyExplorerPage'
 
 const storageKeys = {
   apiBase: 'standalone.umodel.apiBase',
@@ -16,6 +17,7 @@ const storageKeys = {
 }
 
 type DataSource = 'mock' | 'api'
+type StandaloneSection = 'umodel' | 'topology'
 
 export function StandaloneExplorerApp() {
   const { t } = useI18n()
@@ -26,6 +28,7 @@ export function StandaloneExplorerApp() {
   const [error, setError] = useState('')
   const [refreshToken, setRefreshToken] = useState(0)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [section, setSection] = useState<StandaloneSection>('umodel')
   const api = useMemo<UModelApiClient>(() => (
     dataSource === 'mock' ? new MockUModelApi(360) : new UModelApi(apiBase)
   ), [apiBase, dataSource])
@@ -76,9 +79,13 @@ export function StandaloneExplorerApp() {
           </IconButton>
         </div>
         <nav className="workspace-nav">
-          <button className="active" type="button" title={t('nav.umodel')}>
+          <button className={section === 'umodel' ? 'active' : ''} type="button" title={t('nav.umodel')} onClick={() => setSection('umodel')}>
             <GitBranch size={16} />
             <span className="workspace-nav-label">{t('nav.umodel')}</span>
+          </button>
+          <button className={section === 'topology' ? 'active' : ''} type="button" title={t('nav.entityTopo')} onClick={() => setSection('topology')}>
+            <Network size={16} />
+            <span className="workspace-nav-label">{t('nav.entityTopo')}</span>
           </button>
         </nav>
         <div className="workspace-sidebar-footer standalone-sidebar-footer">
@@ -92,7 +99,11 @@ export function StandaloneExplorerApp() {
 
       <section className="workspace-main workspace-main-no-topbar canvas-main-host">
         <main className="workspace-content workspace-content-canvas">
-          <UModelPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
+          {section === 'umodel' ? (
+            <UModelPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
+          ) : (
+            <TopologyExplorerPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
+          )}
         </main>
       </section>
     </div>

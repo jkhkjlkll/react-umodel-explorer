@@ -14,7 +14,7 @@ export const zhCNCommon = {
   'language.simplifiedChinese': '简体中文',
   'nav.apiMap': 'API 调试',
   'nav.collapseSidebar': '收起侧边栏',
-  'nav.entityTopo': 'EntityTopo 探索',
+  'nav.entityTopo': '拓扑探索',
   'nav.expandSidebar': '展开侧边栏',
   'nav.umodel': 'UModel 探索',
   'nav.imports': '导入与写入',

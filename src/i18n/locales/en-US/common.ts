@@ -12,7 +12,7 @@ export const enUSCommon = {
   'language.simplifiedChinese': '简体中文',
   'nav.apiMap': 'API Debugger',
   'nav.collapseSidebar': 'Collapse sidebar',
-  'nav.entityTopo': 'EntityTopo Explorer',
+  'nav.entityTopo': 'Topology Explorer',
   'nav.expandSidebar': 'Expand sidebar',
   'nav.umodel': 'UModel Explorer',
   'nav.imports': 'Imports & Writes',
