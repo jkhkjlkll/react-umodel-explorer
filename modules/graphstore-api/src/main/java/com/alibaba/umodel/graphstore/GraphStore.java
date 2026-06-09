@@ -11,10 +11,14 @@ import com.alibaba.umodel.contract.UModelModels.UModelSnapshot;
 import com.alibaba.umodel.contract.UModelModels.WorkspaceMetadata;
 import com.alibaba.umodel.contract.UModelModels.WriteResult;
 
+import java.util.List;
+
 public interface GraphStore {
     void openWorkspace(WorkspaceMetadata workspace);
 
     WriteResult putUModelElements(UModelElementBatch batch);
+
+    WriteResult deleteUModelElements(String workspace, List<String> ids);
 
     UModelSnapshot getUModelSnapshot(String workspace);
 
@@ -30,4 +34,3 @@ public interface GraphStore {
 
     GraphStoreHealth health();
 }
-

@@ -58,9 +58,11 @@ public class UModelBackendConfiguration {
     @Bean
     public AgentGatewayService agentGatewayService(
             QueryService queryService,
+            UModelService uModelService,
+            EntityStoreService entityStoreService,
             @Value("${umodel.agent.write-enabled:false}") boolean writeEnabled
     ) {
-        return new AgentGatewayService(queryService, writeEnabled);
+        return new AgentGatewayService(queryService, uModelService, entityStoreService, writeEnabled);
     }
 
     @Bean
@@ -68,4 +70,3 @@ public class UModelBackendConfiguration {
         return new SampleDataService(uModelService, entityStoreService);
     }
 }
-

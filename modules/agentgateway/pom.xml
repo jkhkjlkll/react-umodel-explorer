@@ -25,6 +25,15 @@
             <artifactId>umodel-query</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.alibaba.umodel</groupId>
+            <artifactId>umodel-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.umodel</groupId>
+            <artifactId>umodel-entitystore</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 </project>
-

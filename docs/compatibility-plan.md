@@ -20,7 +20,7 @@ The Java service must preserve:
 Use these inputs as the compatibility authority:
 
 1. `compat/openapi/openapi.yaml` for REST shape.
-2. `compat/mcp/tools.schema.json` for agent and future MCP tools.
+2. `compat/mcp/tools.schema.json` for agent and MCP tools.
 3. Go `pkg/model` semantics for DTO field meaning.
 4. Go `pkg/contract` service boundaries.
 5. Query Service documentation and examples.
@@ -39,7 +39,7 @@ Use these inputs as the compatibility authority:
 
 - `memory` GraphStore stores UModel elements, entities, and relations.
 - `file.memory` provider persists the same logical snapshot to JSON.
-- UModel validation enforces required `kind`, `domain`, and `name`.
+- UModel validation enforces required `kind`, `domain`, `name`, basic `entity_set` fields, and link endpoints.
 - EntityStore validates the required CMS 2.0 runtime fields.
 
 ### M3: Query Subset
@@ -67,19 +67,28 @@ Initial parser requirements:
 - Discovery endpoint returns tools, resources, and next actions.
 - Resource read returns metadata and query templates only.
 - Query tools call Query Service.
-- Write tools are disabled by default.
+- `umodel_validate` calls UModel validation.
+- Write tools call UModel and EntityStore services when explicitly enabled.
 
-### M5: Compatibility Fixtures
+### M5: HTTP MCP Subset
+
+- `/mcp` accepts JSON-RPC requests over HTTP.
+- `initialize`, `ping`, `tools/list`, `tools/call`, `resources/list`, `resources/read`, and `discovery` are implemented.
+- Tool calls reuse AgentGateway tools.
+- Write tools stay disabled by default through the same `UMODEL_AGENT_WRITE_ENABLED` switch.
+
+### M6: Compatibility Fixtures
 
 - Reuse one quickstart fixture against both Go and Java services.
 - Compare JSON shape, stable fields, error codes, and core row values.
 - Keep differences documented in `docs/compatibility-matrix.md`.
 
-### M6: Complete Replacement
+### M7: Complete Replacement
 
 - Expand schema validation.
 - Expand Query and topology graph calls.
-- Add MCP stdio and HTTP transports.
+- Add MCP stdio and SSE transports.
+- Expand HTTP MCP coverage to the complete method set.
 - Add search/vector/hybrid modes when provider support exists.
 - Add SDK and CLI compatibility gates.
 
@@ -87,7 +96,7 @@ Initial parser requirements:
 
 - `local.ladybug`.
 - Full Cypher compatibility.
-- Full MCP transport.
+- Full MCP stdio/SSE transport.
 - Full schema spec validation.
 - Vector and hybrid search.
 - Generated SDK regeneration.
@@ -100,4 +109,3 @@ Initial parser requirements:
 - Model runtime rows must be returned by Query Service or tools that call Query
   Service.
 - Keep DTOs permissive where the Go model allows flexible maps.
-

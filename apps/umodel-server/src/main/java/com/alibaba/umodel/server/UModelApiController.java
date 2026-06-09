@@ -4,7 +4,9 @@ import com.alibaba.umodel.agentgateway.AgentGatewayService;
 import com.alibaba.umodel.contract.ErrorCodes;
 import com.alibaba.umodel.contract.UModelException;
 import com.alibaba.umodel.contract.UModelModels.AgentResourceReadRequest;
+import com.alibaba.umodel.contract.UModelModels.AgentResourceReadResult;
 import com.alibaba.umodel.contract.UModelModels.AgentToolCallRequest;
+import com.alibaba.umodel.contract.UModelModels.AgentToolCallResult;
 import com.alibaba.umodel.contract.UModelModels.CreateWorkspaceRequest;
 import com.alibaba.umodel.contract.UModelModels.EntityWriteBatch;
 import com.alibaba.umodel.contract.UModelModels.ExpireRequest;
@@ -27,6 +29,8 @@ import com.alibaba.umodel.query.QueryService;
 import com.alibaba.umodel.sampledata.SampleDataService;
 import com.alibaba.umodel.umodel.UModelService;
 import com.alibaba.umodel.workspace.WorkspaceService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,6 +47,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @RestController
 @RequestMapping
@@ -54,6 +59,7 @@ public class UModelApiController {
     private final QueryService queryService;
     private final AgentGatewayService agentGatewayService;
     private final SampleDataService sampleDataService;
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     public UModelApiController(
             WorkspaceService workspaceService,
@@ -86,7 +92,8 @@ public class UModelApiController {
                         "samples", "/api/v1/samples/{workspace}/multi-domain-quickstart:import",
                         "query", "/api/v1/query/{workspace}/execute",
                         "queryExplain", "/api/v1/query/{workspace}/explain",
-                        "agent", "/api/v1/agent/{workspace}/discover"
+                        "agent", "/api/v1/agent/{workspace}/discover",
+                        "mcp", "/mcp"
                 )
         );
     }
@@ -195,6 +202,14 @@ public class UModelApiController {
         return agentGatewayService.readResource(workspace, request);
     }
 
+    @PostMapping("/mcp")
+    public Object mcp(@RequestBody Object request) {
+        if (request instanceof List<?> batch) {
+            return batch.stream().map(item -> mcpRequest(asMap(item))).toList();
+        }
+        return mcpRequest(asMap(request));
+    }
+
     private void ensureWorkspace(String workspace) {
         try {
             workspaceService.getWorkspace(workspace);
@@ -254,5 +269,122 @@ public class UModelApiController {
         }
         return matrix;
     }
-}
 
+    private Map<String, Object> mcpRequest(Map<String, Object> request) {
+        Object id = request.get("id");
+        try {
+            String method = Objects.toString(request.get("method"), "");
+            Map<String, Object> params = asMap(request.get("params"));
+            String workspace = workspace(params);
+            return switch (method) {
+                case "initialize" -> jsonRpcResult(id, Map.of(
+                        "protocolVersion", Objects.toString(params.get("protocolVersion"), "2025-06-18"),
+                        "serverInfo", Map.of("name", "umodel-server-java", "version", "0.1.0-SNAPSHOT"),
+                        "capabilities", Map.of(
+                                "tools", Map.of(),
+                                "resources", Map.of()
+                        )
+                ));
+                case "notifications/initialized", "ping", "logging/setLevel" -> jsonRpcResult(id, Map.of());
+                case "tools/list" -> jsonRpcResult(id, Map.of("tools", agentGatewayService.tools()));
+                case "tools/call" -> jsonRpcResult(id, mcpToolResult(workspace, params));
+                case "resources/list" -> jsonRpcResult(id, Map.of("resources", agentGatewayService.discover(workspace).resources()));
+                case "resources/templates/list" -> jsonRpcResult(id, Map.of("resourceTemplates", List.of()));
+                case "resources/read" -> jsonRpcResult(id, mcpResourceResult(workspace, params));
+                case "prompts/list" -> jsonRpcResult(id, Map.of("prompts", List.of()));
+                case "discovery" -> jsonRpcResult(id, agentGatewayService.discover(workspace));
+                default -> jsonRpcError(id, -32601, "method not found: " + method);
+            };
+        } catch (UModelException e) {
+            return jsonRpcError(id, mcpErrorCode(e.code()), e.getMessage());
+        } catch (RuntimeException e) {
+            return jsonRpcError(id, -32603, e.getMessage());
+        }
+    }
+
+    private Map<String, Object> mcpToolResult(String workspace, Map<String, Object> params) {
+        AgentToolCallResult result = agentGatewayService.executeTool(
+                workspace,
+                new AgentToolCallRequest(
+                        Objects.toString(params.get("name"), ""),
+                        asMap(params.get("arguments"))
+                )
+        );
+        return Map.of(
+                "content", List.of(Map.of(
+                        "type", "text",
+                        "mimeType", "application/json",
+                        "text", json(result.output())
+                )),
+                "structuredContent", result.output(),
+                "isError", !result.ok()
+        );
+    }
+
+    private Map<String, Object> mcpResourceResult(String workspace, Map<String, Object> params) {
+        AgentResourceReadResult result = agentGatewayService.readResource(
+                workspace,
+                new AgentResourceReadRequest(Objects.toString(params.get("uri"), ""))
+        );
+        return Map.of(
+                "contents", List.of(Map.of(
+                        "uri", result.uri(),
+                        "mimeType", result.mimeType(),
+                        "text", json(result.content())
+                ))
+        );
+    }
+
+    private static Map<String, Object> jsonRpcResult(Object id, Object result) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("jsonrpc", "2.0");
+        response.put("id", id);
+        response.put("result", result);
+        return response;
+    }
+
+    private static Map<String, Object> jsonRpcError(Object id, int code, String message) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("jsonrpc", "2.0");
+        response.put("id", id);
+        response.put("error", Map.of(
+                "code", code,
+                "message", message == null ? "MCP request failed" : message
+        ));
+        return response;
+    }
+
+    private String json(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new UModelException(ErrorCodes.INVALID_ARGUMENT, "failed to encode MCP content");
+        }
+    }
+
+    private static int mcpErrorCode(String code) {
+        return switch (code) {
+            case ErrorCodes.TOOL_NOT_FOUND, ErrorCodes.NOT_FOUND -> -32601;
+            case ErrorCodes.INVALID_ARGUMENT, ErrorCodes.VALIDATION_FAILED -> -32602;
+            default -> -32000;
+        };
+    }
+
+    private static String workspace(Map<String, Object> params) {
+        Object workspace = params.get("workspace");
+        return workspace == null || Objects.toString(workspace, "").isBlank()
+                ? "demo"
+                : Objects.toString(workspace, "");
+    }
+
+    private static Map<String, Object> asMap(Object value) {
+        if (!(value instanceof Map<?, ?> map)) {
+            return Map.of();
+        }
+        Map<String, Object> copy = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            copy.put(Objects.toString(entry.getKey(), ""), entry.getValue());
+        }
+        return copy;
+    }
+}

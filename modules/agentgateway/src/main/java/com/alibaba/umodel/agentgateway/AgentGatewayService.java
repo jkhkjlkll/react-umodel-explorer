@@ -11,19 +11,37 @@ import com.alibaba.umodel.contract.UModelModels.AgentResourceReadResult;
 import com.alibaba.umodel.contract.UModelModels.AgentTool;
 import com.alibaba.umodel.contract.UModelModels.AgentToolCallRequest;
 import com.alibaba.umodel.contract.UModelModels.AgentToolCallResult;
+import com.alibaba.umodel.contract.UModelModels.EntityWriteBatch;
+import com.alibaba.umodel.contract.UModelModels.ExpireRequest;
 import com.alibaba.umodel.contract.UModelModels.QueryRequest;
+import com.alibaba.umodel.contract.UModelModels.UModelElement;
+import com.alibaba.umodel.contract.UModelModels.UModelImportRequest;
+import com.alibaba.umodel.entitystore.EntityStoreService;
 import com.alibaba.umodel.query.QueryService;
+import com.alibaba.umodel.umodel.UModelService;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 public class AgentGatewayService {
     private final QueryService queryService;
+    private final UModelService uModelService;
+    private final EntityStoreService entityStoreService;
     private final boolean writeEnabled;
 
-    public AgentGatewayService(QueryService queryService, boolean writeEnabled) {
+    public AgentGatewayService(
+            QueryService queryService,
+            UModelService uModelService,
+            EntityStoreService entityStoreService,
+            boolean writeEnabled
+    ) {
         this.queryService = queryService;
+        this.uModelService = uModelService;
+        this.entityStoreService = entityStoreService;
         this.writeEnabled = writeEnabled;
     }
 
@@ -112,14 +130,33 @@ public class AgentGatewayService {
             case "query_spl_execute" -> new AgentToolCallResult(name, true, queryService.execute(workspace, queryRequest(args)));
             case "query_spl_explain" -> new AgentToolCallResult(name, true, queryService.explain(workspace, queryRequest(args)));
             case "query_spl_examples" -> new AgentToolCallResult(name, true, queryService.examples());
-            case "umodel_validate", "umodel_import", "entity_write", "entity_expire" -> {
-                if (!writeEnabled) {
-                    throw new UModelException(ErrorCodes.TOOL_DISABLED, "agent write tool is disabled");
-                }
-                throw new UModelException(ErrorCodes.NOT_IMPLEMENTED, "agent write tool wiring is not implemented in the subset");
-            }
+            case "umodel_validate" -> new AgentToolCallResult(name, true, uModelService.validate(workspace, uModelElements(args.get("elements"))));
+            case "umodel_import" -> writeToolResult(name, () -> uModelService.importElements(
+                    workspace,
+                    new UModelImportRequest(asString(args, "path"), uModelElementsOrNull(args.get("elements")))
+            ));
+            case "entity_write" -> writeToolResult(name, () -> entityStoreService.writeEntities(
+                    workspace,
+                    new EntityWriteBatch(
+                            workspace,
+                            asString(args, "idempotency_key", "idempotencyKey"),
+                            asBoolean(args, "partial_success", "partialSuccess"),
+                            rows(args.get("entities"), "entities")
+                    )
+            ));
+            case "entity_expire" -> writeToolResult(name, () -> entityStoreService.expireEntities(
+                    workspace,
+                    new ExpireRequest(workspace, strings(args.get("ids"), "ids"))
+            ));
             default -> throw new UModelException(ErrorCodes.TOOL_NOT_FOUND, "agent tool not found");
         };
+    }
+
+    private AgentToolCallResult writeToolResult(String name, Supplier<Object> output) {
+        if (!writeEnabled) {
+            throw new UModelException(ErrorCodes.TOOL_DISABLED, "agent write tool is disabled");
+        }
+        return new AgentToolCallResult(name, true, output.get());
     }
 
     private static List<AgentResource> resources(String workspace) {
@@ -149,9 +186,15 @@ public class AgentGatewayService {
         );
     }
 
-    @SuppressWarnings("unchecked")
     private static Map<String, Object> asMap(Object value) {
-        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+        if (!(value instanceof Map<?, ?> map)) {
+            return Map.of();
+        }
+        Map<String, Object> copy = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            copy.put(Objects.toString(entry.getKey(), ""), entry.getValue());
+        }
+        return copy;
     }
 
     private static Integer asInteger(Object value) {
@@ -162,5 +205,98 @@ public class AgentGatewayService {
             return null;
         }
         return Integer.parseInt(value.toString());
+    }
+
+    private static List<UModelElement> uModelElementsOrNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return uModelElements(value);
+    }
+
+    private static List<UModelElement> uModelElements(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        List<UModelElement> elements = new ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof UModelElement element) {
+                elements.add(element);
+                continue;
+            }
+            Map<String, Object> map = asMap(item);
+            if (map.isEmpty()) {
+                throw new UModelException(ErrorCodes.INVALID_ARGUMENT, "elements items must be objects");
+            }
+            Map<String, Object> metadata = asMap(map.get("metadata"));
+            elements.add(new UModelElement(
+                    asString(map, "id"),
+                    asString(map, "kind"),
+                    firstString(map, metadata, "domain"),
+                    firstString(map, metadata, "name"),
+                    asMap(map.get("spec")),
+                    metadata
+            ));
+        }
+        return elements;
+    }
+
+    private static List<Map<String, Object>> rows(Object value, String field) {
+        if (!(value instanceof List<?> list)) {
+            throw new UModelException(ErrorCodes.INVALID_ARGUMENT, field + " argument must be an array");
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Object item : list) {
+            Map<String, Object> row = asMap(item);
+            if (row.isEmpty()) {
+                throw new UModelException(ErrorCodes.INVALID_ARGUMENT, field + " items must be objects");
+            }
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private static List<String> strings(Object value, String field) {
+        if (!(value instanceof List<?> list)) {
+            throw new UModelException(ErrorCodes.INVALID_ARGUMENT, field + " argument must be an array");
+        }
+        List<String> values = new ArrayList<>();
+        for (Object item : list) {
+            if (item == null || Objects.toString(item, "").isBlank()) {
+                throw new UModelException(ErrorCodes.INVALID_ARGUMENT, field + " items must be non-empty strings");
+            }
+            values.add(Objects.toString(item, ""));
+        }
+        return values;
+    }
+
+    private static boolean asBoolean(Map<String, Object> map, String... keys) {
+        Object value = firstValue(map, keys);
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        return value != null && Boolean.parseBoolean(value.toString());
+    }
+
+    private static String asString(Map<String, Object> map, String... keys) {
+        Object value = firstValue(map, keys);
+        return value == null ? null : Objects.toString(value, null);
+    }
+
+    private static String firstString(Map<String, Object> first, Map<String, Object> second, String key) {
+        Object value = first.get(key);
+        if (value == null) {
+            value = second.get(key);
+        }
+        return value == null ? null : Objects.toString(value, null);
+    }
+
+    private static Object firstValue(Map<String, Object> map, String... keys) {
+        for (String key : keys) {
+            if (map.containsKey(key)) {
+                return map.get(key);
+            }
+        }
+        return null;
     }
 }
