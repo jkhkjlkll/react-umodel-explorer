@@ -93,7 +93,7 @@ public final class UModelModels {
             List<ErrorDetail> errors,
             List<ErrorDetail> warnings
     ) {
-        public static ValidationResult valid() {
+        public static ValidationResult ok() {
             return new ValidationResult(true, List.of(), List.of());
         }
 

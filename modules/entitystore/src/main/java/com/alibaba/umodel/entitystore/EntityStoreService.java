@@ -112,7 +112,7 @@ public class EntityStoreService {
                 return ValidationResult.invalid(field, "required CMS 2.0 field is missing");
             }
         }
-        return ValidationResult.valid();
+        return ValidationResult.ok();
     }
 
     private static Map<String, Object> expireEntityPayload(String id, long now) {
