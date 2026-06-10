@@ -17,6 +17,15 @@ import './topology.css'
 
 type PanelTab = 'overview' | 'layout'
 
+const mockApplications = [
+  { id: 'app-cms-prod-001', name: '云监控生产应用' },
+  { id: 'app-k8s-core-018', name: 'Kubernetes 核心链路' },
+  { id: 'app-pai-eas-026', name: 'PAI-EAS 推理服务' },
+  { id: 'app-slb-gateway-039', name: 'SLB 网关入口' },
+  { id: 'app-ecs-billing-052', name: 'ECS 计费服务' },
+  { id: 'app-arms-observe-073', name: 'ARMS 观测服务' },
+]
+
 export function TopologyExplorerPage({
   api: _api,
   workspaceId: _workspaceId,
@@ -37,6 +46,7 @@ export function TopologyExplorerPage({
   const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null)
   const [playing, setPlaying] = useState(false)
   const [playhead, setPlayhead] = useState(0.98)
+  const [selectedApplicationId, setSelectedApplicationId] = useState(mockApplications[0]?.id || '')
   const focusedTypeSet = useMemo(() => new Set(focusedTypes), [focusedTypes])
   const currentNodeCount = focusedTypes.length > 0 ? data.nodes.filter((node) => focusedTypeSet.has(node.type)).length : data.nodes.length
   const currentEdgeCount = focusedTypes.length > 0
@@ -124,6 +134,16 @@ export function TopologyExplorerPage({
               <span>Search</span>
               <kbd>⌘ K</kbd>
             </div>
+            <label className="topo-app-selector">
+              <span>应用 ID</span>
+              <select value={selectedApplicationId} onChange={(event) => setSelectedApplicationId(event.target.value)}>
+                {mockApplications.map((application) => (
+                  <option key={application.id} value={application.id}>
+                    {application.id} · {application.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="topo-time-player">
               <button type="button">1小时</button>
               <button type="button">1天</button>
