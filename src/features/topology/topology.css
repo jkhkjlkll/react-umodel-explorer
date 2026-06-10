@@ -301,20 +301,6 @@
   font: 12px var(--om-mono);
 }
 
-.topo-demo-warning {
-  overflow: hidden;
-  color: #ff1d1d;
-  font-size: 20px;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.topo-demo-warning a {
-  color: #1476ff;
-  text-decoration: underline;
-}
-
 .topo-time-player {
   min-width: 0;
   height: 42px;

@@ -2,7 +2,7 @@
   "name": "react-umodel-explorer",
   "version": "0.1.0",
   "private": true,
-  "description": "Standalone React UModel Explorer copied from the original Web UI.",
+  "description": "Standalone React OModel Explorer copied from the original Web UI.",
   "type": "module",
   "packageManager": "pnpm@9.15.9",
   "scripts": {

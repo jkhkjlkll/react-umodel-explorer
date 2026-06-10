@@ -1,6 +1,6 @@
-# React UModel Explorer Standalone
+# React OModel Explorer Standalone
 
-Standalone copy of the original UModel Explorer page. It keeps the same React, React Flow, Monaco, Graphviz, API client, data model, styles, workspace shell, and interaction logic used by the repository Web UI.
+Standalone copy of the original OModel Explorer page. It keeps the same React, Monaco, Graphviz, API client, data model, styles, workspace shell, and interaction logic used by the repository Web UI.
 
 The project includes a large mock graph data source by default, so it can be opened and tested before an intranet backend is ready.
 

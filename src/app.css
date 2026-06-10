@@ -2209,7 +2209,7 @@ html[lang="zh-CN"] .landing .landing-copy p {
 }
 
 .landing .landing-stage::after {
-  content: "OPENUMODEL";
+  content: "OPENOMODEL";
   position: absolute;
   right: -12px;
   bottom: -28px;

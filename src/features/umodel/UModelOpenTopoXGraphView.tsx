@@ -281,7 +281,7 @@ function renderUModelNode(data: Record<string, unknown>) {
   const color = String(data.color || '#8b5cf6')
   const colorBg = String(data.colorBg || '#f3f0ff')
   const colorText = String(data.colorText || color)
-  const label = String(data.label || data.kind || 'UModel')
+  const label = String(data.label || data.kind || 'OModel')
   const title = String(data.title || '')
   const domain = String(data.domain || 'unknown')
   return `

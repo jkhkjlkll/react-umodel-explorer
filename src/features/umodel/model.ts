@@ -69,8 +69,8 @@ export const defaultKindColor: KindColor = {
   bg: '#f8fafc',
   text: '#64748b',
   dot: '#94a3b8',
-  label: 'UModel',
-  abbrev: 'UM',
+  label: 'OModel',
+  abbrev: 'OM',
 }
 
 export const nodeKindOrder = [

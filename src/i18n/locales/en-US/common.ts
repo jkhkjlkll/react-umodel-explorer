@@ -14,7 +14,7 @@ export const enUSCommon = {
   'nav.collapseSidebar': 'Collapse sidebar',
   'nav.entityTopo': 'Topology Explorer',
   'nav.expandSidebar': 'Expand sidebar',
-  'nav.umodel': 'UModel Explorer',
+  'nav.umodel': 'OModel Explorer',
   'nav.imports': 'Imports & Writes',
   'nav.query': 'Query',
   'nav.settings': 'Settings',

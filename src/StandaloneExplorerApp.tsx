@@ -113,7 +113,7 @@ export function StandaloneExplorerApp() {
 
 function StandaloneBrand() {
   return (
-    <div className="brand brand-compact" aria-label="UModel">
+    <div className="brand brand-compact" aria-label="OModel">
       <div className="brand-mark standalone-brand-mark">
         <GitBranch size={18} />
       </div>

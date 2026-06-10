@@ -641,7 +641,7 @@ export function UModelPage({
             <IconButton className="ume-icon-button" disabled={redoStack.length === 0} label={t('umodelExplorer.action.redo')} onClick={redoDraft} type="button">
               <Redo2 size={15} />
             </IconButton>
-            <IconButton className="ume-icon-button" label="导出当前 UModel" onClick={exportElements} type="button">
+            <IconButton className="ume-icon-button" label="导出当前 OModel" onClick={exportElements} type="button">
               <Download size={15} />
             </IconButton>
             <button
@@ -1894,7 +1894,7 @@ function rowToElement(row: Record<string, unknown>): UModelElement {
 }
 
 export function parseUModelElementsFromJson(json: string): UModelElement[] {
-  return asArray(parseJson<UModelElement | UModelElement[]>(json, 'UModel elements'))
+  return asArray(parseJson<UModelElement | UModelElement[]>(json, 'OModel elements'))
 }
 
 export function parseUModelElementsFromYamlOrJson(input: string, t?: TFunction): UModelElement[] {
@@ -1923,11 +1923,11 @@ function normalizeUModelPayload(payload: unknown, t?: TFunction): UModelElement[
   if (isObject(payload) && Array.isArray(payload.items)) return payload.items.map((value) => normalizeUModelElement(value, t))
   if (isObject(payload) && Array.isArray(payload.rows)) return payload.rows.map((row) => normalizeUModelElement(row, t))
   if (isObject(payload)) return [normalizeUModelElement(payload, t)]
-  throw new Error(t?.('umodelExplorer.validation.payloadMustContain') || 'YAML/JSON must contain one UModel element, an array, or an object with elements/items/rows.')
+  throw new Error(t?.('umodelExplorer.validation.payloadMustContain') || 'YAML/JSON must contain one OModel element, an array, or an object with elements/items/rows.')
 }
 
 function normalizeUModelElement(value: unknown, t?: TFunction): UModelElement {
-  if (!isObject(value)) throw new Error(t?.('umodelExplorer.validation.rowObjectRequired') || 'Each UModel element must be an object.')
+  if (!isObject(value)) throw new Error(t?.('umodelExplorer.validation.rowObjectRequired') || 'Each OModel element must be an object.')
   const element = rowToElement(value)
   if (!element.kind) throw new Error(t?.('umodelExplorer.validation.missingKind', { id: elementKey(element) || '<unknown>' }) || `Element ${elementKey(element) || '<unknown>'} is missing kind.`)
   if (!element.domain) throw new Error(t?.('umodelExplorer.validation.missingDomain', { id: element.name || '<unknown>' }) || `Element ${element.name || '<unknown>'} is missing domain.`)

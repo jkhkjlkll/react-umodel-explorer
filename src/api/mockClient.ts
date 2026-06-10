@@ -38,7 +38,7 @@ export class MockUModelApi implements UModelApiClient {
     return {
       id: workspace,
       name: workspace,
-      description: 'Standalone mock workspace for UModel Explorer migration.',
+      description: 'Standalone mock workspace for OModel Explorer migration.',
       labels: { source: 'mock', portable: 'true' },
       paths: { root: 'mock://standalone' },
       status: 'active',

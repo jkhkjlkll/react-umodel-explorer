@@ -124,10 +124,6 @@ export function TopologyExplorerPage({
               <span>Search</span>
               <kbd>⌘ K</kbd>
             </div>
-            <div className="topo-demo-warning">
-              当前为演示环境 云监控 2.0 生产地址为：
-              <a href="https://cmsnext.console.aliyun.com" target="_blank" rel="noreferrer">https://cmsnext.console.aliyun.com</a>
-            </div>
             <div className="topo-time-player">
               <button type="button">1小时</button>
               <button type="button">1天</button>
