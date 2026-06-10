@@ -70,22 +70,24 @@ const colors = [
   '#1cc8c0',
   '#13b981',
   '#2c9bff',
+  '#ef4444',
+  '#d946ef',
+  '#f97316',
 ]
 
 const clusterLayout = [
-  { cx: 0, cy: 0, radius: 295, count: 1240, variance: 0.52 },
-  { cx: -470, cy: -380, radius: 230, count: 820, variance: 0.46 },
-  { cx: 420, cy: -350, radius: 150, count: 430, variance: 0.48 },
-  { cx: 70, cy: 420, radius: 190, count: 480, variance: 0.5 },
-  { cx: -610, cy: 140, radius: 112, count: 230, variance: 0.54 },
-  { cx: 590, cy: 190, radius: 118, count: 220, variance: 0.5 },
-  { cx: 760, cy: -50, radius: 85, count: 110, variance: 0.55 },
-  { cx: -220, cy: -350, radius: 95, count: 170, variance: 0.54 },
-  { cx: 220, cy: -470, radius: 90, count: 150, variance: 0.58 },
-  { cx: 560, cy: 470, radius: 74, count: 90, variance: 0.5 },
-  { cx: -360, cy: 520, radius: 72, count: 78, variance: 0.5 },
-  { cx: 850, cy: 230, radius: 58, count: 46, variance: 0.56 },
-  { cx: -760, cy: -30, radius: 58, count: 48, variance: 0.56 },
+  { cx: 70, cy: 70, radius: 390, count: 1680, variance: 0.5 },
+  { cx: -560, cy: -360, radius: 220, count: 560, variance: 0.5 },
+  { cx: -470, cy: 280, radius: 150, count: 410, variance: 0.51 },
+  { cx: 590, cy: -300, radius: 150, count: 320, variance: 0.51 },
+  { cx: 650, cy: 250, radius: 135, count: 250, variance: 0.52 },
+  { cx: 420, cy: 520, radius: 135, count: 220, variance: 0.5 },
+  { cx: -230, cy: -440, radius: 100, count: 160, variance: 0.52 },
+  { cx: -710, cy: 65, radius: 78, count: 135, variance: 0.54 },
+  { cx: 820, cy: -20, radius: 84, count: 110, variance: 0.52 },
+  { cx: -160, cy: 520, radius: 78, count: 80, variance: 0.53 },
+  { cx: 760, cy: 480, radius: 62, count: 46, variance: 0.54 },
+  { cx: 290, cy: -500, radius: 60, count: 39, variance: 0.54 },
 ]
 
 const NODE_TOTAL = 4010
@@ -101,9 +103,10 @@ export function createAliyunLikeTopologyData(): TopologyExplorerData {
       const typeIndex = weightedTypeIndex(random, clusterIndex, index)
       const angle = random() * Math.PI * 2
       const distance = Math.pow(random(), cluster.variance) * cluster.radius
-      const swirl = Math.sin(index * 0.19 + clusterIndex) * cluster.radius * 0.06
-      const x = cluster.cx + Math.cos(angle) * distance + Math.cos(angle + Math.PI / 2) * swirl
-      const y = cluster.cy + Math.sin(angle) * distance + Math.sin(angle + Math.PI / 2) * swirl
+      const ripple = Math.sin(index * 0.071 + clusterIndex * 1.7) * cluster.radius * 0.018
+      const jitter = (random() - 0.5) * cluster.radius * 0.018
+      const x = cluster.cx + Math.cos(angle) * (distance + jitter) + Math.cos(angle + Math.PI / 2) * ripple
+      const y = cluster.cy + Math.sin(angle) * (distance + jitter) + Math.sin(angle + Math.PI / 2) * ripple
       sequence += 1
       nodes.push({
         id: `entity-${sequence}`,
@@ -183,16 +186,16 @@ export function createAliyunLikeTopologyData(): TopologyExplorerData {
   }
 
   for (const { group } of clusterEntries) {
-    const neighborLimit = Math.min(90, Math.max(28, Math.ceil(Math.sqrt(group.length) * 3)))
+    const neighborLimit = Math.min(96, Math.max(28, Math.ceil(Math.sqrt(group.length) * 3)))
     for (const node of group) {
       nearbyNodesById.set(node.id, nearestNodes(node, group, neighborLimit))
     }
     for (const node of group) {
       const neighbors = nearbyNodesById.get(node.id) || []
       if (neighbors[0]) addEdge(node, neighbors[0], 'contains')
-      if (neighbors.length > 12 && random() > 0.46 && edges.length < EDGE_TOTAL) {
-        const bridgeIndex = Math.min(neighbors.length - 1, 12 + Math.floor(random() * 36))
-        addEdge(node, neighbors[bridgeIndex], 'depends_on')
+      if (neighbors.length > 12 && random() > 0.38 && edges.length < EDGE_TOTAL) {
+        const target = pickStructuralTarget(neighbors, random)
+        addEdge(node, target, 'depends_on')
       }
     }
   }
@@ -263,8 +266,16 @@ function nearestNodes(source: TopologyNode, nodes: TopologyNode[], limit: number
 function pickNearbyNode(source: TopologyNode, nearbyNodesById: Map<string, TopologyNode[]>, random: () => number) {
   const neighbors = nearbyNodesById.get(source.id) || []
   if (neighbors.length === 0) return source
-  const weightedIndex = Math.floor(Math.pow(random(), 0.38) * neighbors.length)
+  const weightedIndex = Math.floor(Math.pow(random(), 0.82) * neighbors.length)
   return neighbors[Math.min(neighbors.length - 1, weightedIndex)]
+}
+
+function pickStructuralTarget(neighbors: TopologyNode[], random: () => number) {
+  const lower = Math.min(neighbors.length - 1, 10)
+  const upper = Math.min(neighbors.length - 1, 54)
+  if (upper <= lower) return neighbors[lower]
+  const index = lower + Math.floor(Math.pow(random(), 0.78) * (upper - lower + 1))
+  return neighbors[Math.min(neighbors.length - 1, index)]
 }
 
 function relaxTopologyNodeSpacing(nodes: TopologyNode[]) {
@@ -278,10 +289,10 @@ function relaxTopologyNodeSpacing(nodes: TopologyNode[]) {
   for (const [clusterId, group] of nodesByCluster.entries()) {
     const cluster = clusterSpecForId(clusterId)
     const minDistance = clusterId === 'outer-orbit'
-      ? 16
-      : clamp(cluster.radius / Math.sqrt(group.length) * 1.45, 10.5, 14)
-    const maxRadius = clusterId === 'outer-orbit' ? 1020 : cluster.radius * 1.14
-    for (let iteration = 0; iteration < 6; iteration += 1) {
+      ? 14
+      : clamp(cluster.radius / Math.sqrt(group.length) * 0.92, 5.4, 8.6)
+    const maxRadius = clusterId === 'outer-orbit' ? 1020 : cluster.radius * 1.02
+    for (let iteration = 0; iteration < 4; iteration += 1) {
       relaxClusterPass(group, cluster.cx, cluster.cy, maxRadius, minDistance)
     }
   }
@@ -363,8 +374,8 @@ function deterministicPairAngle(left: string, right: string) {
 }
 
 function weightedTypeIndex(random: () => number, clusterIndex: number, index: number) {
-  if (random() < 0.5) return (clusterIndex * 2 + index) % 7
-  if (random() < 0.78) return Math.floor(random() * 8)
+  if (random() < 0.38) return (clusterIndex * 3 + index) % Math.min(10, typeNames.length)
+  if (random() < 0.82) return Math.floor(random() * typeNames.length)
   return Math.floor(random() * typeNames.length)
 }
 

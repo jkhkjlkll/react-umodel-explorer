@@ -2312,6 +2312,34 @@ export class NewTopoGraph {
     this.edgeLayer.prepend(this.edgeDefs);
   }
 
+  ensureEdgeMarker(edge) {
+    if (!this.edgeDefs) return this.edgeMarkerId;
+    const id = `topo-arrow-${this.instanceId}-${cssSafeId(edge.id)}`;
+    let marker = this.edgeDefs.querySelector(`[data-edge-marker-id="${id}"]`);
+    let path = marker?.querySelector("path");
+    if (!marker) {
+      marker = document.createElementNS(SVG_NS, "marker");
+      marker.setAttribute("id", id);
+      marker.setAttribute("data-edge-marker-id", id);
+      marker.setAttribute("markerWidth", "12");
+      marker.setAttribute("markerHeight", "10");
+      marker.setAttribute("refX", "10");
+      marker.setAttribute("refY", "5");
+      marker.setAttribute("orient", "auto");
+      marker.setAttribute("markerUnits", "userSpaceOnUse");
+      marker.setAttribute("overflow", "visible");
+      path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("d", "M0,0 L10,5 L0,10 L2.6,5 Z");
+      marker.appendChild(path);
+      this.edgeDefs.appendChild(marker);
+    }
+    if (path) {
+      path.setAttribute("fill", edge.data?.targetColor || edge.data?.color || "currentColor");
+      path.setAttribute("fill-opacity", edge.data?.markerOpacity ?? "0.96");
+    }
+    return id;
+  }
+
   createEdgeElement(edge, nodeById, shouldRenderLabel) {
     const source = nodeById.get(edge.source);
     const target = nodeById.get(edge.target);
@@ -2346,7 +2374,7 @@ export class NewTopoGraph {
     if (edgeShape?.pathClassName) visible.classList.add(...toClassList(edgeShape.pathClassName));
     const markerEnd = edge.markerEnd === false || edge.data?.markerEnd === false || edgeShape?.markerEnd === false
       ? ""
-      : edge.markerEnd || edge.data?.markerEnd || edgeShape?.markerEnd || `url(#${this.edgeMarkerId})`;
+      : resolveEdgeMarkerEnd(edge.markerEnd || edge.data?.markerEnd || edgeShape?.markerEnd, this.ensureEdgeMarker(edge));
     if (markerEnd) visible.setAttribute("marker-end", markerEnd);
     applySvgAttributes(visible, edgeShape?.pathAttributes, edge);
 
@@ -2680,6 +2708,11 @@ export class NewTopoGraph {
       const gradientId = this.ensureEdgeGradient(edge, path);
       if (gradientId) visible.setAttribute("stroke", `url(#${gradientId})`);
       else visible.removeAttribute("stroke");
+      const markerEnd = edge.markerEnd === false || edge.data?.markerEnd === false || edgeShape?.markerEnd === false
+        ? ""
+        : resolveEdgeMarkerEnd(edge.markerEnd || edge.data?.markerEnd || edgeShape?.markerEnd, this.ensureEdgeMarker(edge));
+      if (markerEnd) visible.setAttribute("marker-end", markerEnd);
+      else visible.removeAttribute("marker-end");
     }
     element.querySelector(".topo-edge-hit")?.setAttribute("d", path.d);
     const dot = element.querySelector(".topo-edge-target-dot");
@@ -3472,6 +3505,11 @@ function buildFlowEdgeGeometry(source, target, edge = {}) {
     to: shiftedTo,
     label: { x: (shiftedC1.x + shiftedC2.x) / 2, y: (shiftedFrom.y + shiftedTo.y) / 2 - 8 },
   };
+}
+
+function resolveEdgeMarkerEnd(markerEnd, markerId) {
+  if (!markerEnd || markerEnd === "arrow") return `url(#${markerId})`;
+  return markerEnd;
 }
 
 function viewportBoxToGeometryNode(box) {

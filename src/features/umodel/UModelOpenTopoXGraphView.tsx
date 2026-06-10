@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { OpenTopoXGraph, type OpenTopoXGraphHandle } from 'opentopox/react'
 import { registerNodeShape } from 'opentopox'
 import type { TopologyGraphData } from 'opentopox'
@@ -33,17 +33,20 @@ export function OpenTopoXGraphView({
   const graphRef = useRef<OpenTopoXGraphHandle | null>(null)
   const focusKey = focusIds.join('\u001f')
   const data = useMemo(() => toOpenTopoXData(graph), [graph])
-
-  useEffect(() => {
+  const applyNeighborhoodSelection = useCallback((id: string | null) => {
     const graphApi = graphRef.current?.getGraph()
     if (!graphApi) return
-    if (!selectedId) {
+    const selection = buildNeighborhoodSelection(graph, id)
+    if (!selection) {
       graphApi.clearSelection?.({ emit: false })
       return
     }
-    if (graph.nodes.some((node) => node.id === selectedId)) graphApi.selectNode?.(selectedId, { emit: false })
-    else graphApi.setSelection?.({ nodes: [], edges: [selectedId], primary: { type: 'edge', id: selectedId } }, { emit: false })
-  }, [graph.nodes, selectedId])
+    graphApi.setSelection?.(selection, { emit: false })
+  }, [graph])
+
+  useEffect(() => {
+    applyNeighborhoodSelection(selectedId)
+  }, [applyNeighborhoodSelection, selectedId])
 
   useEffect(() => {
     if (layouting || data.nodes.length === 0) return
@@ -74,6 +77,7 @@ export function OpenTopoXGraphView({
       className="v2-graph-container ume-opentopox-wrap"
       data-zoom={forceFullMode ? 'full' : zoomLevel}
       data-background={backgroundStyle}
+      data-focus-active={selectedId ? 'true' : 'false'}
     >
       <OpenTopoXGraph
         ref={graphRef}
@@ -84,10 +88,12 @@ export function OpenTopoXGraphView({
           canvasEdges: false,
           edgeLabelsVisible: false,
           edgeRouting: 'flow',
+          enableSelection: true,
           fitViewPadding: 0.2,
           grid: false,
           hideEdgesOnViewportMove: false,
-          hoverHighlight: false,
+          hoverHighlight: true,
+          hoverHighlightDegree: 1,
           maxZoom: 3,
           minimap: true,
           minZoom: 0.18,
@@ -107,9 +113,18 @@ export function OpenTopoXGraphView({
           const next = forceFullMode ? 'full' : viewport.zoom < 0.34 ? 'mini' : viewport.zoom < 0.74 ? 'compact' : 'full'
           if (next !== zoomLevel) onZoomLevelChange(next)
         }}
-        onNodeClick={(node) => onSelect((node.data as { element?: UModelElement }).element || null)}
-        onEdgeClick={(edge) => onSelect((edge.data as { element?: UModelElement }).element || null)}
-        onCanvasClick={() => onSelect(null)}
+        onNodeClick={(node) => {
+          applyNeighborhoodSelection(node.id)
+          onSelect((node.data as { element?: UModelElement }).element || null)
+        }}
+        onEdgeClick={(edge) => {
+          applyNeighborhoodSelection(edge.id)
+          onSelect((edge.data as { element?: UModelElement }).element || null)
+        }}
+        onCanvasClick={() => {
+          applyNeighborhoodSelection(null)
+          onSelect(null)
+        }}
       />
       {layouting && <div className="ume-layout-badge">Arranging OpenTopoX view...</div>}
     </div>
@@ -155,14 +170,12 @@ function toOpenTopoXData(graph: GraphModel): TopologyGraphData & Record<string, 
         source: edge.source,
         target: edge.target,
         type: 'flowEdge',
-        markerEnd: false,
         data: {
           ...data,
           element: data?.element,
-          markerEnd: false,
           routing: 'flow',
           status: 'ok',
-          targetDot: true,
+          targetDot: false,
           targetDotRadius: 3.4,
           color: targetColor,
           sourceColor,
@@ -173,6 +186,41 @@ function toOpenTopoXData(graph: GraphModel): TopologyGraphData & Record<string, 
       }
     }),
   }
+}
+
+function buildNeighborhoodSelection(graph: GraphModel, selectedId: string | null) {
+  if (!selectedId) return null
+  const nodeIds = new Set(graph.nodes.map((node) => node.id))
+  const visibleEdges = graph.edges.filter((edge) => !edge.hidden)
+
+  if (nodeIds.has(selectedId)) {
+    const nodes = new Set<string>([selectedId])
+    const edges: string[] = []
+    for (const edge of visibleEdges) {
+      if (edge.source !== selectedId && edge.target !== selectedId) continue
+      nodes.add(edge.source)
+      nodes.add(edge.target)
+      edges.push(edgeKeyForOpenTopoX(edge))
+    }
+    return {
+      nodes: [...nodes],
+      edges: [...new Set(edges)],
+      primary: { type: 'node' as const, id: selectedId },
+    }
+  }
+
+  const selectedEdge = visibleEdges.find((edge) => edgeKeyForOpenTopoX(edge) === selectedId)
+  if (!selectedEdge) return null
+  return {
+    nodes: [selectedEdge.source, selectedEdge.target],
+    edges: [edgeKeyForOpenTopoX(selectedEdge)],
+    primary: { type: 'edge' as const, id: edgeKeyForOpenTopoX(selectedEdge) },
+  }
+}
+
+function edgeKeyForOpenTopoX(edge: GraphModel['edges'][number]) {
+  const data = edge.data as UModelEdgeData | undefined
+  return data?.element ? elementKey(data.element) : edge.id
 }
 
 function computeEdgeOffsets(edges: GraphModel['edges'], nodeById: Map<string, GraphModel['nodes'][number]>) {

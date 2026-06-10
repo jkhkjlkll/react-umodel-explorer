@@ -1,10 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { fileURLToPath, URL } from 'node:url'
 
 const apiTarget = process.env.UMODEL_API_TARGET || process.env.VITE_UMODEL_API_TARGET || 'http://localhost:8080'
+const openTopoXSource = fileURLToPath(new URL('./vendor/opentopox/src/framework/', import.meta.url))
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: [
+      { find: /^opentopox\/react$/, replacement: `${openTopoXSource}react.js` },
+      { find: /^opentopox\/style\.css$/, replacement: `${openTopoXSource}topology.css` },
+      { find: /^opentopox$/, replacement: `${openTopoXSource}index.js` },
+    ],
+  },
+  optimizeDeps: {
+    exclude: ['opentopox'],
+  },
   build: {
     chunkSizeWarningLimit: 900,
     rollupOptions: {

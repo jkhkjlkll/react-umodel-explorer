@@ -14,6 +14,7 @@ const storageKeys = {
   apiBase: 'standalone.umodel.apiBase',
   workspace: 'standalone.umodel.workspace',
   dataSource: 'standalone.umodel.dataSource',
+  section: 'standalone.umodel.section',
 }
 
 type DataSource = 'mock' | 'api'
@@ -28,7 +29,7 @@ export function StandaloneExplorerApp() {
   const [error, setError] = useState('')
   const [refreshToken, setRefreshToken] = useState(0)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [section, setSection] = useState<StandaloneSection>('umodel')
+  const [section, setSection] = useLocalStorageState<StandaloneSection>(storageKeys.section, 'topology')
   const api = useMemo<UModelApiClient>(() => (
     dataSource === 'mock' ? new MockUModelApi(360) : new UModelApi(apiBase)
   ), [apiBase, dataSource])

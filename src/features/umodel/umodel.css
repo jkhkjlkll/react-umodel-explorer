@@ -2625,40 +2625,75 @@ body.ume-resizing-detail .ume-detail-panel {
   box-shadow: 0 0 0 2.5px var(--node-color, var(--ume-color-accent)), 0 4px 12px rgba(91, 91, 214, 0.15);
 }
 
+.ume-opentopox-wrap[data-focus-active="true"] .topo-node.umodelNode:not(.is-multi-selected) {
+  opacity: 0.14;
+  filter: saturate(0.24);
+}
+
+.ume-opentopox-wrap[data-focus-active="true"] .topo-node.umodelNode.is-multi-selected:not(.is-selected) {
+  opacity: 0.86;
+}
+
+.ume-opentopox-container .new-topo-graph.has-hover-highlight .topo-node.umodelNode:not(.is-hover-related):not(.is-selected):not(.is-multi-selected) {
+  opacity: 0.14;
+  filter: saturate(0.24);
+}
+
 .ume-opentopox-container .topo-edge-path {
   stroke-linecap: round;
   stroke-width: 1.8px;
   opacity: 0.86;
 }
 
-.ume-opentopox-container .topo-edge-target-dot {
-  fill: currentColor;
-  opacity: 0.82;
+.ume-opentopox-wrap[data-focus-active="true"] .topo-edge:not(.is-multi-selected) .topo-edge-path {
+  opacity: 0.08;
+  stroke-width: 1.1px;
+  filter: none;
+}
+
+.ume-opentopox-wrap[data-focus-active="true"] .topo-edge.is-multi-selected .topo-edge-path,
+.ume-opentopox-container .new-topo-graph.has-hover-highlight .topo-edge.is-hover-related .topo-edge-path {
+  opacity: 1;
+  stroke-width: 2.7px;
+  filter: none;
 }
 
 .ume-opentopox-container .topo-edge.is-selected .topo-edge-path {
-  stroke: currentColor;
-  stroke-width: 2.8px;
+  stroke-width: 3.4px;
   opacity: 0.98;
   filter: none;
 }
 
-.ume-opentopox-container .topo-edge.is-selected .topo-edge-target-dot {
-  opacity: 0.95;
+.ume-opentopox-container .topo-edge.is-multi-selected:not(.is-selected) .topo-edge-path {
+  stroke-width: 2.5px;
+}
+
+.ume-opentopox-container .new-topo-graph.has-hover-highlight .topo-edge:not(.is-hover-related) .topo-edge-path {
+  opacity: 0.08;
 }
 
 .ume-opentopox-container .topo-edge-hit {
   stroke-width: 16;
 }
 
-.ume-opentopox-wrap[data-zoom="mini"] .topo-edge:not(.is-selected) .topo-edge-path {
+.ume-opentopox-wrap[data-zoom="mini"] .topo-edge:not(.is-selected):not(.is-multi-selected) .topo-edge-path {
   stroke-width: 1.2px;
   opacity: 0.58;
 }
 
-.ume-opentopox-wrap[data-zoom="compact"] .topo-edge:not(.is-selected) .topo-edge-path {
+.ume-opentopox-wrap[data-zoom="compact"] .topo-edge:not(.is-selected):not(.is-multi-selected) .topo-edge-path {
   stroke-width: 1.45px;
   opacity: 0.72;
+}
+
+.ume-opentopox-wrap[data-focus-active="true"][data-zoom] .topo-edge:not(.is-multi-selected) .topo-edge-path {
+  stroke-width: 1.1px;
+  opacity: 0.08;
+}
+
+.ume-opentopox-wrap[data-focus-active="true"][data-zoom] .topo-edge.is-multi-selected .topo-edge-path {
+  stroke-width: 2.7px;
+  opacity: 1;
 }
 
 .ume-edge-label {

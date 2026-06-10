@@ -64,6 +64,13 @@ const glyphModeZoom = 6.7
 const labelModeZoom = 6.95
 const nodeCullZoom = 0.88
 
+interface SelectedRelation {
+  type: string
+  source: TopologyNode
+  target: TopologyNode
+  color: string
+}
+
 export function TopologyCanvas({
   data,
   layoutMode,
@@ -99,6 +106,15 @@ export function TopologyCanvas({
     }
     return ids
   }, [data.edges, selectedNode])
+  const selectedRelation = useMemo<SelectedRelation | null>(() => {
+    if (!selectedNode) return null
+    const edge = data.edges.find((item) => item.source === selectedNode.id || item.target === selectedNode.id)
+    if (!edge) return null
+    const source = nodeById.get(edge.source)
+    const target = nodeById.get(edge.target)
+    if (!source || !target) return null
+    return { type: edge.type, source, target, color: edge.color }
+  }, [data.edges, nodeById, selectedNode])
   const drawStateRef = useRef({
     data,
     nodeById,
@@ -271,6 +287,7 @@ export function TopologyCanvas({
       {selectedNode && (
         <SelectedNodePopover
           node={selectedNode}
+          relation={selectedRelation}
           viewport={viewportRef.current}
           size={sizeRef.current}
           version={minimapVersion}
@@ -321,17 +338,34 @@ function isPointInsideElement(clientX: number, clientY: number, element: HTMLEle
 
 function SelectedNodePopover({
   node,
+  relation,
   viewport,
   size,
 }: {
   node: TopologyNode
+  relation: SelectedRelation | null
   viewport: Viewport
   size: { width: number; height: number }
   version: number
 }) {
   const point = worldToScreen(node.x, node.y, viewport)
-  const left = clamp(point.x + 22, 18, Math.max(18, size.width - 360))
-  const top = clamp(point.y + 18, 18, Math.max(18, size.height - 132))
+  const left = clamp(point.x + 24, 18, Math.max(18, size.width - 456))
+  const top = clamp(point.y - 18, 18, Math.max(18, size.height - 242))
+  if (relation) {
+    return (
+      <div className="topo-relation-popover" style={{ left, top }}>
+        <div className="topo-relation-title">
+          <span style={{ backgroundColor: relation.color }} />
+          <div>
+            <strong>{relation.type}</strong>
+            <small>关系</small>
+          </div>
+        </div>
+        <RelationEntityCard title="源实体" node={relation.source} />
+        <RelationEntityCard title="目标实体" node={relation.target} />
+      </div>
+    )
+  }
   return (
     <div className="topo-node-popover" style={{ left, top }}>
       <span className="topo-popover-icon" style={{ color: node.color, borderColor: node.color }}>
@@ -346,6 +380,23 @@ function SelectedNodePopover({
           <dt>标识</dt>
           <dd>{node.properties.id}</dd>
         </dl>
+      </div>
+    </div>
+  )
+}
+
+function RelationEntityCard({ title, node }: { title: string; node: TopologyNode }) {
+  return (
+    <div className="topo-relation-entity">
+      <small>{title}</small>
+      <div>
+        <span className="topo-popover-icon" style={{ color: node.color, borderColor: node.color }}>
+          {iconTextForNode(node)}
+        </span>
+        <p>
+          <b style={{ color: node.color }}>{node.type}</b>
+          <strong>{node.label}</strong>
+        </p>
       </div>
     </div>
   )
@@ -448,7 +499,6 @@ function drawTopology(
   }
   const forcePlan = createForceRenderPlan(data, viewport, size, options)
   drawForceBackgroundEdges(context, data, nodeById, viewport, size, options)
-  drawForceAnchorDots(context, data, viewport, size, options)
   drawForceEdges(context, data, forcePlan, viewport, size, options)
   drawForceNodes(context, forcePlan, viewport, size, options)
 }
@@ -463,7 +513,7 @@ function drawForceBackgroundEdges(
 ) {
   if (viewport.zoom < 0.12) return
   const visibleWindow = Math.max(0.16, Math.min(1, options.playhead))
-  const stride = viewport.zoom > 0.7 ? 1 : 2
+  const stride = viewport.zoom > 0.52 ? 1 : 2
   context.save()
   context.lineCap = 'round'
   context.lineJoin = 'round'
@@ -481,11 +531,11 @@ function drawForceBackgroundEdges(
     if (!lineIntersectsViewport(from.x, from.y, to.x, to.y, size.width, size.height)) continue
 
     context.globalAlpha = options.selectedNode
-      ? selectedEdge ? 0.52 : 0.08
-      : viewport.zoom > 1.15 ? 0.46 : 0.48
-    context.strokeStyle = edgeVisualColor(edge.color)
-    context.lineWidth = viewport.zoom > 1.2 ? 1.28 : 0.82
-    drawForceEdgePath(context, from, to, source, target)
+      ? selectedEdge ? 0.56 : 0.06
+      : viewport.zoom > 1.15 ? 0.42 : 0.48
+    context.strokeStyle = '#a9b6c2'
+    context.lineWidth = selectedEdge ? 1.9 : viewport.zoom > 1.2 ? 0.94 : 0.82
+    drawStraightEdgePath(context, from, to)
     context.stroke()
   }
   context.restore()
@@ -524,8 +574,8 @@ function drawForceEdges(
   size: { width: number; height: number },
   options: { focusedTypeSet: Set<string>; selectedNode: TopologyNode | null; playhead: number },
 ) {
-  if (viewport.zoom < 0.14) return
-  const stride = viewport.zoom > 0.5 ? 1 : 2
+  if (!options.selectedNode && viewport.zoom < 2.75) return
+  const stride = options.selectedNode || viewport.zoom > 4 ? 1 : 2
   const visibleWindow = Math.max(0.16, Math.min(1, options.playhead))
   context.save()
   context.lineCap = 'round'
@@ -544,22 +594,11 @@ function drawForceEdges(
     const to = { x: targetVisible.x, y: targetVisible.y }
     if (!lineIntersectsViewport(from.x, from.y, to.x, to.y, size.width, size.height)) continue
 
-    const baseAlpha = options.selectedNode
-      ? selectedEdge ? 0.56 : 0.035
-      : viewport.zoom > 1.15 ? 0.62 : 0.46
-    const colorAlpha = options.selectedNode
-      ? selectedEdge ? 0.82 : 0.03
-      : viewport.zoom > 1.15 ? 0.82 : 0.62
-    context.globalAlpha = baseAlpha
-    context.strokeStyle = '#5ec7ee'
-    context.lineWidth = selectedEdge ? 2.35 : viewport.zoom > 1.2 ? 1.34 : 1
-    drawForceEdgePath(context, from, to, source, target)
-    context.stroke()
-
-    context.globalAlpha = colorAlpha
-    context.strokeStyle = selectedEdge ? edge.color : edgeVisualColor(edge.color)
-    context.lineWidth = selectedEdge ? 1.28 : viewport.zoom > 1.2 ? 0.66 : 0.5
-    drawForceEdgePath(context, from, to, source, target)
+    if (!selectedEdge && viewport.zoom < 3.8) continue
+    context.globalAlpha = selectedEdge ? 0.86 : 0.16
+    context.strokeStyle = selectedEdge ? edge.color : '#b9c5d0'
+    context.lineWidth = selectedEdge ? 1.75 : 0.62
+    drawStraightEdgePath(context, from, to)
     context.stroke()
   }
   context.restore()
@@ -578,9 +617,12 @@ function createForceRenderPlan(
   const ringMode = viewport.zoom >= ringModeZoom
   const iconMode = viewport.zoom >= iconModeZoom
   const glyphMode = viewport.zoom >= glyphModeZoom
-  const radius = iconMode ? clamp(7 + viewport.zoom * 2.1, 12, 18) : ringMode ? clamp(4.5 + viewport.zoom * 1.6, 6.5, 10) : viewport.zoom > 0.75 ? 1.7 : 1.25
+  const radius = iconMode ? clamp(7 + viewport.zoom * 2.1, 12, 18) : ringMode ? clamp(4.5 + viewport.zoom * 1.6, 6.5, 10) : viewport.zoom > 0.75 ? 1.9 : 1.65
   const shouldReserveScreenSpace = viewport.zoom >= nodeCullZoom
-  const nodes = [...data.nodes].sort((left, right) => nodePriority(right, options) - nodePriority(left, options))
+  const shouldPrioritizeNodes = Boolean(options.selectedNode || options.selectedNeighborIds || options.focusedTypeSet.size > 0)
+  const nodes = shouldPrioritizeNodes
+    ? [...data.nodes].sort((left, right) => nodePriority(right, options) - nodePriority(left, options))
+    : data.nodes
   const reservations: CircleReservation[] = []
   const visibleNodes: VisibleForceNode[] = []
   const visibleNodeById = new Map<string, VisibleForceNode>()
@@ -693,10 +735,20 @@ function drawForceEdgePath(
   const normalX = -dy / distance
   const normalY = dx / distance
   const bendSign = deterministicEdgeSign(source.id, target.id)
-  const bend = clamp(distance * 0.055, 5, 34) * bendSign
+  const bend = clamp(distance * 0.018, 1.5, 12) * bendSign
   const midX = (from.x + to.x) / 2
   const midY = (from.y + to.y) / 2
   context.quadraticCurveTo(midX + normalX * bend, midY + normalY * bend, to.x, to.y)
+}
+
+function drawStraightEdgePath(
+  context: CanvasRenderingContext2D,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+) {
+  context.beginPath()
+  context.moveTo(from.x, from.y)
+  context.lineTo(to.x, to.y)
 }
 
 function edgeVisualColor(color: string) {
