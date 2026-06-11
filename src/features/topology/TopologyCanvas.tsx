@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { TopologyExplorerData, TopologyNode } from './topologyModel'
+import { drawTopologyPresetGlyph, resolveTopologyNodeIconPreset, TopologyPresetIcon } from './topologyIcons'
 
 interface Viewport {
   x: number
@@ -59,8 +60,8 @@ const maxZoom = 7
 const zoomSensitivity = 0.012
 const maxZoomStep = 1.65
 const ringModeZoom = 1.8
-const iconModeZoom = 5.4
-const glyphModeZoom = 6.7
+const iconModeZoom = 2.35
+const glyphModeZoom = 4.25
 const labelModeZoom = 6.95
 const nodeCullZoom = 0.88
 
@@ -367,11 +368,11 @@ function SelectedNodePopover({
     )
   }
   return (
-    <div className="topo-node-popover" style={{ left, top }}>
-      <span className="topo-popover-icon" style={{ color: node.color, borderColor: node.color }}>
-        {iconTextForNode(node)}
-      </span>
-      <div>
+      <div className="topo-node-popover" style={{ left, top }}>
+        <span className="topo-popover-icon" style={{ color: node.color, borderColor: node.color }}>
+          <TopologyPresetIcon preset={resolveTopologyNodeIconPreset(node)} label={node.type} size={22} />
+        </span>
+        <div>
         <strong>{node.label}</strong>
         <small>{node.type}</small>
         <dl>
@@ -391,7 +392,7 @@ function RelationEntityCard({ title, node }: { title: string; node: TopologyNode
       <small>{title}</small>
       <div>
         <span className="topo-popover-icon" style={{ color: node.color, borderColor: node.color }}>
-          {iconTextForNode(node)}
+          <TopologyPresetIcon preset={resolveTopologyNodeIconPreset(node)} label={node.type} size={18} />
         </span>
         <p>
           <b style={{ color: node.color }}>{node.type}</b>
@@ -498,7 +499,7 @@ function drawTopology(
     return
   }
   const forcePlan = createForceRenderPlan(data, viewport, size, options)
-  drawForceBackgroundEdges(context, data, nodeById, viewport, size, options)
+  drawForceBackgroundEdges(context, data, forcePlan, viewport, size, options)
   drawForceEdges(context, data, forcePlan, viewport, size, options)
   drawForceNodes(context, forcePlan, viewport, size, options)
 }
@@ -506,7 +507,7 @@ function drawTopology(
 function drawForceBackgroundEdges(
   context: CanvasRenderingContext2D,
   data: TopologyExplorerData,
-  nodeById: Map<string, TopologyNode>,
+  forcePlan: ForceRenderPlan,
   viewport: Viewport,
   size: { width: number; height: number },
   options: { focusedTypeSet: Set<string>; selectedNode: TopologyNode | null; playhead: number },
@@ -514,20 +515,31 @@ function drawForceBackgroundEdges(
   if (viewport.zoom < 0.12) return
   const visibleWindow = Math.max(0.16, Math.min(1, options.playhead))
   const stride = viewport.zoom > 0.52 ? 1 : 2
+  const ringMode = viewport.zoom >= ringModeZoom
+  const iconMode = viewport.zoom >= iconModeZoom
+  const edgeNodeRadius = iconMode ? clamp(7 + viewport.zoom * 2.1, 12, 18) : ringMode ? clamp(4.5 + viewport.zoom * 1.6, 6.5, 10) : viewport.zoom > 0.75 ? 1.9 : 1.65
   context.save()
   context.lineCap = 'round'
   context.lineJoin = 'round'
   context.globalCompositeOperation = 'multiply'
   for (let index = 0; index < data.edges.length * visibleWindow; index += stride) {
     const edge = data.edges[index]
-    const source = nodeById.get(edge.source)
-    const target = nodeById.get(edge.target)
-    if (!source || !target) continue
+    const sourceVisible = forcePlan.nodeById.get(edge.source)
+    const targetVisible = forcePlan.nodeById.get(edge.target)
+    if (!sourceVisible || !targetVisible) continue
+    const source = sourceVisible.node
+    const target = targetVisible.node
     if (options.focusedTypeSet.size > 0 && !options.focusedTypeSet.has(source.type) && !options.focusedTypeSet.has(target.type)) continue
     const selectedEdge = Boolean(options.selectedNode && (edge.source === options.selectedNode.id || edge.target === options.selectedNode.id))
     if (source.cluster !== target.cluster) continue
-    const from = worldToScreen(source.x, source.y, viewport)
-    const to = worldToScreen(target.x, target.y, viewport)
+    const endpoints = edgeEndpointsOnNodeRings(
+      { x: sourceVisible.x, y: sourceVisible.y },
+      { x: targetVisible.x, y: targetVisible.y },
+      Math.max(0, edgeNodeRadius - 2.5),
+      Math.max(0, edgeNodeRadius - 2.5),
+    )
+    const from = endpoints.from
+    const to = endpoints.to
     if (!lineIntersectsViewport(from.x, from.y, to.x, to.y, size.width, size.height)) continue
 
     context.globalAlpha = options.selectedNode
@@ -590,8 +602,14 @@ function drawForceEdges(
     if (options.focusedTypeSet.size > 0 && !options.focusedTypeSet.has(source.type) && !options.focusedTypeSet.has(target.type)) continue
     const selectedEdge = Boolean(options.selectedNode && (edge.source === options.selectedNode.id || edge.target === options.selectedNode.id))
     if (source.cluster !== target.cluster) continue
-    const from = { x: sourceVisible.x, y: sourceVisible.y }
-    const to = { x: targetVisible.x, y: targetVisible.y }
+    const endpoints = edgeEndpointsOnNodeRings(
+      { x: sourceVisible.x, y: sourceVisible.y },
+      { x: targetVisible.x, y: targetVisible.y },
+      Math.max(0, forcePlan.radius - 2.5),
+      Math.max(0, forcePlan.radius - 2.5),
+    )
+    const from = endpoints.from
+    const to = endpoints.to
     if (!lineIntersectsViewport(from.x, from.y, to.x, to.y, size.width, size.height)) continue
 
     if (!selectedEdge && viewport.zoom < 3.8) continue
@@ -671,7 +689,7 @@ function drawForceNodes(
       context.globalAlpha = 0.94
     }
     if (forcePlan.iconMode) {
-      drawIconNode(context, item.node, item.x, item.y, forcePlan.radius, item.selected, item.selected)
+      drawIconNode(context, item.node, item.x, item.y, forcePlan.radius, item.selected, forcePlan.glyphMode || forcePlan.iconMode)
     } else if (forcePlan.ringMode) {
       drawRingNode(context, item.node, item.x, item.y, forcePlan.radius, item.selected)
     } else {
@@ -749,6 +767,24 @@ function drawStraightEdgePath(
   context.beginPath()
   context.moveTo(from.x, from.y)
   context.lineTo(to.x, to.y)
+}
+
+function edgeEndpointsOnNodeRings(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  fromRadius: number,
+  toRadius: number,
+) {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const distance = Math.hypot(dx, dy)
+  if (distance < 0.001) return { from, to }
+  const unitX = dx / distance
+  const unitY = dy / distance
+  return {
+    from: { x: from.x + unitX * fromRadius, y: from.y + unitY * fromRadius },
+    to: { x: to.x - unitX * toRadius, y: to.y - unitY * toRadius },
+  }
 }
 
 function edgeVisualColor(color: string) {
@@ -941,10 +977,7 @@ function drawIconNode(
   context.shadowBlur = 0
   if (showGlyph) {
     context.fillStyle = node.color
-    context.font = `700 ${Math.max(11, Math.round(radius * 0.72))}px var(--om-cjk-font)`
-    context.textAlign = 'center'
-    context.textBaseline = 'middle'
-    context.fillText(iconTextForNode(node), x, y + 0.5)
+    drawTopologyPresetGlyph(context, resolveTopologyNodeIconPreset(node), node.type, x, y, Math.max(14, radius * 1.14))
   }
   context.restore()
 }
@@ -1058,17 +1091,6 @@ function phyllotaxisPoint(index: number, count: number, radius: number) {
     x: Math.cos(angle) * distance,
     y: Math.sin(angle) * distance,
   }
-}
-
-function iconTextForNode(node: TopologyNode) {
-  if (node.type.includes('Kubernetes') || node.type.includes('容器')) return 'K'
-  if (node.type.includes('数据库') || node.type.includes('NoSQL')) return 'D'
-  if (node.type.includes('负载均衡')) return 'L'
-  if (node.type.includes('API')) return 'A'
-  if (node.type.includes('PAI') || node.type.includes('人工智能')) return 'P'
-  if (node.type.includes('ECS') || node.type.includes('服务器')) return 'E'
-  if (node.type.includes('Kafka')) return 'Q'
-  return node.type.slice(0, 1).toUpperCase()
 }
 
 function shortNodeLabel(node: TopologyNode) {

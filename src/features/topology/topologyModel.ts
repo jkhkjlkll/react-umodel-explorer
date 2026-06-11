@@ -4,6 +4,9 @@ export interface TopologyNode {
   type: string
   cluster: string
   color: string
+  iconPreset?: string
+  iconUrl?: string
+  iconClass?: string
   x: number
   y: number
   weight: number
@@ -114,6 +117,7 @@ export function createAliyunLikeTopologyData(): TopologyExplorerData {
         type: typeNames[typeIndex],
         cluster: `cluster-${clusterIndex}`,
         color: colors[typeIndex % colors.length],
+        iconPreset: inferMockIconPreset(typeNames[typeIndex]),
         x,
         y,
         weight: 1 + Math.floor(random() * 4),
@@ -140,6 +144,7 @@ export function createAliyunLikeTopologyData(): TopologyExplorerData {
       type: typeNames[typeIndex],
       cluster: 'outer-orbit',
       color: colors[typeIndex % colors.length],
+      iconPreset: inferMockIconPreset(typeNames[typeIndex]),
       x: Math.cos(angle) * radius,
       y: Math.sin(angle) * radius,
       weight: 1,
@@ -248,6 +253,18 @@ function computeBounds(nodes: TopologyNode[]) {
     maxY = Math.max(maxY, node.y)
   })
   return { minX, minY, maxX, maxY }
+}
+
+function inferMockIconPreset(type: string) {
+  const text = type.toLowerCase()
+  if (text.includes('kubernetes') || text.includes('容器')) return 'pod'
+  if (text.includes('数据库') || text.includes('nosql')) return 'database'
+  if (text.includes('负载均衡') || text.includes('slb') || text.includes('alb')) return 'loadbalancer'
+  if (text.includes('api') || text.includes('网关')) return 'endpoint'
+  if (text.includes('ecs') || text.includes('服务器')) return 'instance'
+  if (text.includes('pai') || text.includes('应用') || text.includes('工作空间')) return 'application'
+  if (text.includes('kafka')) return 'service'
+  return 'default'
 }
 
 function nearestNodes(source: TopologyNode, nodes: TopologyNode[], limit: number) {

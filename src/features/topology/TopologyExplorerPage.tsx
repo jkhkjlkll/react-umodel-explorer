@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronRight,
   CircleHelp,
-  Database,
   Grid2X2,
   Network,
   Play,
@@ -12,6 +11,7 @@ import {
 } from 'lucide-react'
 import type { UModelApiClient } from '../../api/client'
 import { createAliyunLikeTopologyData, type TopologyNode } from './topologyModel'
+import { resolveTopologyNodeIconPreset, TopologyPresetIcon } from './topologyIcons'
 import { TopologyCanvas } from './TopologyCanvas'
 import './topology.css'
 
@@ -47,15 +47,43 @@ export function TopologyExplorerPage({
   const [playing, setPlaying] = useState(false)
   const [playhead, setPlayhead] = useState(0.98)
   const [selectedApplicationId, setSelectedApplicationId] = useState(mockApplications[0]?.id || '')
+  const [searchDraft, setSearchDraft] = useState('')
+  const [searchText, setSearchText] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchBlurRef = useRef<number | null>(null)
   const focusedTypeSet = useMemo(() => new Set(focusedTypes), [focusedTypes])
-  const currentNodeCount = focusedTypes.length > 0 ? data.nodes.filter((node) => focusedTypeSet.has(node.type)).length : data.nodes.length
-  const currentEdgeCount = focusedTypes.length > 0
-    ? data.edges.filter((edge) => {
-      const source = data.nodesById.get(edge.source)
-      const target = data.nodesById.get(edge.target)
-      return Boolean(source && target && (focusedTypeSet.has(source.type) || focusedTypeSet.has(target.type)))
-    }).length
-    : data.edges.length
+  const searchNeedles = useMemo(() => splitSearchWords(searchText), [searchText])
+  const displayData = useMemo(() => {
+    const nodes = data.nodes.filter((node) => {
+      const typeMatched = focusedTypes.length === 0 || focusedTypeSet.has(node.type)
+      const searchMatched = searchNeedles.length === 0 || nodeMatchesSearch(node, searchNeedles)
+      return typeMatched && searchMatched
+    })
+    const nodeIds = new Set(nodes.map((node) => node.id))
+    const edges = data.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+    return {
+      ...data,
+      nodes,
+      edges,
+      nodesById: new Map(nodes.map((node) => [node.id, node])),
+      types: data.types.map((type) => ({
+        ...type,
+        count: nodes.filter((node) => node.type === type.type).length,
+      })),
+      bounds: nodes.length > 0 ? computeDisplayBounds(nodes) : data.bounds,
+    }
+  }, [data, focusedTypeSet, focusedTypes.length, searchNeedles])
+  const currentNodeCount = displayData.nodes.length
+  const currentEdgeCount = displayData.edges.length
+  const searchMatches = useMemo(() => {
+    const query = searchDraft.trim()
+    if (!query) return []
+    const needles = splitSearchWords(query)
+    return data.nodes
+      .filter((node) => nodeMatchesSearch(node, needles))
+      .slice(0, 8)
+  }, [data.nodes, searchDraft])
+  const activeTypes = useMemo(() => data.types.filter((type) => type.count > 0).slice(0, 8), [data.types])
 
   useEffect(() => {
     if (!playing) return
@@ -71,6 +99,25 @@ export function TopologyExplorerPage({
       if (clusterRule === 'replace') return current.length === 1 && current[0] === type ? [] : [type]
       return current.includes(type) ? current.filter((item) => item !== type) : [...current, type]
     })
+  }
+
+  const focusNode = (node: TopologyNode) => {
+    setSearchText('')
+    setSearchDraft('')
+    setLayoutMode('force')
+    setSelectedNode(node)
+    setFocusedTypes((current) => {
+      if (current.includes(node.type)) return current
+      return clusterRule === 'append' ? [...current, node.type] : [node.type]
+    })
+  }
+
+  const applySearch = (text = searchDraft) => {
+    const value = text.trim()
+    setSearchText(value)
+    setSearchDraft(value)
+    setSearchOpen(false)
+    setSelectedNode(null)
   }
 
   return (
@@ -129,10 +176,52 @@ export function TopologyExplorerPage({
 
         <main className="topo-stage">
           <header className="topo-stage-toolbar">
-            <div className="topo-search-pill">
+            <div className="topo-search-wrap">
               <Search size={16} />
-              <span>Search</span>
-              <kbd>⌘ K</kbd>
+              <input
+                value={searchDraft}
+                onBlur={() => {
+                  searchBlurRef.current = window.setTimeout(() => setSearchOpen(false), 160)
+                }}
+                onChange={(event) => {
+                  setSearchDraft(event.target.value)
+                  setSearchOpen(true)
+                }}
+                onFocus={() => {
+                  if (searchBlurRef.current) window.clearTimeout(searchBlurRef.current)
+                  setSearchOpen(true)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') applySearch()
+                  if (event.key === 'Escape') setSearchOpen(false)
+                }}
+                placeholder="搜索实体、类型、属性..."
+              />
+              {searchText && (
+                <button className="topo-search-clear" type="button" aria-label="清除搜索" onClick={() => {
+                  setSearchText('')
+                  setSearchDraft('')
+                  setSearchOpen(false)
+                }}>
+                  ×
+                </button>
+              )}
+              {searchOpen && (
+                <SearchPopover
+                  query={searchDraft}
+                  nodes={searchMatches}
+                  types={activeTypes}
+                  onApplySearch={applySearch}
+                  onFocusNode={(node) => {
+                    focusNode(node)
+                    setSearchOpen(false)
+                  }}
+                  onToggleType={(type) => {
+                    focusType(type)
+                    setSearchOpen(false)
+                  }}
+                />
+              )}
             </div>
             <label className="topo-app-selector">
               <span>应用 ID</span>
@@ -163,9 +252,9 @@ export function TopologyExplorerPage({
 
           <section className="topo-graph-card">
             <TopologyCanvas
-              data={data}
+              data={displayData}
               layoutMode={layoutMode}
-              focusedTypes={focusedTypes}
+              focusedTypes={[]}
               selectedNode={selectedNode}
               showLabels={showLabels}
               showClusterLabels={showClusterLabels}
@@ -181,12 +270,69 @@ export function TopologyExplorerPage({
 
           <footer className="topo-statusbar">
             <span>当前：{currentNodeCount.toLocaleString()} 实体 / {currentEdgeCount.toLocaleString()} 关系</span>
+            {searchText && (
+              <>
+                <i />
+                <span>搜索：{searchText}</span>
+              </>
+            )}
             <i />
             <span>总量：{data.nodes.length.toLocaleString()} 实体 / {data.edges.length.toLocaleString()} 关系</span>
             <b>拓扑探索</b>
           </footer>
         </main>
       </section>
+    </div>
+  )
+}
+
+function SearchPopover({
+  query,
+  nodes,
+  types,
+  onApplySearch,
+  onFocusNode,
+  onToggleType,
+}: {
+  query: string
+  nodes: TopologyNode[]
+  types: Array<{ type: string; count: number; color: string }>
+  onApplySearch: (query: string) => void
+  onFocusNode: (node: TopologyNode) => void
+  onToggleType: (type: string) => void
+}) {
+  return (
+    <div className="topo-search-popover" onMouseDown={(event) => event.preventDefault()}>
+      {query.trim() && (
+        <button className="topo-search-command" onClick={() => onApplySearch(query)} type="button">
+          <Search size={13} />
+          搜索 "{query.trim()}"
+        </button>
+      )}
+      <div className="topo-search-section">
+        <strong>实体</strong>
+        {nodes.length === 0 ? <span className="topo-search-empty">没有匹配实体</span> : nodes.map((node) => (
+          <button key={node.id} onClick={() => onFocusNode(node)} type="button">
+            <span className="topo-search-dot" style={{ background: node.color }} />
+            <span>
+              <b>{node.label}</b>
+              <small>{node.type} · {node.properties.region}</small>
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="topo-search-section">
+        <strong>类型</strong>
+        <div className="topo-token-cloud">
+          {types.map((type) => (
+            <button key={type.type} onClick={() => onToggleType(type.type)} type="button">
+              <span style={{ background: type.color }} />
+              {type.type}
+              <b>{type.count.toLocaleString()}</b>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -203,13 +349,13 @@ function OverviewPanel({
   const focusedTypeSet = new Set(focusedTypes)
   return (
     <div className="topo-overview-list">
-      {types.map((item) => (
-        <button key={item.type} className={focusedTypeSet.has(item.type) ? 'active' : ''} type="button" onClick={() => onSelectType(item.type)}>
-          <span className="topo-type-icon" style={{ color: item.color, borderColor: item.color }}>
-            <Database size={13} />
-          </span>
-          <span>{item.type}</span>
-          <b>{item.count}</b>
+          {types.map((item) => (
+            <button key={item.type} className={focusedTypeSet.has(item.type) ? 'active' : ''} type="button" onClick={() => onSelectType(item.type)}>
+              <span className="topo-type-icon" style={{ color: item.color, borderColor: item.color }}>
+                <TopologyPresetIcon preset={resolveTypeSummaryPreset(item.type)} label={item.type} size={13} />
+              </span>
+              <span>{item.type}</span>
+              <b>{item.count}</b>
           <CircleHelp size={14} />
           <ChevronRight size={14} />
         </button>
@@ -304,7 +450,7 @@ function NodeDetail({ node, onClose }: { node: TopologyNode; onClose: () => void
       <button className="topo-detail-close" type="button" onClick={onClose}>×</button>
       <div className="topo-detail-header">
         <div className="topo-detail-icon" style={{ color: node.color, borderColor: node.color }}>
-          {node.type.includes('Kubernetes') ? 'K' : <Shuffle size={18} />}
+          <TopologyPresetIcon preset={resolveTopologyNodeIconPreset(node)} label={node.type} size={22} />
         </div>
         <div>
           <strong>{shortDetailTitle(node)}</strong>
@@ -332,4 +478,46 @@ function shortDetailTitle(node: TopologyNode) {
   if (node.type.includes('Kubernetes')) return node.properties.host ? String(node.properties.host) : 'openclaw-chat-config'
   if (node.type.includes('ECS')) return '10.179.126.252'
   return node.label.replace(/\s+\d+$/, '').slice(0, 28)
+}
+
+function resolveTypeSummaryPreset(type: string) {
+  return resolveTopologyNodeIconPreset({ type, label: type, iconPreset: undefined })
+}
+
+function splitSearchWords(text: string) {
+  return text
+    .toLowerCase()
+    .split(/[\s,，/|]+/g)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function nodeMatchesSearch(node: TopologyNode, needles: string[]) {
+  if (needles.length === 0) return true
+  const haystack = [
+    node.id,
+    node.label,
+    node.type,
+    node.cluster,
+    ...Object.entries(node.properties).flatMap(([key, value]) => [key, String(value)]),
+  ].join(' ').toLowerCase()
+  return needles.every((needle) => haystack.includes(needle))
+}
+
+function computeDisplayBounds(nodes: TopologyNode[]) {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  nodes.forEach((node) => {
+    minX = Math.min(minX, node.x)
+    minY = Math.min(minY, node.y)
+    maxX = Math.max(maxX, node.x)
+    maxY = Math.max(maxY, node.y)
+  })
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return { minX: -1, minY: -1, maxX: 1, maxY: 1 }
+  }
+  const padding = 80
+  return { minX: minX - padding, minY: minY - padding, maxX: maxX + padding, maxY: maxY + padding }
 }
