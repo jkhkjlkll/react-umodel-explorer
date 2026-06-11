@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import ReactDOM from 'react-dom'
 import {
   ChevronRight,
   CircleHelp,
@@ -51,6 +52,8 @@ export function TopologyExplorerPage({
   const [searchText, setSearchText] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const searchBlurRef = useRef<number | null>(null)
+  const searchWrapRef = useRef<HTMLDivElement | null>(null)
+  const [searchPanelStyle, setSearchPanelStyle] = useState<CSSProperties>()
   const focusedTypeSet = useMemo(() => new Set(focusedTypes), [focusedTypes])
   const searchNeedles = useMemo(() => splitSearchWords(searchText), [searchText])
   const displayData = useMemo(() => {
@@ -92,6 +95,36 @@ export function TopologyExplorerPage({
     }, 160)
     return () => window.clearInterval(timer)
   }, [playing])
+
+  const updateSearchPanelGeometry = useCallback(() => {
+    const wrap = searchWrapRef.current
+    if (!wrap) return
+    const rect = wrap.getBoundingClientRect()
+    const viewportPadding = 12
+    const width = Math.min(620, Math.max(320, window.innerWidth - viewportPadding * 2))
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      Math.max(viewportPadding, window.innerWidth - width - viewportPadding),
+    )
+    setSearchPanelStyle({
+      left,
+      top: rect.bottom + 8,
+      width,
+      maxWidth: width,
+      maxHeight: Math.max(180, window.innerHeight - rect.bottom - 20),
+    })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!searchOpen) return
+    updateSearchPanelGeometry()
+    window.addEventListener('resize', updateSearchPanelGeometry)
+    window.addEventListener('scroll', updateSearchPanelGeometry, true)
+    return () => {
+      window.removeEventListener('resize', updateSearchPanelGeometry)
+      window.removeEventListener('scroll', updateSearchPanelGeometry, true)
+    }
+  }, [searchOpen, updateSearchPanelGeometry])
 
   const focusType = (type: string) => {
     setSelectedNode(null)
@@ -176,7 +209,7 @@ export function TopologyExplorerPage({
 
         <main className="topo-stage">
           <header className="topo-stage-toolbar">
-            <div className="topo-search-wrap">
+            <div className="topo-search-wrap" ref={searchWrapRef}>
               <Search size={16} />
               <input
                 value={searchDraft}
@@ -211,6 +244,7 @@ export function TopologyExplorerPage({
                   query={searchDraft}
                   nodes={searchMatches}
                   types={activeTypes}
+                  style={searchPanelStyle}
                   onApplySearch={applySearch}
                   onFocusNode={(node) => {
                     focusNode(node)
@@ -290,6 +324,7 @@ function SearchPopover({
   query,
   nodes,
   types,
+  style,
   onApplySearch,
   onFocusNode,
   onToggleType,
@@ -297,12 +332,14 @@ function SearchPopover({
   query: string
   nodes: TopologyNode[]
   types: Array<{ type: string; count: number; color: string }>
+  style?: CSSProperties
   onApplySearch: (query: string) => void
   onFocusNode: (node: TopologyNode) => void
   onToggleType: (type: string) => void
 }) {
-  return (
-    <div className="topo-search-popover" onMouseDown={(event) => event.preventDefault()}>
+  if (typeof document === 'undefined') return null
+  return ReactDOM.createPortal(
+    <div className="topo-search-popover" style={style} onMouseDown={(event) => event.preventDefault()}>
       {query.trim() && (
         <button className="topo-search-command" onClick={() => onApplySearch(query)} type="button">
           <Search size={13} />
@@ -333,7 +370,8 @@ function SearchPopover({
           ))}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
