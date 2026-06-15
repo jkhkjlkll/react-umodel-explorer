@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { GitBranch, Network, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
+import { Box, GitBranch, Network, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
 import { UModelApi, type UModelApiClient } from './api/client'
 import { MockUModelApi } from './api/mockClient'
 import type { WorkspaceMetadata } from './api/types'
@@ -9,6 +9,7 @@ import { formatError } from './lib/json'
 import { useLocalStorageState } from './lib/storage'
 import { UModelPage } from './features/umodel/UModelPage'
 import { TopologyExplorerPage } from './features/topology/TopologyExplorerPage'
+import { EntityExplorerPage } from './features/entity/EntityExplorerPage'
 
 const storageKeys = {
   apiBase: 'standalone.umodel.apiBase',
@@ -18,7 +19,7 @@ const storageKeys = {
 }
 
 type DataSource = 'mock' | 'api'
-type StandaloneSection = 'umodel' | 'topology'
+type StandaloneSection = 'umodel' | 'entity' | 'topology'
 
 export function StandaloneExplorerApp() {
   const { t } = useI18n()
@@ -84,6 +85,10 @@ export function StandaloneExplorerApp() {
             <GitBranch size={16} />
             <span className="workspace-nav-label">{t('nav.umodel')}</span>
           </button>
+          <button className={section === 'entity' ? 'active' : ''} type="button" title="实体探索" onClick={() => setSection('entity')}>
+            <Box size={16} />
+            <span className="workspace-nav-label">实体探索</span>
+          </button>
           <button className={section === 'topology' ? 'active' : ''} type="button" title={t('nav.entityTopo')} onClick={() => setSection('topology')}>
             <Network size={16} />
             <span className="workspace-nav-label">{t('nav.entityTopo')}</span>
@@ -102,6 +107,8 @@ export function StandaloneExplorerApp() {
         <main className="workspace-content workspace-content-canvas">
           {section === 'umodel' ? (
             <UModelPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
+          ) : section === 'entity' ? (
+            <EntityExplorerPage refreshToken={refreshToken} />
           ) : (
             <TopologyExplorerPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
           )}
