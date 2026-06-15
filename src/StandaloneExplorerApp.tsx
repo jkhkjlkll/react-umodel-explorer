@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Box, GitBranch, Network, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
+import { Box, GitBranch, Monitor, Network, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
 import { UModelApi, type UModelApiClient } from './api/client'
 import { MockUModelApi } from './api/mockClient'
 import type { WorkspaceMetadata } from './api/types'
@@ -10,6 +10,7 @@ import { useLocalStorageState } from './lib/storage'
 import { UModelPage } from './features/umodel/UModelPage'
 import { TopologyExplorerPage } from './features/topology/TopologyExplorerPage'
 import { EntityExplorerPage } from './features/entity/EntityExplorerPage'
+import { CmsTopologyReplicaPage } from './features/cms/CmsTopologyReplicaPage'
 
 const storageKeys = {
   apiBase: 'standalone.umodel.apiBase',
@@ -19,7 +20,7 @@ const storageKeys = {
 }
 
 type DataSource = 'mock' | 'api'
-type StandaloneSection = 'umodel' | 'entity' | 'topology'
+type StandaloneSection = 'umodel' | 'entity' | 'topology' | 'cmsTopology'
 
 export function StandaloneExplorerApp() {
   const { t } = useI18n()
@@ -93,6 +94,10 @@ export function StandaloneExplorerApp() {
             <Network size={16} />
             <span className="workspace-nav-label">{t('nav.entityTopo')}</span>
           </button>
+          <button className={section === 'cmsTopology' ? 'active' : ''} type="button" title="CMS 原版拓扑" onClick={() => setSection('cmsTopology')}>
+            <Monitor size={16} />
+            <span className="workspace-nav-label">CMS 原版拓扑</span>
+          </button>
         </nav>
         <div className="workspace-sidebar-footer standalone-sidebar-footer">
           <Button className="workspace-back-button" variant="ghost" onClick={() => void refresh()}>
@@ -109,6 +114,8 @@ export function StandaloneExplorerApp() {
             <UModelPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
           ) : section === 'entity' ? (
             <EntityExplorerPage refreshToken={refreshToken} />
+          ) : section === 'cmsTopology' ? (
+            <CmsTopologyReplicaPage />
           ) : (
             <TopologyExplorerPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
           )}
