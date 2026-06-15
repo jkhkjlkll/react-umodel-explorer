@@ -3,12 +3,17 @@ import ReactDOM from 'react-dom'
 import {
   ChevronRight,
   CircleHelp,
+  Code2,
+  Filter,
   Grid2X2,
+  Home,
   Network,
   Play,
+  RefreshCw,
   Search,
   Settings,
   Shuffle,
+  Sparkles,
 } from 'lucide-react'
 import type { UModelApiClient } from '../../api/client'
 import { createAliyunLikeTopologyData, type TopologyNode } from './topologyModel'
@@ -25,6 +30,59 @@ const mockApplications = [
   { id: 'app-slb-gateway-039', name: 'SLB 网关入口' },
   { id: 'app-ecs-billing-052', name: 'ECS 计费服务' },
   { id: 'app-arms-observe-073', name: 'ARMS 观测服务' },
+]
+
+const entityTabs = [
+  ['所有实体', '19869'],
+  ['应用列表', '218'],
+  ['K8s 集群子...', '1'],
+  ['ECS 列表', '348'],
+  ['RDS 列表', '27'],
+  ['RUM...', '4'],
+]
+
+const consoleNavGroups = [
+  {
+    title: '',
+    items: [
+      ['default-cms-181...', 'home'],
+      ['快速查询', 'search'],
+      ['所有功能', 'box'],
+    ],
+  },
+  {
+    title: '常驻应用',
+    items: [
+      ['实体探索', 'scan'],
+      ['智能运维', 'spark'],
+      ['接入中心', 'screen'],
+      ['告警中心', 'bell'],
+      ['云产品监控', 'cloud'],
+    ],
+  },
+  {
+    title: 'AI 可观测',
+    items: [
+      ['AI Agent 可观测', 'ai'],
+      ['推理服务可观测', 'ai'],
+      ['AI 网关洞察', 'ai'],
+    ],
+  },
+  {
+    title: '应用可观测',
+    items: [
+      ['用户体验监控', 'screen'],
+      ['应用监控', 'screen'],
+    ],
+  },
+  {
+    title: '运维监控',
+    items: [
+      ['数据库可观测', 'cloud'],
+      ['日志审计', 'scan'],
+      ['Prometheus 服务', 'cloud'],
+    ],
+  },
 ]
 
 export function TopologyExplorerPage({
@@ -87,6 +145,7 @@ export function TopologyExplorerPage({
       .slice(0, 8)
   }, [data.nodes, searchDraft])
   const activeTypes = useMemo(() => data.types.filter((type) => type.count > 0).slice(0, 8), [data.types])
+  const topTypes = useMemo(() => data.types.slice(0, 14), [data.types])
 
   useEffect(() => {
     if (!playing) return
@@ -156,59 +215,42 @@ export function TopologyExplorerPage({
   return (
     <div className="topo-page">
       <section className="topo-console">
-        <aside className="topo-config-panel">
-          <div className="topo-config-title">
+        <aside className="topo-console-sidebar">
+          <div className="topo-product-title">
             <Network size={18} />
-            <strong>拓扑探索</strong>
+            <strong>云监控2.0</strong>
           </div>
-          <div className="topo-stat-grid">
-            <div>
-              <strong>{data.nodes.length.toLocaleString()}</strong>
-              <span>实体</span>
-            </div>
-            <div>
-              <strong>{data.edges.length.toLocaleString()}</strong>
-              <span>关系</span>
-            </div>
-          </div>
-          <div className="topo-panel-tabs">
-            <button className={tab === 'overview' ? 'active' : ''} type="button" onClick={() => setTab('overview')}>
-              <Grid2X2 size={15} />
-              概览
-            </button>
-            <button className={tab === 'layout' ? 'active' : ''} type="button" onClick={() => setTab('layout')}>
-              <Settings size={15} />
-              布局
-            </button>
-          </div>
-
-          {tab === 'overview' ? (
-            <OverviewPanel
-              types={data.types}
-              focusedTypes={focusedTypes}
-              onSelectType={focusType}
-            />
-          ) : (
-            <LayoutPanel
-              layoutMode={layoutMode}
-              clusterRule={clusterRule}
-              allowDrag={allowDrag}
-              showLabels={showLabels}
-              showClusterLabels={showClusterLabels}
-              onLayoutModeChange={(value) => {
-                setLayoutMode(value)
-                setSelectedNode(null)
-              }}
-              onClusterRuleChange={setClusterRule}
-              onAllowDragChange={setAllowDrag}
-              onShowLabelsChange={setShowLabels}
-              onShowClusterLabelsChange={setShowClusterLabels}
-            />
-          )}
+          <ConsoleNav />
         </aside>
 
         <main className="topo-stage">
-          <header className="topo-stage-toolbar">
+          <header className="topo-entity-head">
+            <div className="topo-entity-title">
+              <Network size={18} />
+              <strong>实体探索</strong>
+            </div>
+            <nav className="topo-entity-tabs">
+              {entityTabs.map(([label, count], index) => (
+                <button key={label} className={index === 0 ? 'active' : ''} type="button">
+                  {label}<b>{count}</b>
+                </button>
+              ))}
+            </nav>
+            <div className="topo-time-range">
+              <span>15min</span>
+              <strong>最近15分钟</strong>
+              <button type="button"><RefreshCw size={14} /></button>
+              <button className="topo-time-action" type="button"><Sparkles size={15} /></button>
+            </div>
+          </header>
+
+          <div className="topo-stage-toolbar">
+            <div className="topo-query-mode">
+              <button className="active" type="button"><Search size={14} /> USearch</button>
+              <button type="button"><Code2 size={14} /> SPL</button>
+            </div>
+            <button className="topo-tool-button" type="button"><Grid2X2 size={16} /></button>
+            <button className="topo-tool-button" type="button"><Filter size={16} /></button>
             <div className="topo-search-wrap" ref={searchWrapRef}>
               <Search size={16} />
               <input
@@ -228,7 +270,7 @@ export function TopologyExplorerPage({
                   if (event.key === 'Enter') applySearch()
                   if (event.key === 'Escape') setSearchOpen(false)
                 }}
-                placeholder="搜索实体、类型、属性..."
+                placeholder="请输入实体关键词（至少 4 个字符）"
               />
               {searchText && (
                 <button className="topo-search-clear" type="button" aria-label="清除搜索" onClick={() => {
@@ -257,37 +299,39 @@ export function TopologyExplorerPage({
                 />
               )}
             </div>
-            <label className="topo-app-selector">
-              <span>应用 ID</span>
-              <select value={selectedApplicationId} onChange={(event) => setSelectedApplicationId(event.target.value)}>
-                {mockApplications.map((application) => (
-                  <option key={application.id} value={application.id}>
-                    {application.id} · {application.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="topo-time-player">
-              <button type="button">1小时</button>
-              <button type="button">1天</button>
-              <button type="button">自定义</button>
-              <div className="topo-timeline" aria-hidden>
-                {Array.from({ length: 30 }).map((_, index) => (
-                  <span key={index} style={{ backgroundColor: data.types[index % data.types.length]?.color }} />
-                ))}
-              </div>
-              <button className="topo-play-button" type="button" onClick={() => setPlaying((value) => !value)}>
-                <Play size={15} />
-                {playing ? '暂停' : '播放'}
-              </button>
-              <span>已缓存</span>
+            <button className="topo-query-button" type="button" onClick={() => applySearch()}>查询</button>
+            <div className="topo-view-switch">
+              <button type="button">表格</button>
+              <button className="active" type="button">拓扑</button>
+              <button type="button">健康度</button>
             </div>
-          </header>
+          </div>
 
           <section className="topo-graph-card">
+            <div className="topo-zoom-toolbar" aria-hidden>
+              <button type="button">－</button>
+              <span>13%</span>
+              <button type="button">＋</button>
+              <button type="button">⌗</button>
+            </div>
+            <div className="topo-type-strip">
+              {topTypes.map((type) => (
+                <button
+                  key={type.type}
+                  className={focusedTypes.includes(type.type) ? 'active' : ''}
+                  type="button"
+                  onClick={() => focusType(type.type)}
+                >
+                  <i style={{ background: type.color }} />
+                  {type.type}
+                </button>
+              ))}
+            </div>
             <TopologyCanvas
               data={displayData}
               layoutMode={layoutMode}
+              visualMode="entity"
+              initialZoomRatio={1.08}
               focusedTypes={[]}
               selectedNode={selectedNode}
               showLabels={showLabels}
@@ -318,6 +362,32 @@ export function TopologyExplorerPage({
       </section>
     </div>
   )
+}
+
+function ConsoleNav() {
+  return (
+    <div className="topo-console-nav">
+      {consoleNavGroups.map((group, groupIndex) => (
+        <div key={`${group.title}-${groupIndex}`} className="topo-console-nav-group">
+          {group.title && <strong>{group.title}</strong>}
+          {group.items.map(([label, icon]) => (
+            <button key={label} className={label === '实体探索' ? 'active' : ''} type="button">
+              <ConsoleNavIcon kind={icon} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ConsoleNavIcon({ kind }: { kind: string }) {
+  if (kind === 'home') return <Home size={17} />
+  if (kind === 'search') return <Search size={17} />
+  if (kind === 'spark') return <Sparkles size={17} />
+  if (kind === 'scan') return <Network size={17} />
+  return <Grid2X2 size={17} />
 }
 
 function SearchPopover({
