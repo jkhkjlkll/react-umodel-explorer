@@ -4481,23 +4481,6 @@ html[lang="zh-CN"] .landing .landing-copy p {
   overflow: hidden;
 }
 
-.workspace-shell.console-fullscreen {
-  display: block;
-}
-
-.workspace-shell.console-fullscreen .workspace-sidebar {
-  display: none;
-}
-
-.workspace-shell.console-fullscreen .workspace-main {
-  width: 100%;
-  height: 100vh;
-  margin-left: 0;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-
 .workspace-page-loading {
   min-height: 180px;
   display: grid;

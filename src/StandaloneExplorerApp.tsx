@@ -60,10 +60,8 @@ export function StandaloneExplorerApp() {
     if (nextDataSource === 'api' || nextDataSource === 'mock') setDataSource(nextDataSource)
   }, [setApiBase, setDataSource, setWorkspaceId])
 
-  const consoleFullscreen = section === 'entity' || section === 'topology'
-
   return (
-    <div className={`workspace-shell app-shell canvas-host ${sidebarCollapsed ? 'collapsed' : ''} ${consoleFullscreen ? 'console-fullscreen' : ''}`}>
+    <div className={`workspace-shell app-shell canvas-host ${sidebarCollapsed ? 'collapsed' : ''}`}>
       <aside className="workspace-sidebar">
         <div className="workspace-sidebar-header">
           <StandaloneBrand />

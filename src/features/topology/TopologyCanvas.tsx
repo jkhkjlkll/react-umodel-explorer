@@ -11,8 +11,6 @@ interface Viewport {
 interface TopologyCanvasProps {
   data: TopologyExplorerData
   layoutMode: 'force' | 'cluster'
-  visualMode?: 'bubble' | 'entity'
-  initialZoomRatio?: number
   focusedTypes: string[]
   selectedNode: TopologyNode | null
   showLabels: boolean
@@ -57,7 +55,7 @@ interface ForceRenderPlan {
   glyphMode: boolean
 }
 
-const minZoom = 0.08
+const minZoom = 0.32
 const maxZoom = 7
 const zoomSensitivity = 0.012
 const maxZoomStep = 1.65
@@ -77,8 +75,6 @@ interface SelectedRelation {
 export function TopologyCanvas({
   data,
   layoutMode,
-  visualMode = 'bubble',
-  initialZoomRatio = 1,
   focusedTypes,
   selectedNode,
   showLabels,
@@ -128,7 +124,6 @@ export function TopologyCanvas({
     clusterSummaries,
     selectedNode,
     selectedNeighborIds,
-    visualMode,
     showLabels,
     showClusterLabels,
     playhead,
@@ -141,7 +136,6 @@ export function TopologyCanvas({
     clusterSummaries,
     selectedNode,
     selectedNeighborIds,
-    visualMode,
     showLabels,
     showClusterLabels,
     playhead,
@@ -159,7 +153,7 @@ export function TopologyCanvas({
       canvas.height = Math.max(1, Math.floor(rect.height * ratio))
       const boundsWidth = layoutBounds.maxX - layoutBounds.minX
       const boundsHeight = layoutBounds.maxY - layoutBounds.minY
-      const zoom = Math.min((rect.width * 0.72) / boundsWidth, (rect.height * 0.74) / boundsHeight) * initialZoomRatio
+      const zoom = Math.min((rect.width * 0.72) / boundsWidth, (rect.height * 0.74) / boundsHeight)
       viewportRef.current = {
         x: rect.width / 2 - ((layoutBounds.minX + layoutBounds.maxX) / 2) * zoom,
         y: rect.height / 2 - ((layoutBounds.minY + layoutBounds.maxY) / 2) * zoom,
@@ -173,12 +167,12 @@ export function TopologyCanvas({
     observer.observe(canvas)
     resize()
     return () => observer.disconnect()
-  }, [initialZoomRatio, layoutBounds.maxX, layoutBounds.maxY, layoutBounds.minX, layoutBounds.minY])
+  }, [layoutBounds.maxX, layoutBounds.maxY, layoutBounds.minX, layoutBounds.minY])
 
   useEffect(() => {
     requestDraw()
     scheduleMinimapUpdate(true)
-  }, [data, layoutMode, focusedTypes, selectedNode, visualMode, showLabels, showClusterLabels, playhead])
+  }, [data, layoutMode, focusedTypes, selectedNode, showLabels, showClusterLabels, playhead])
 
   useEffect(() => {
     return () => {
@@ -241,7 +235,6 @@ export function TopologyCanvas({
         clusterSummaries: state.clusterSummaries,
         selectedNode: state.selectedNode,
         selectedNeighborIds: state.selectedNeighborIds,
-        visualMode: state.visualMode,
         showLabels: state.showLabels,
         showClusterLabels: state.showClusterLabels,
         playhead: state.playhead,
@@ -489,7 +482,6 @@ function drawTopology(
     clusterSummaries: ClusterSummary[]
     selectedNode: TopologyNode | null
     selectedNeighborIds: Set<string> | null
-    visualMode: 'bubble' | 'entity'
     showLabels: boolean
     showClusterLabels: boolean
     playhead: number
@@ -518,11 +510,11 @@ function drawForceBackgroundEdges(
   forcePlan: ForceRenderPlan,
   viewport: Viewport,
   size: { width: number; height: number },
-  options: { focusedTypeSet: Set<string>; selectedNode: TopologyNode | null; playhead: number; visualMode?: 'bubble' | 'entity' },
+  options: { focusedTypeSet: Set<string>; selectedNode: TopologyNode | null; playhead: number },
 ) {
-  if (viewport.zoom < (options.visualMode === 'entity' ? 0.04 : 0.12)) return
+  if (viewport.zoom < 0.12) return
   const visibleWindow = Math.max(0.16, Math.min(1, options.playhead))
-  const stride = options.visualMode === 'entity' ? viewport.zoom > 0.18 ? 1 : 2 : viewport.zoom > 0.52 ? 1 : 2
+  const stride = viewport.zoom > 0.52 ? 1 : 2
   const ringMode = viewport.zoom >= ringModeZoom
   const iconMode = viewport.zoom >= iconModeZoom
   const edgeNodeRadius = iconMode ? clamp(7 + viewport.zoom * 2.1, 12, 18) : ringMode ? clamp(4.5 + viewport.zoom * 1.6, 6.5, 10) : viewport.zoom > 0.75 ? 1.9 : 1.65
@@ -543,20 +535,18 @@ function drawForceBackgroundEdges(
     const endpoints = edgeEndpointsOnNodeRings(
       { x: sourceVisible.x, y: sourceVisible.y },
       { x: targetVisible.x, y: targetVisible.y },
-      options.visualMode === 'entity' ? 4 : Math.max(0, edgeNodeRadius - 2.5),
-      options.visualMode === 'entity' ? 4 : Math.max(0, edgeNodeRadius - 2.5),
+      Math.max(0, edgeNodeRadius - 2.5),
+      Math.max(0, edgeNodeRadius - 2.5),
     )
     const from = endpoints.from
     const to = endpoints.to
     if (!lineIntersectsViewport(from.x, from.y, to.x, to.y, size.width, size.height)) continue
 
-    context.globalAlpha = options.visualMode === 'entity'
-      ? options.selectedNode ? selectedEdge ? 0.55 : 0.05 : 0.36
-      : options.selectedNode
-        ? selectedEdge ? 0.56 : 0.06
-        : viewport.zoom > 1.15 ? 0.42 : 0.48
-    context.strokeStyle = options.visualMode === 'entity' ? '#c9d4df' : '#a9b6c2'
-    context.lineWidth = options.visualMode === 'entity' ? selectedEdge ? 1.2 : 0.55 : selectedEdge ? 1.9 : viewport.zoom > 1.2 ? 0.94 : 0.82
+    context.globalAlpha = options.selectedNode
+      ? selectedEdge ? 0.56 : 0.06
+      : viewport.zoom > 1.15 ? 0.42 : 0.48
+    context.strokeStyle = '#a9b6c2'
+    context.lineWidth = selectedEdge ? 1.9 : viewport.zoom > 1.2 ? 0.94 : 0.82
     drawStraightEdgePath(context, from, to)
     context.stroke()
   }
@@ -640,14 +630,13 @@ function createForceRenderPlan(
     focusedTypeSet: Set<string>
     selectedNode: TopologyNode | null
     selectedNeighborIds: Set<string> | null
-    visualMode?: 'bubble' | 'entity'
   },
 ): ForceRenderPlan {
   const ringMode = viewport.zoom >= ringModeZoom
   const iconMode = viewport.zoom >= iconModeZoom
   const glyphMode = viewport.zoom >= glyphModeZoom
   const radius = iconMode ? clamp(7 + viewport.zoom * 2.1, 12, 18) : ringMode ? clamp(4.5 + viewport.zoom * 1.6, 6.5, 10) : viewport.zoom > 0.75 ? 1.9 : 1.65
-  const shouldReserveScreenSpace = options.visualMode === 'entity' ? viewport.zoom >= 0.82 : viewport.zoom >= nodeCullZoom
+  const shouldReserveScreenSpace = viewport.zoom >= nodeCullZoom
   const shouldPrioritizeNodes = Boolean(options.selectedNode || options.selectedNeighborIds || options.focusedTypeSet.size > 0)
   const nodes = shouldPrioritizeNodes
     ? [...data.nodes].sort((left, right) => nodePriority(right, options) - nodePriority(left, options))
@@ -662,10 +651,8 @@ function createForceRenderPlan(
     const selected = options.selectedNode?.id === node.id
     const related = options.selectedNeighborIds?.has(node.id) ?? false
     const point = worldToScreen(node.x, node.y, viewport)
-    if (point.x < -80 || point.y < -50 || point.x > size.width + 80 || point.y > size.height + 50) continue
-    const reservationRadius = options.visualMode === 'entity'
-      ? clamp(14 + viewport.zoom * 34, 14, 42)
-      : forceNodeReservationRadius(viewport.zoom, radius, iconMode, glyphMode)
+    if (point.x < -42 || point.y < -42 || point.x > size.width + 42 || point.y > size.height + 42) continue
+    const reservationRadius = forceNodeReservationRadius(viewport.zoom, radius, iconMode, glyphMode)
     if (shouldReserveScreenSpace && !selected && circleOverlaps(reservations, point.x, point.y, reservationRadius)) continue
     reservations.push({ x: point.x, y: point.y, radius: reservationRadius })
     const visibleNode = { node, x: point.x, y: point.y, selected, related }
@@ -693,14 +680,8 @@ function drawForceNodes(
   options: {
     selectedNode: TopologyNode | null
     showLabels: boolean
-    visualMode?: 'bubble' | 'entity'
   },
 ) {
-  if (options.visualMode === 'entity') {
-    drawConsoleEntityNodes(context, forcePlan, viewport, size, options)
-    return
-  }
-
   for (const item of forcePlan.nodes) {
     if (options.selectedNode && !item.selected && !item.related) {
       context.globalAlpha = 0.14
@@ -751,56 +732,6 @@ function drawForceNodes(
     labelCount += 1
   }
   context.textAlign = 'start'
-}
-
-function drawConsoleEntityNodes(
-  context: CanvasRenderingContext2D,
-  forcePlan: ForceRenderPlan,
-  viewport: Viewport,
-  size: { width: number; height: number },
-  options: {
-    selectedNode: TopologyNode | null
-    showLabels: boolean
-  },
-) {
-  const zoomBoost = clamp(viewport.zoom / 0.48, 0.58, 1.8)
-  const cardWidth = clamp(44 * zoomBoost, 28, 70)
-  const cardHeight = clamp(15 * zoomBoost, 9, 24)
-  const textSize = clamp(6.6 * zoomBoost, 5.5, 9.2)
-  context.save()
-  context.font = `${textSize}px var(--om-cjk-font)`
-  context.textBaseline = 'middle'
-  context.textAlign = 'left'
-
-  for (const item of forcePlan.nodes) {
-    const isDimmed = Boolean(options.selectedNode && !item.selected && !item.related)
-    const x = item.x - cardWidth / 2
-    const y = item.y - cardHeight / 2
-    if (x > size.width + 30 || y > size.height + 30 || x + cardWidth < -30 || y + cardHeight < -30) continue
-    context.globalAlpha = isDimmed ? 0.18 : item.selected ? 1 : 0.9
-    context.fillStyle = '#ffffff'
-    context.strokeStyle = item.selected ? '#2c73ff' : softenEntityColor(item.node.color)
-    context.lineWidth = item.selected ? 1.35 : 0.72
-    roundRect(context, x, y, cardWidth, cardHeight, 2)
-    context.fill()
-    context.stroke()
-
-    context.fillStyle = item.node.color
-    context.fillRect(x + 1.2, y + 1.2, cardWidth - 2.4, Math.max(1.2, Math.min(2.4, cardHeight * 0.14)))
-
-    if ((options.showLabels && viewport.zoom >= 0.18) || item.selected) {
-      context.fillStyle = '#314158'
-      context.save()
-      context.beginPath()
-      context.rect(x + 4, y + 3, cardWidth - 8, cardHeight - 5)
-      context.clip()
-      context.fillText(compactEntityLabel(item.node), x + 4, y + cardHeight / 2 + 1)
-      context.restore()
-    }
-  }
-
-  context.restore()
-  context.globalAlpha = 1
 }
 
 function drawForceEdgePath(
@@ -860,12 +791,6 @@ function edgeVisualColor(color: string) {
   const rgb = hexToRgb(color)
   if (!rgb) return color
   return `rgb(${Math.round((rgb.r + 72) / 2)}, ${Math.round((rgb.g + 190) / 2)}, ${Math.round((rgb.b + 232) / 2)})`
-}
-
-function softenEntityColor(color: string) {
-  const rgb = hexToRgb(color)
-  if (!rgb) return color
-  return `rgb(${Math.round(rgb.r * 0.42 + 255 * 0.58)}, ${Math.round(rgb.g * 0.42 + 255 * 0.58)}, ${Math.round(rgb.b * 0.42 + 255 * 0.58)})`
 }
 
 function deterministicEdgeSign(sourceId: string, targetId: string) {
@@ -1172,12 +1097,6 @@ function shortNodeLabel(node: TopologyNode) {
   if (node.type.includes('Kubernetes')) return node.label.includes(' ') ? node.label.split(' ').slice(0, 2).join(' ') : node.label
   if (node.type.includes('ECS')) return String(node.properties.host || '10.179.126.252')
   return node.label.length > 18 ? `${node.label.slice(0, 16)}...` : node.label
-}
-
-function compactEntityLabel(node: TopologyNode) {
-  if (node.type.includes('Kubernetes')) return String(node.properties.host || node.label).slice(0, 18)
-  if (node.type.includes('ECS')) return String(node.properties.ip || node.properties.host || node.label).slice(0, 18)
-  return node.label.replace(/\s+\d+$/, '').slice(0, 16)
 }
 
 function worldToScreen(x: number, y: number, viewport: Viewport) {
