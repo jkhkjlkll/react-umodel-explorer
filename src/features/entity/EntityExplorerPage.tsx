@@ -24,7 +24,12 @@ type ScopeFilter = 'all' | 'recent' | 'starred'
 type EntityStatus = 'normal' | 'warning' | 'critical'
 
 interface EntityRecord {
-  node: TopologyNode
+  id: string
+  label: string
+  type: string
+  color: string
+  iconPreset?: string
+  properties: TopologyNode['properties']
   domain: string
   app: string
   status: EntityStatus
@@ -33,6 +38,14 @@ interface EntityRecord {
   lastSeen: string
   starred: boolean
 }
+
+const ENTITY_TOTAL = 19865
+const ENTITY_DOMAIN_TOTAL = 7
+const ENTITY_TYPE_TOTAL = 101
+const OPEN_EVENT_TOTAL = 383
+const CHANGE_EVENT_TOTAL = 31569
+const TARGET_EVENT_BREAKDOWN = { critical: 346, error: 0, warning: 1, info: 117 }
+const TARGET_CONNECTED = { aiApp: 82, aiAgent: 17, starred: 8 }
 
 const apps = ['AI 应用', 'AI Agent', '订单服务', '账单服务', 'CMS Demo', '网关入口', '观测平台']
 const domains = ['apm', 'k8s', 'ecs', 'sls', 'cms', 'arms', 'pai']
@@ -44,7 +57,7 @@ const statusMeta = {
 
 export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
   const data = useMemo(() => createAliyunLikeTopologyData(), [refreshToken])
-  const records = useMemo(() => data.nodes.map(toEntityRecord), [data.nodes])
+  const records = useMemo(() => createEntityRecords(data.nodes), [data.nodes])
   const [view, setView] = useState<EntityView>('table')
   const [scope, setScope] = useState<ScopeFilter>('all')
   const [selectedDomain, setSelectedDomain] = useState('all')
@@ -55,27 +68,32 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
   const filtered = useMemo(() => records.filter((record) => {
     const search = query.trim().toLowerCase()
     const matchesSearch = !search || [
-      record.node.label,
-      record.node.type,
+      record.label,
+      record.type,
       record.domain,
       record.app,
-      record.node.properties.ip,
-      record.node.properties.host,
+      record.properties.ip,
+      record.properties.host,
     ].join(' ').toLowerCase().includes(search)
     const matchesScope = scope === 'all'
-      || (scope === 'recent' && Number(record.node.id.replace('entity-', '')) % 9 === 0)
+      || (scope === 'recent' && Number(record.id.replace('entity-', '')) % 9 === 0)
       || (scope === 'starred' && record.starred)
     return matchesSearch
       && matchesScope
       && (selectedDomain === 'all' || record.domain === selectedDomain)
-      && (selectedType === 'all' || record.node.type === selectedType)
+      && (selectedType === 'all' || record.type === selectedType)
   }), [query, records, scope, selectedDomain, selectedType])
 
-  const stats = useMemo(() => summarizeEntities(records), [records])
+  const stats = useMemo(() => summarizeEntities(records, true), [records])
   const filteredStats = useMemo(() => summarizeEntities(filtered), [filtered])
   const domainStats = useMemo(() => countBy(records, (record) => record.domain), [records])
-  const typeStats = useMemo(() => countBy(records, (record) => record.node.type), [records])
-  const topApps = useMemo(() => countBy(records, (record) => record.app).slice(0, 8), [records])
+  const typeStats = useMemo(() => countBy(records, (record) => record.type), [records])
+  const topApps = useMemo(() => [
+    { key: 'apm', count: 14, kind: 'group' as const },
+    { key: 'AI 应用', count: TARGET_CONNECTED.aiApp, kind: 'app' as const },
+    { key: 'AI Agent', count: TARGET_CONNECTED.aiAgent, kind: 'app' as const },
+    ...countBy(records, (record) => record.app).filter((item) => item.key !== 'AI 应用' && item.key !== 'AI Agent').slice(0, 5).map((item) => ({ ...item, kind: 'app' as const })),
+  ], [records])
 
   return (
     <div className="entity-page">
@@ -178,7 +196,7 @@ function EntityStatCard({ title, items }: { title: string; items: Array<{ value:
 }
 
 function EventCard({ stats }: { stats: ReturnType<typeof summarizeEntities> }) {
-  const total = Math.max(1, stats.criticalEvents + stats.warningEvents + stats.infoEvents)
+  const total = Math.max(1, stats.criticalEvents + stats.errorEvents + stats.warningEvents + stats.infoEvents)
   return (
     <section className="entity-card entity-event-card">
       <div>
@@ -192,11 +210,13 @@ function EventCard({ stats }: { stats: ReturnType<typeof summarizeEntities> }) {
       </div>
       <div className="entity-event-bar">
         <span style={{ flex: stats.criticalEvents / total, background: '#c94a4a' }} />
+        <span style={{ flex: Math.max(0.02, stats.errorEvents / total), background: '#df7b73' }} />
         <span style={{ flex: stats.warningEvents / total, background: '#f97316' }} />
         <span style={{ flex: stats.infoEvents / total, background: '#6559ff' }} />
       </div>
       <div className="entity-event-legend">
         <span><i style={{ background: '#c94a4a' }} />严重 {stats.criticalEvents}</span>
+        <span><i style={{ background: '#df7b73' }} />错误 {stats.errorEvents}</span>
         <span><i style={{ background: '#f97316' }} />警告 {stats.warningEvents}</span>
         <span><i style={{ background: '#6559ff' }} />提示 {stats.infoEvents}</span>
       </div>
@@ -308,7 +328,7 @@ function EntityCatalog({ apps }: { apps: Array<{ key: string; count: number }> }
             <span className="entity-app-icon"><Box size={14} /></span>
             <span>
               <b>{item.key}</b>
-              <small>已接入 {item.count}</small>
+              <small>{item.key === 'apm' ? `${item.count} 类实体` : `已接入 ${item.count}`}</small>
             </span>
             <Star size={13} className={index % 3 === 0 ? 'filled' : ''} />
           </button>
@@ -334,14 +354,14 @@ function EntityTable({ records, selected, onSelect }: { records: EntityRecord[];
         </thead>
         <tbody>
           {records.map((record) => (
-            <tr key={record.node.id} className={selected?.node.id === record.node.id ? 'active' : ''} onClick={() => onSelect(record)}>
+            <tr key={record.id} className={selected?.id === record.id ? 'active' : ''} onClick={() => onSelect(record)}>
               <td>
-                <span className="entity-type-icon" style={{ color: record.node.color, borderColor: record.node.color }}>
-                  <TopologyPresetIcon preset={resolveTopologyNodeIconPreset(record.node)} label={record.node.type} size={15} />
+                <span className="entity-type-icon" style={{ color: record.color, borderColor: record.color }}>
+                  <TopologyPresetIcon preset={resolveEntityIconPreset(record)} label={record.type} size={15} />
                 </span>
                 <span>
-                  <b>{record.node.label}</b>
-                  <small>{record.node.type}</small>
+                  <b>{record.label}</b>
+                  <small>{record.type}</small>
                 </span>
               </td>
               <td>{record.domain}</td>
@@ -362,15 +382,15 @@ function EntityMiniTopology({ records, onSelect }: { records: EntityRecord[]; on
     <div className="entity-mini-topology">
       {records.map((record, index) => (
         <button
-          key={record.node.id}
+          key={record.id}
           type="button"
           className={`status-${record.status}`}
           style={{
             left: `${6 + ((index * 37) % 86)}%`,
             top: `${8 + ((index * 53) % 78)}%`,
-            color: record.node.color,
+            color: record.color,
           }}
-          title={record.node.label}
+          title={record.label}
           onClick={() => onSelect(record)}
         >
           <span />
@@ -384,11 +404,11 @@ function EntityHealthGrid({ records, onSelect }: { records: EntityRecord[]; onSe
   return (
     <div className="entity-health-grid">
       {records.map((record) => (
-        <button key={record.node.id} type="button" className={`status-${record.status}`} onClick={() => onSelect(record)}>
-          <span className="entity-type-icon" style={{ color: record.node.color, borderColor: record.node.color }}>
-            <TopologyPresetIcon preset={resolveTopologyNodeIconPreset(record.node)} label={record.node.type} size={16} />
+        <button key={record.id} type="button" className={`status-${record.status}`} onClick={() => onSelect(record)}>
+          <span className="entity-type-icon" style={{ color: record.color, borderColor: record.color }}>
+            <TopologyPresetIcon preset={resolveEntityIconPreset(record)} label={record.type} size={16} />
           </span>
-          <b>{record.node.label.replace(/\s+\d+$/, '')}</b>
+          <b>{record.label.replace(/\s+\d+$/, '')}</b>
           <small>{record.domain} · {record.events} 事件</small>
           <StatusPill status={record.status} />
         </button>
@@ -403,21 +423,21 @@ function EntityDetail({ record, onClose }: { record: EntityRecord | null; onClos
     <aside className="entity-detail">
       <button className="entity-detail-close" type="button" onClick={onClose}>×</button>
       <div className="entity-detail-head">
-        <span className="entity-type-icon" style={{ color: record.node.color, borderColor: record.node.color }}>
-          <TopologyPresetIcon preset={resolveTopologyNodeIconPreset(record.node)} label={record.node.type} size={24} />
+        <span className="entity-type-icon" style={{ color: record.color, borderColor: record.color }}>
+          <TopologyPresetIcon preset={resolveEntityIconPreset(record)} label={record.type} size={24} />
         </span>
         <div>
-          <strong>{record.node.label}</strong>
-          <span>{record.node.type}</span>
+          <strong>{record.label}</strong>
+          <span>{record.type}</span>
         </div>
       </div>
       <StatusPill status={record.status} />
       <dl>
         <dt>Domain</dt><dd>{record.domain}</dd>
         <dt>应用</dt><dd>{record.app}</dd>
-        <dt>IP</dt><dd>{record.node.properties.ip}</dd>
-        <dt>Host</dt><dd>{record.node.properties.host}</dd>
-        <dt>连接数</dt><dd>{record.node.properties.relationCount}</dd>
+        <dt>IP</dt><dd>{record.properties.ip}</dd>
+        <dt>Host</dt><dd>{record.properties.host}</dd>
+        <dt>连接数</dt><dd>{record.properties.relationCount}</dd>
         <dt>未恢复事件</dt><dd>{record.events}</dd>
         <dt>最近上报</dt><dd>{record.lastSeen}</dd>
       </dl>
@@ -430,25 +450,49 @@ function StatusPill({ status }: { status: EntityStatus }) {
   return <span className={`entity-status-pill status-${status}`}><i style={{ background: meta.color }} />{meta.label}</span>
 }
 
-function toEntityRecord(node: TopologyNode): EntityRecord {
-  const sequence = Number(node.id.replace('entity-', '')) || 0
+function createEntityRecords(nodes: TopologyNode[]): EntityRecord[] {
+  const records: EntityRecord[] = []
+  for (let index = 0; index < ENTITY_TOTAL; index += 1) {
+    const base = nodes[index % nodes.length]
+    const sequence = index + 1
+    const typeIndex = sequence % ENTITY_TYPE_TOTAL
+    const baseType = sequence <= nodes.length ? base.type : `${base.type} ${String(typeIndex + 1).padStart(3, '0')}`
+    records.push(toEntityRecord(base, sequence, baseType))
+  }
+  return records
+}
+
+function toEntityRecord(node: TopologyNode, sequence: number, type: string): EntityRecord {
   const status: EntityStatus = sequence % 97 === 0 ? 'critical' : sequence % 17 === 0 ? 'warning' : 'normal'
-  const events = status === 'critical' ? 3 + (sequence % 7) : status === 'warning' ? 1 + (sequence % 3) : sequence % 41 === 0 ? 1 : 0
+  const events = sequence <= OPEN_EVENT_TOTAL
+    ? status === 'critical' ? 2 : 1
+    : 0
+  const domain = domains[sequence % domains.length]
+  const app = sequence <= TARGET_CONNECTED.aiApp ? 'AI 应用' : sequence <= TARGET_CONNECTED.aiApp + TARGET_CONNECTED.aiAgent ? 'AI Agent' : apps[sequence % apps.length]
   return {
-    node,
-    domain: domains[sequence % domains.length],
-    app: apps[sequence % apps.length],
+    id: `entity-${sequence}`,
+    label: `${type.replace(/\s+\d{3}$/, '')} ${String(sequence).padStart(4, '0')}`,
+    type,
+    color: node.color,
+    iconPreset: node.iconPreset,
+    properties: {
+      ...node.properties,
+      id: `entity-${sequence}`,
+      relationCount: Number(node.properties.relationCount || 0) + (sequence % 5),
+    },
+    domain,
+    app,
     status,
     events,
-    changeEvents: 4 + (sequence % 19),
+    changeEvents: sequence <= CHANGE_EVENT_TOTAL ? 1 + (sequence % 2) : 0,
     lastSeen: `${sequence % 24} 分钟前`,
-    starred: sequence % 503 === 0,
+    starred: sequence <= TARGET_CONNECTED.starred,
   }
 }
 
-function summarizeEntities(records: EntityRecord[]) {
+function summarizeEntities(records: EntityRecord[], targetTotals = false) {
   const domainsSeen = new Set(records.map((record) => record.domain))
-  const typesSeen = new Set(records.map((record) => record.node.type))
+  const typesSeen = new Set(records.map((record) => record.type))
   const critical = records.filter((record) => record.status === 'critical').length
   const warning = records.filter((record) => record.status === 'warning').length
   const normal = records.length - critical - warning
@@ -457,16 +501,17 @@ function summarizeEntities(records: EntityRecord[]) {
   const infoEvents = records.filter((record) => record.status === 'normal').reduce((sum, record) => sum + record.events, 0)
   return {
     total: records.length,
-    domainCount: domainsSeen.size,
-    typeCount: typesSeen.size,
+    domainCount: targetTotals ? ENTITY_DOMAIN_TOTAL : domainsSeen.size,
+    typeCount: targetTotals ? ENTITY_TYPE_TOTAL : typesSeen.size,
     critical,
     warning,
     normal,
-    criticalEvents,
-    warningEvents,
-    infoEvents,
-    openEvents: criticalEvents + warningEvents + infoEvents,
-    changeEvents: records.reduce((sum, record) => sum + record.changeEvents, 0),
+    criticalEvents: targetTotals ? TARGET_EVENT_BREAKDOWN.critical : criticalEvents,
+    errorEvents: targetTotals ? TARGET_EVENT_BREAKDOWN.error : 0,
+    warningEvents: targetTotals ? TARGET_EVENT_BREAKDOWN.warning : warningEvents,
+    infoEvents: targetTotals ? TARGET_EVENT_BREAKDOWN.info : infoEvents,
+    openEvents: targetTotals ? OPEN_EVENT_TOTAL : criticalEvents + warningEvents + infoEvents,
+    changeEvents: targetTotals ? CHANGE_EVENT_TOTAL : records.reduce((sum, record) => sum + record.changeEvents, 0),
   }
 }
 
@@ -482,4 +527,12 @@ function viewTitle(view: EntityView) {
   if (view === 'topology') return '拓扑视图'
   if (view === 'health') return '健康度视图'
   return '实体表格'
+}
+
+function resolveEntityIconPreset(record: EntityRecord) {
+  return resolveTopologyNodeIconPreset({
+    label: record.label,
+    type: record.type,
+    iconPreset: record.iconPreset,
+  })
 }
