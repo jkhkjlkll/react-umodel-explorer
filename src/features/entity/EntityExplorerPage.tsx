@@ -22,6 +22,7 @@ import './entity.css'
 type EntityView = 'table' | 'topology' | 'health'
 type ScopeFilter = 'all' | 'recent' | 'starred'
 type EntityStatus = 'normal' | 'warning' | 'critical'
+type QueryMode = 'usearch' | 'spl'
 
 interface EntityRecord {
   id: string
@@ -62,7 +63,11 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
   const [scope, setScope] = useState<ScopeFilter>('all')
   const [selectedDomain, setSelectedDomain] = useState('all')
   const [selectedType, setSelectedType] = useState('all')
+  const [queryMode, setQueryMode] = useState<QueryMode>('usearch')
+  const [queryDraft, setQueryDraft] = useState('')
   const [query, setQuery] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(true)
+  const [catalogQuery, setCatalogQuery] = useState('')
   const [selected, setSelected] = useState<EntityRecord | null>(null)
 
   const filtered = useMemo(() => records.filter((record) => {
@@ -88,12 +93,17 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
   const filteredStats = useMemo(() => summarizeEntities(filtered), [filtered])
   const domainStats = useMemo(() => countBy(records, (record) => record.domain), [records])
   const typeStats = useMemo(() => countBy(records, (record) => record.type), [records])
-  const topApps = useMemo(() => [
-    { key: 'apm', count: 14, kind: 'group' as const },
-    { key: 'AI 应用', count: TARGET_CONNECTED.aiApp, kind: 'app' as const },
-    { key: 'AI Agent', count: TARGET_CONNECTED.aiAgent, kind: 'app' as const },
-    ...countBy(records, (record) => record.app).filter((item) => item.key !== 'AI 应用' && item.key !== 'AI Agent').slice(0, 5).map((item) => ({ ...item, kind: 'app' as const })),
-  ], [records])
+  const catalogApps = useMemo(() => {
+    const entries = [
+      { key: 'apm', count: 14, kind: 'group' as const },
+      { key: 'AI 应用', count: TARGET_CONNECTED.aiApp, kind: 'app' as const },
+      { key: 'AI Agent', count: TARGET_CONNECTED.aiAgent, kind: 'app' as const },
+      ...countBy(records, (record) => record.app).filter((item) => item.key !== 'AI 应用' && item.key !== 'AI Agent').slice(0, 5).map((item) => ({ ...item, kind: 'app' as const })),
+    ]
+    const search = catalogQuery.trim().toLowerCase()
+    return search ? entries.filter((item) => item.key.toLowerCase().includes(search)) : entries
+  }, [catalogQuery, records])
+  const runQuery = () => setQuery(queryDraft.trim())
 
   return (
     <div className="entity-page">
@@ -112,16 +122,23 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
             <strong>实体探索</strong>
           </div>
           <div className="entity-query-tabs">
-            <button className="active" type="button">USearch</button>
-            <button type="button">SPL</button>
+            <button className={queryMode === 'usearch' ? 'active' : ''} type="button" onClick={() => setQueryMode('usearch')}>USearch</button>
+            <button className={queryMode === 'spl' ? 'active' : ''} type="button" onClick={() => setQueryMode('spl')}>SPL</button>
           </div>
           <button className="entity-icon-button" type="button"><Grid2X2 size={15} /></button>
           <button className="entity-icon-button" type="button"><Filter size={15} /></button>
           <div className="entity-search">
             <Search size={15} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="请输入实体名称、类型、IP..." />
+            <input
+              value={queryDraft}
+              onChange={(event) => setQueryDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') runQuery()
+              }}
+              placeholder={queryMode === 'spl' ? '输入 SPL，例如 * | where entity_type like Kubernetes' : '请输入实体名称、类型、IP...'}
+            />
           </div>
-          <button className="entity-primary" type="button">查询</button>
+          <button className="entity-primary" type="button" onClick={runQuery}>查询</button>
           <div className="entity-view-tabs">
             <button className={view === 'table' ? 'active' : ''} type="button" onClick={() => setView('table')}><Table2 size={14} />表格</button>
             <button className={view === 'topology' ? 'active' : ''} type="button" onClick={() => setView('topology')}><Network size={14} />拓扑</button>
@@ -146,13 +163,15 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
               scope={scope}
               selectedDomain={selectedDomain}
               selectedType={selectedType}
+              collapsed={!filtersOpen}
               domains={domainStats}
               types={typeStats}
               onScopeChange={setScope}
               onDomainChange={setSelectedDomain}
               onTypeChange={setSelectedType}
+              onToggleCollapsed={() => setFiltersOpen((value) => !value)}
             />
-            <EntityCatalog apps={topApps} />
+            <EntityCatalog apps={catalogApps} query={catalogQuery} onQueryChange={setCatalogQuery} />
             <section className="entity-result-panel">
               <div className="entity-panel-head">
                 <div>
@@ -164,6 +183,7 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
                   setSelectedDomain('all')
                   setSelectedType('all')
                   setQuery('')
+                  setQueryDraft('')
                 }}>重置</button>
               </div>
               {view === 'table' && <EntityTable records={filtered.slice(0, 80)} selected={selected} onSelect={setSelected} />}
@@ -250,69 +270,76 @@ function FilterPanel({
   scope,
   selectedDomain,
   selectedType,
+  collapsed,
   domains,
   types,
   onScopeChange,
   onDomainChange,
   onTypeChange,
+  onToggleCollapsed,
 }: {
   total: number
   scope: ScopeFilter
   selectedDomain: string
   selectedType: string
+  collapsed: boolean
   domains: Array<{ key: string; count: number }>
   types: Array<{ key: string; count: number }>
   onScopeChange: (value: ScopeFilter) => void
   onDomainChange: (value: string) => void
   onTypeChange: (value: string) => void
+  onToggleCollapsed: () => void
 }) {
   return (
-    <section className="entity-card entity-filter-panel">
+    <section className={`entity-card entity-filter-panel ${collapsed ? 'collapsed' : ''}`}>
       <div className="entity-panel-head">
         <div>
           <strong>过滤器</strong>
           <span>{total.toLocaleString()} 个实体</span>
         </div>
-        <button type="button">收起</button>
+        <button type="button" onClick={onToggleCollapsed}>{collapsed ? '展开' : '收起'}</button>
       </div>
-      <div className="entity-filter-section">
-        <strong>实体范围</strong>
-        <FilterRow active={scope === 'all'} label="所有实体" count={total} onClick={() => onScopeChange('all')} />
-        <FilterRow active={scope === 'recent'} label="最近访问" count={Math.floor(total / 9)} onClick={() => onScopeChange('recent')} />
-        <FilterRow active={scope === 'starred'} label="关注实体" count={8} onClick={() => onScopeChange('starred')} />
-      </div>
-      <div className="entity-filter-section">
-        <strong>实体Domain</strong>
-        <div className="entity-chip-grid">
-          <button className={selectedDomain === 'all' ? 'active' : ''} type="button" onClick={() => onDomainChange('all')}>全部</button>
-          {domains.slice(0, 7).map((item) => (
-            <button key={item.key} className={selectedDomain === item.key ? 'active' : ''} type="button" onClick={() => onDomainChange(item.key)}>
-              {item.key}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="entity-filter-section">
-        <strong>实体类型</strong>
-        <select value={selectedType} onChange={(event) => onTypeChange(event.target.value)}>
-          <option value="all">全部类型</option>
-          {types.slice(0, 16).map((item) => <option key={item.key} value={item.key}>{item.key} ({item.count})</option>)}
-        </select>
-      </div>
+      {!collapsed && (
+        <>
+          <div className="entity-filter-section">
+            <strong>实体范围</strong>
+            <FilterRow active={scope === 'all'} label="所有实体" count={total} onClick={() => onScopeChange('all')} />
+            <FilterRow active={scope === 'recent'} label="最近访问" count={Math.floor(total / 9)} onClick={() => onScopeChange('recent')} />
+            <FilterRow active={scope === 'starred'} label="关注实体" count={8} onClick={() => onScopeChange('starred')} />
+          </div>
+          <div className="entity-filter-section">
+            <strong>实体Domain</strong>
+            <div className="entity-chip-grid">
+              <button className={selectedDomain === 'all' ? 'active' : ''} type="button" onClick={() => onDomainChange('all')}>全部</button>
+              {domains.slice(0, 7).map((item) => (
+                <button key={item.key} className={selectedDomain === item.key ? 'active' : ''} type="button" onClick={() => onDomainChange(item.key)}>
+                  {item.key}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="entity-filter-section">
+            <strong>实体类型</strong>
+            <select value={selectedType} onChange={(event) => onTypeChange(event.target.value)}>
+              <option value="all">全部类型</option>
+              {types.slice(0, 16).map((item) => <option key={item.key} value={item.key}>{item.key} ({item.count})</option>)}
+            </select>
+          </div>
+        </>
+      )}
     </section>
   )
 }
 
-function FilterRow({ active, label, count, onClick }: { active: boolean; label: string; count: number; onClick: () => void }) {
-  return (
-    <button className={active ? 'entity-filter-row active' : 'entity-filter-row'} type="button" onClick={onClick}>
-      <span><i />{label}</span>
-      <b>{count.toLocaleString()}</b>
-    </button>
-  )
-}
-
-function EntityCatalog({ apps }: { apps: Array<{ key: string; count: number }> }) {
+function EntityCatalog({
+  apps,
+  query,
+  onQueryChange,
+}: {
+  apps: Array<{ key: string; count: number }>
+  query: string
+  onQueryChange: (value: string) => void
+}) {
   return (
     <section className="entity-card entity-catalog">
       <div className="entity-panel-head">
@@ -320,7 +347,10 @@ function EntityCatalog({ apps }: { apps: Array<{ key: string; count: number }> }
           <strong>实体目录</strong>
           <span>最近访问 0 条记录</span>
         </div>
-        <button type="button">搜索</button>
+        <label className="entity-catalog-search">
+          <Search size={13} />
+          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索" />
+        </label>
       </div>
       <div className="entity-app-list">
         {apps.map((item, index) => (
@@ -335,6 +365,15 @@ function EntityCatalog({ apps }: { apps: Array<{ key: string; count: number }> }
         ))}
       </div>
     </section>
+  )
+}
+
+function FilterRow({ active, label, count, onClick }: { active: boolean; label: string; count: number; onClick: () => void }) {
+  return (
+    <button className={active ? 'entity-filter-row active' : 'entity-filter-row'} type="button" onClick={onClick}>
+      <span><i />{label}</span>
+      <b>{count.toLocaleString()}</b>
+    </button>
   )
 }
 

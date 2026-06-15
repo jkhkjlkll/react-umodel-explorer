@@ -329,6 +329,10 @@
   overflow: hidden;
 }
 
+.entity-filter-panel.collapsed {
+  align-self: start;
+}
+
 .entity-panel-head {
   min-height: 44px;
   display: flex;
@@ -365,6 +369,29 @@
   color: #687386;
   cursor: pointer;
   font-size: 12px;
+}
+
+.entity-catalog-search {
+  width: 84px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid #dfe5f2;
+  border-radius: 7px;
+  background: #fff;
+  color: #8f98a8;
+}
+
+.entity-catalog-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #252b3a;
+  font: 12px var(--om-sans);
 }
 
 .entity-filter-section {
@@ -764,10 +791,6 @@
   }
 
   .entity-lower-grid {
-    grid-template-columns: 250px minmax(460px, 1fr);
-  }
-
-  .entity-catalog {
-    display: none;
+    grid-template-columns: 250px 280px minmax(520px, 1fr);
   }
 }
