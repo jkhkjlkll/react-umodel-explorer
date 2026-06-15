@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { createAliyunLikeTopologyData, type TopologyNode } from '../topology/topologyModel'
 import { resolveTopologyNodeIconPreset, TopologyPresetIcon } from '../topology/topologyIcons'
+import { TopologyCanvas } from '../topology/TopologyCanvas'
 import './entity.css'
 
 type EntityView = 'table' | 'topology' | 'health'
@@ -69,6 +70,7 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
   const [filtersOpen, setFiltersOpen] = useState(true)
   const [catalogQuery, setCatalogQuery] = useState('')
   const [selected, setSelected] = useState<EntityRecord | null>(null)
+  const [selectedTopoNode, setSelectedTopoNode] = useState<TopologyNode | null>(null)
 
   const filtered = useMemo(() => records.filter((record) => {
     const search = query.trim().toLowerCase()
@@ -103,6 +105,11 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
     const search = catalogQuery.trim().toLowerCase()
     return search ? entries.filter((item) => item.key.toLowerCase().includes(search)) : entries
   }, [catalogQuery, records])
+  const topologyTypes = useMemo(() => {
+    if (selectedType !== 'all') return [stripSyntheticType(selectedType)]
+    const values = [...new Set(filtered.slice(0, 12).map((record) => stripSyntheticType(record.type)))]
+    return values
+  }, [filtered, selectedType])
   const runQuery = () => setQuery(queryDraft.trim())
 
   return (
@@ -187,7 +194,25 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
                 }}>重置</button>
               </div>
               {view === 'table' && <EntityTable records={filtered.slice(0, 80)} selected={selected} onSelect={setSelected} />}
-              {view === 'topology' && <EntityMiniTopology records={filtered.slice(0, 140)} onSelect={setSelected} />}
+              {view === 'topology' && (
+                <EntityTopologyView
+                  data={data}
+                  focusedTypes={topologyTypes}
+                  selectedNode={selectedTopoNode}
+                  records={filtered.slice(0, 12)}
+                  onSelectNode={(node) => {
+                    setSelectedTopoNode(node)
+                    if (node) {
+                      const match = filtered.find((record) => stripSyntheticType(record.type) === node.type || record.label.includes(node.label.replace(/\s+\d+$/, '')))
+                      if (match) setSelected(match)
+                    }
+                  }}
+                  onFocusType={(type) => {
+                    const match = typeStats.find((item) => stripSyntheticType(item.key) === type)
+                    if (match) setSelectedType(match.key)
+                  }}
+                />
+              )}
               {view === 'health' && <EntityHealthGrid records={filtered.slice(0, 80)} onSelect={setSelected} />}
             </section>
           </div>
@@ -416,25 +441,59 @@ function EntityTable({ records, selected, onSelect }: { records: EntityRecord[];
   )
 }
 
-function EntityMiniTopology({ records, onSelect }: { records: EntityRecord[]; onSelect: (record: EntityRecord) => void }) {
+function EntityTopologyView({
+  data,
+  focusedTypes,
+  selectedNode,
+  records,
+  onSelectNode,
+  onFocusType,
+}: {
+  data: ReturnType<typeof createAliyunLikeTopologyData>
+  focusedTypes: string[]
+  selectedNode: TopologyNode | null
+  records: EntityRecord[]
+  onSelectNode: (node: TopologyNode | null) => void
+  onFocusType: (type: string) => void
+}) {
   return (
-    <div className="entity-mini-topology">
-      {records.map((record, index) => (
-        <button
-          key={record.id}
-          type="button"
-          className={`status-${record.status}`}
-          style={{
-            left: `${6 + ((index * 37) % 86)}%`,
-            top: `${8 + ((index * 53) % 78)}%`,
-            color: record.color,
-          }}
-          title={record.label}
-          onClick={() => onSelect(record)}
-        >
-          <span />
-        </button>
-      ))}
+    <div className="entity-topology-view">
+      <div className="entity-topology-toolbar">
+        <div>
+          <strong>实体拓扑</strong>
+          <span>按实体连接关系展示当前筛选结果</span>
+        </div>
+        <div className="entity-topology-tags">
+          {focusedTypes.slice(0, 4).map((type) => <span key={type}>{type}</span>)}
+        </div>
+      </div>
+      <div className="entity-topology-body">
+        <TopologyCanvas
+          data={data}
+          layoutMode="force"
+          focusedTypes={focusedTypes}
+          selectedNode={selectedNode}
+          showLabels
+          showClusterLabels
+          allowDrag={false}
+          playhead={1}
+          onSelectNode={onSelectNode}
+          onFocusType={onFocusType}
+        />
+        <div className="entity-topology-index">
+          <strong>实体列表</strong>
+          {records.map((record) => (
+            <button key={record.id} type="button" onClick={() => onFocusType(stripSyntheticType(record.type))}>
+              <i style={{ background: record.color }} />
+              <span>
+                <b>{record.label.replace(/\s+\d+$/, '')}</b>
+                <small>{record.domain} · 已接入</small>
+              </span>
+              <StatusPill status={record.status} />
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -566,6 +625,10 @@ function viewTitle(view: EntityView) {
   if (view === 'topology') return '拓扑视图'
   if (view === 'health') return '健康度视图'
   return '实体表格'
+}
+
+function stripSyntheticType(type: string) {
+  return type.replace(/\s+\d{3}$/, '')
 }
 
 function resolveEntityIconPreset(record: EntityRecord) {
