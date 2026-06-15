@@ -2,117 +2,11 @@
   width: 100%;
   height: 100%;
   min-width: 0;
-  display: grid;
-  grid-template-columns: 276px minmax(0, 1fr);
+  display: block;
   overflow: hidden;
   background: #f5f6f8;
   color: #1f2937;
   font-family: var(--om-cjk-font);
-}
-
-.cms-replica-sidebar {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid #e5e7eb;
-  background: #fff;
-  overflow: hidden;
-}
-
-.cms-product-head {
-  height: 54px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 0 18px;
-  border-bottom: 1px solid #eef0f3;
-}
-
-.cms-product-head svg {
-  color: #202936;
-}
-
-.cms-product-head strong {
-  font-size: 18px;
-}
-
-.cms-product-head button {
-  width: 28px;
-  height: 28px;
-  border: 0;
-  background: transparent;
-  color: #374151;
-  cursor: pointer;
-  font-size: 18px;
-}
-
-.cms-nav-scroll {
-  min-height: 0;
-  overflow: auto;
-  padding: 10px 0 18px;
-}
-
-.cms-nav-group {
-  padding: 0 0 8px;
-  border-bottom: 1px solid #f0f2f5;
-}
-
-.cms-nav-group + .cms-nav-group {
-  padding-top: 8px;
-}
-
-.cms-nav-group > strong {
-  display: block;
-  padding: 0 18px 6px;
-  color: #a2a8b2;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.cms-nav-group button {
-  width: 100%;
-  height: 46px;
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 0 18px;
-  border: 0;
-  border-right: 3px solid transparent;
-  background: transparent;
-  color: #3f4652;
-  cursor: pointer;
-  text-align: left;
-  font-size: 15px;
-}
-
-.cms-nav-group button.active {
-  border-right-color: #1f6feb;
-  background: #f2f6ff;
-  color: #1f6feb;
-  font-weight: 700;
-}
-
-.cms-nav-group svg {
-  color: currentColor;
-}
-
-.cms-nav-group span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.cms-nav-group kbd {
-  height: 24px;
-  min-width: 48px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 6px;
-  background: #f1edff;
-  color: #111827;
-  font: 700 13px var(--om-sans);
 }
 
 .cms-replica-main {
@@ -934,10 +828,6 @@
 }
 
 @media (max-width: 1280px) {
-  .cms-replica-page {
-    grid-template-columns: 248px minmax(0, 1fr);
-  }
-
   .cms-timebar {
     display: none;
   }

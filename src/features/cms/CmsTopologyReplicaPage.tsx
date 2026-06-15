@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Grid2X2, Home, Monitor, Network, RefreshCw, Search, Settings, Sparkles, Star, Zap } from 'lucide-react'
+import { Grid2X2, Monitor, Network, RefreshCw, Search, Settings, Sparkles, Star } from 'lucide-react'
 import './cmsTopologyReplica.css'
 
 type CmsView = 'table' | 'topology' | 'health'
@@ -11,14 +11,6 @@ const tabs = [
   ['ECS 列表', '348'],
   ['RDS 列表', '27'],
   ['RUM...', '4'],
-]
-
-const navGroups = [
-  { title: '', items: ['default-cms-181...', '快速查询', '所有功能'] },
-  { title: '常驻应用', items: ['实体探索', '智能运维', '接入中心', '告警中心', '云产品监控'] },
-  { title: 'AI 可观测', items: ['AI Agent 可观测', '推理服务可观测', 'AI 网关洞察'] },
-  { title: '应用可观测', items: ['用户体验监控', '应用监控'] },
-  { title: '运维监控', items: ['数据库可观测', '日志审计', 'Prometheus 服务'] },
 ]
 
 const nodeTypes = [
@@ -38,28 +30,6 @@ export function CmsTopologyReplicaPage() {
 
   return (
     <div className="cms-replica-page">
-      <aside className="cms-replica-sidebar">
-        <div className="cms-product-head">
-          <Network size={22} />
-          <strong>云监控2.0</strong>
-          <button type="button">↩</button>
-        </div>
-        <div className="cms-nav-scroll">
-          {navGroups.map((group, groupIndex) => (
-            <section key={`${group.title}-${groupIndex}`} className="cms-nav-group">
-              {group.title && <strong>{group.title}</strong>}
-              {group.items.map((item, itemIndex) => (
-                <button key={item} className={item === '实体探索' ? 'active' : ''} type="button">
-                  <NavIcon index={groupIndex * 5 + itemIndex} />
-                  <span>{item}</span>
-                  {item === '快速查询' && <kbd>⌘K</kbd>}
-                </button>
-              ))}
-            </section>
-          ))}
-        </div>
-      </aside>
-
       <main className="cms-replica-main">
         <header className="cms-entity-tabs">
           <div className="cms-title">
@@ -272,12 +242,6 @@ function HealthReplica() {
       ))}
     </section>
   )
-}
-
-function NavIcon({ index }: { index: number }) {
-  const icons = [Home, Search, Grid2X2, Network, Zap, Monitor, Star]
-  const Icon = icons[index % icons.length]
-  return <Icon size={18} />
 }
 
 function createGraphNodes() {
