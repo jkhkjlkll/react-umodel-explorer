@@ -8,8 +8,8 @@ import { useI18n } from './i18n'
 import { formatError } from './lib/json'
 import { useLocalStorageState } from './lib/storage'
 import { UModelPage } from './features/umodel/UModelPage'
+import { TopologyExplorerPage } from './features/topology/TopologyExplorerPage'
 import { EntityExplorerPage } from './features/entity/EntityExplorerPage'
-import { CmsTopologyReplicaPage } from './features/cms/CmsTopologyReplicaPage'
 
 const storageKeys = {
   apiBase: 'standalone.umodel.apiBase',
@@ -110,7 +110,7 @@ export function StandaloneExplorerApp() {
           ) : section === 'entity' ? (
             <EntityExplorerPage refreshToken={refreshToken} />
           ) : (
-            <CmsTopologyReplicaPage />
+            <TopologyExplorerPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
           )}
         </main>
       </section>
