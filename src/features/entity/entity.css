@@ -2,25 +2,13 @@
   width: 100%;
   height: 100%;
   min-width: 0;
-  display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
+  display: block;
   overflow: hidden;
   background: #f5f7fb;
   color: #252b3a;
   font-family: var(--om-cjk-font);
 }
 
-.entity-side-rail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 0;
-  border-right: 1px solid #e7ebf2;
-  background: #fff;
-}
-
-.entity-side-rail button,
 .entity-icon-button {
   width: 32px;
   height: 32px;
@@ -33,15 +21,9 @@
   cursor: pointer;
 }
 
-.entity-side-rail button:hover,
-.entity-side-rail button.active,
 .entity-icon-button:hover {
   background: #eef2ff;
   color: #6559e8;
-}
-
-.entity-side-rail button.active {
-  box-shadow: inset 3px 0 0 #6559e8;
 }
 
 .entity-main {

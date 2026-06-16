@@ -1,15 +1,12 @@
 import { useMemo, useState } from 'react'
 import {
-  Activity,
   Box,
   ChevronDown,
-  Database,
   Filter,
   Grid2X2,
   HeartPulse,
   Network,
   Search,
-  Server,
   Star,
   Table2,
   X,
@@ -177,14 +174,6 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
 
   return (
     <div className="entity-page">
-      <aside className="entity-side-rail" aria-label="实体探索工具">
-        {[Server, Grid2X2, Box, Database, Network, HeartPulse, Activity].map((Icon, index) => (
-          <button key={index} className={index === 2 ? 'active' : ''} type="button">
-            <Icon size={16} />
-          </button>
-        ))}
-      </aside>
-
       <main className="entity-main">
         <header className="entity-toolbar">
           <div className="entity-title">
