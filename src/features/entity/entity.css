@@ -123,6 +123,7 @@
 
 .entity-search {
   flex: 0 0 300px;
+  position: relative;
   height: 34px;
   display: flex;
   align-items: center;
@@ -147,6 +148,35 @@
   background: transparent;
   color: #252b3a;
   font: 13px var(--om-sans);
+}
+
+.entity-selected-filter {
+  flex: 0 0 auto;
+  height: 34px;
+  max-width: 230px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 10px;
+  border: 1px solid #d7dde8;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #4a5568;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.entity-selected-filter span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-selected-filter svg {
+  flex: 0 0 auto;
+  color: #94a0b2;
 }
 
 .entity-primary {
@@ -329,11 +359,18 @@
   overflow: hidden;
 }
 
+.entity-catalog {
+  position: relative;
+  z-index: 20;
+  overflow: visible;
+}
+
 .entity-filter-panel.collapsed {
   align-self: start;
 }
 
 .entity-panel-head {
+  position: relative;
   min-height: 44px;
   display: flex;
   align-items: center;
@@ -343,18 +380,18 @@
   border-bottom: 1px solid #eef1f6;
 }
 
-.entity-panel-head div {
+.entity-panel-head > div {
   min-width: 0;
   display: grid;
   gap: 3px;
 }
 
-.entity-panel-head strong {
+.entity-panel-head > div > strong {
   color: #252b3a;
   font-size: 14px;
 }
 
-.entity-panel-head span {
+.entity-panel-head > div > span {
   color: #8f98a8;
   font-size: 12px;
 }
@@ -372,7 +409,7 @@
 }
 
 .entity-catalog-search {
-  width: 84px;
+  width: 250px;
   height: 28px;
   display: flex;
   align-items: center;
@@ -392,6 +429,95 @@
   background: transparent;
   color: #252b3a;
   font: 12px var(--om-sans);
+}
+
+.entity-search-popover {
+  position: absolute;
+  left: 308px;
+  top: 58px;
+  z-index: 80;
+  width: min(660px, calc(100vw - 560px));
+  min-width: 480px;
+  padding: 14px 16px 12px;
+  border: 1px solid #dfe4ec;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(31, 45, 75, 0.16);
+}
+
+.entity-search-popover.compact {
+  left: 0;
+  top: 42px;
+  width: 540px;
+  min-width: 540px;
+}
+
+.entity-search-popover-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #687386;
+  font-size: 13px;
+}
+
+.entity-search-popover-title strong {
+  color: #687386;
+  font-size: 13px;
+}
+
+.entity-recommendation-group {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.entity-recommendation-group > strong {
+  color: #8f98a8;
+  font-size: 13px;
+}
+
+.entity-recommendation-group > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.entity-recommendation-group button {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid #dfe4ec;
+  border-radius: 999px;
+  background: #fff;
+  color: #4b5563;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.entity-recommendation-group button:hover {
+  border-color: #b9c6ff;
+  background: #f7f9ff;
+}
+
+.entity-recommendation-group button b {
+  color: #ff7a2f;
+  font-size: 13px;
+}
+
+.entity-recommendation-group button small {
+  color: #a7aebb;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.entity-search-popover p {
+  margin: 14px 0 0;
+  color: #b4bac6;
+  font-size: 12px;
 }
 
 .entity-filter-section {
@@ -502,6 +628,11 @@
   text-align: left;
 }
 
+.entity-app-list button:hover {
+  border-color: #d9e3ff;
+  background: #f3f6ff;
+}
+
 .entity-app-icon,
 .entity-type-icon {
   display: grid;
@@ -603,6 +734,146 @@
 .entity-table small {
   margin-top: 2px;
   color: #8f98a8;
+}
+
+.entity-metrics-result {
+  grid-row: 1 / -1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 58px;
+  border: 1px solid #eef1f6;
+  background: #fff;
+}
+
+.entity-metrics-table-wrap {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.entity-metrics-table {
+  width: 100%;
+  min-width: 1260px;
+  border-collapse: collapse;
+  color: #303641;
+  font-size: 13px;
+}
+
+.entity-metrics-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 58px;
+  padding: 0 12px;
+  border-bottom: 1px solid #d8dde6;
+  background: #fafafa;
+  color: #303641;
+  text-align: left;
+  font-weight: 700;
+}
+
+.entity-metrics-table th span {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 4px;
+  border: 1px solid #8d96a6;
+  border-radius: 999px;
+  color: #687386;
+  font-size: 10px;
+}
+
+.entity-metrics-table td {
+  height: 66px;
+  padding: 0 12px;
+  border-bottom: 1px solid #d8dde6;
+  background: #fff;
+  font-weight: 700;
+}
+
+.entity-metrics-table tbody tr:nth-child(6) td {
+  background: #f5f6f8;
+}
+
+.entity-metrics-table a {
+  color: #2b6bdc;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.entity-metrics-table a:hover {
+  text-decoration: underline;
+}
+
+.entity-metric-cell {
+  min-width: 170px;
+}
+
+.entity-metric-cell {
+  display: grid;
+  grid-template-columns: 94px minmax(52px, auto);
+  align-items: center;
+  gap: 12px;
+}
+
+.entity-metric-cell b {
+  color: #303641;
+  font-size: 13px;
+}
+
+.entity-sparkline {
+  width: 94px;
+  height: 44px;
+  display: block;
+}
+
+.entity-metrics-footer {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid #eef1f6;
+  background: #fff;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.entity-metrics-footer button {
+  height: 34px;
+  min-width: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid #d8dde6;
+  border-radius: 3px;
+  background: #fff;
+  color: #4b5563;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.entity-metrics-footer button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.entity-metrics-footer button.active {
+  border-color: #1677ff;
+  color: #1677ff;
+}
+
+.entity-metrics-footer input {
+  width: 56px;
+  height: 34px;
+  border: 1px solid #d8dde6;
+  border-radius: 3px;
+  outline: 0;
 }
 
 .entity-status-pill {
@@ -890,5 +1161,11 @@
 
   .entity-lower-grid {
     grid-template-columns: 250px 280px minmax(520px, 1fr);
+  }
+
+  .entity-search-popover {
+    left: 0;
+    width: 540px;
+    min-width: 540px;
   }
 }

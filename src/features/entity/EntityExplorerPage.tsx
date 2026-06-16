@@ -1,10 +1,8 @@
 import { useMemo, useState } from 'react'
 import {
   Activity,
-  AlertTriangle,
   Box,
-  ChevronRight,
-  Clock3,
+  ChevronDown,
   Database,
   Filter,
   Grid2X2,
@@ -14,6 +12,7 @@ import {
   Server,
   Star,
   Table2,
+  X,
 } from 'lucide-react'
 import { createAliyunLikeTopologyData, type TopologyNode } from '../topology/topologyModel'
 import { resolveTopologyNodeIconPreset, TopologyPresetIcon } from '../topology/topologyIcons'
@@ -24,6 +23,14 @@ type EntityView = 'table' | 'topology' | 'health'
 type ScopeFilter = 'all' | 'recent' | 'starred'
 type EntityStatus = 'normal' | 'warning' | 'critical'
 type QueryMode = 'usearch' | 'spl'
+type RecommendationKind = 'domain' | 'entity' | 'catalog'
+
+interface EntityDrilldown {
+  label: string
+  token: string
+  count: number
+  kind: RecommendationKind
+}
 
 interface EntityRecord {
   id: string
@@ -51,6 +58,39 @@ const TARGET_CONNECTED = { aiApp: 82, aiAgent: 17, starred: 8 }
 
 const apps = ['AI 应用', 'AI Agent', '订单服务', '账单服务', 'CMS Demo', '网关入口', '观测平台']
 const domains = ['apm', 'k8s', 'ecs', 'sls', 'cms', 'arms', 'pai']
+const recommendedDomains = [
+  { label: 'k8s', token: 'k8s', count: 12933, kind: 'domain' as const },
+  { label: 'acs', token: 'acs', count: 3423, kind: 'domain' as const },
+  { label: 'apm', token: 'apm', count: 861, kind: 'domain' as const },
+  { label: 'devops', token: 'devops', count: 714, kind: 'domain' as const },
+  { label: 'infra', token: 'infra', count: 346, kind: 'domain' as const },
+  { label: 'synthetics', token: 'synthetics', count: 9, kind: 'domain' as const },
+  { label: 'rum', token: 'rum', count: 8, kind: 'domain' as const },
+]
+const recommendedEntities = [
+  { label: 'Pod', token: 'k8s@Pod', count: 11731, kind: 'entity' as const },
+  { label: '云服务器 ECS（Disk）', token: 'acs@ecs.disk', count: 1396, kind: 'entity' as const },
+  { label: '云服务器 ECS（eni）', token: 'acs@ecs.eni', count: 805, kind: 'entity' as const },
+  { label: 'devops.image', token: 'devops@image', count: 419, kind: 'entity' as const },
+  { label: '云服务器 ECS（Instance）', token: 'acs@ecs.instance', count: 346, kind: 'entity' as const },
+  { label: '基础设施:主机', token: 'infra@host', count: 346, kind: 'entity' as const },
+  { label: 'Kubernetes 配置项', token: 'k8s@configmap', count: 336, kind: 'entity' as const },
+  { label: 'Kubernetes 服务', token: 'k8s@service', count: 301, kind: 'entity' as const },
+  { label: 'devops.image_registry', token: 'devops@image_registry', count: 268, kind: 'entity' as const },
+  { label: 'Kubernetes 无状态应用', token: 'k8s@deployment', count: 227, kind: 'entity' as const },
+]
+const appMetricsRows = [
+  { name: 'langchain-rag', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '2.52', errors: '0', latency: '28.03 s', tokens: '2.54K', active: true },
+  { name: 'google-adk-a2a-protocol', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '76.47', errors: '0', latency: '1.15 s', tokens: '72.24K', active: true },
+  { name: 'DeepResearch', probe: 'OpenTelemetry', language: 'java', region: 'cn-hongkong', calls: '0', errors: '0', latency: '0', tokens: '0', active: false },
+  { name: 'gw-d44v3iem1hkln8d0d8v0', probe: 'OpenTelemetry', language: 'java', region: 'cn-hongkong', calls: '0', errors: '0', latency: '0', tokens: '0', active: false },
+  { name: 'gw-d28nspmm1hksushjsnd0', probe: 'OpenTelemetry', language: 'java', region: 'cn-hongkong', calls: '0', errors: '0', latency: '0', tokens: '0', active: false },
+  { name: 'agentscope-code-correction', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '5.23', errors: '0', latency: '12.58 s', tokens: '5.77K', active: true },
+  { name: 'dashscope-multicapability', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '0', errors: '0', latency: '0', tokens: '0', active: false },
+  { name: 'claude-agent-doc-qa', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '7.52', errors: '0', latency: '284.82 ms', tokens: '126.24K', active: true },
+  { name: 'openai-marketing-agent', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '2.44', errors: '0', latency: '13.25 s', tokens: '5.93K', active: true },
+  { name: 'knowledge-base-qa', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '1.05', errors: '0', latency: '55.21 s', tokens: '3.71K', active: true },
+]
 const statusMeta = {
   normal: { label: '正常', color: '#22c55e' },
   warning: { label: '警告', color: '#f97316' },
@@ -69,6 +109,9 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
   const [query, setQuery] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(true)
   const [catalogQuery, setCatalogQuery] = useState('')
+  const [mainSuggestOpen, setMainSuggestOpen] = useState(false)
+  const [catalogSuggestOpen, setCatalogSuggestOpen] = useState(false)
+  const [drilldown, setDrilldown] = useState<EntityDrilldown | null>(null)
   const [selected, setSelected] = useState<EntityRecord | null>(null)
   const [selectedTopoNode, setSelectedTopoNode] = useState<TopologyNode | null>(null)
 
@@ -110,7 +153,27 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
     const values = [...new Set(filtered.slice(0, 12).map((record) => stripSyntheticType(record.type)))]
     return values
   }, [filtered, selectedType])
-  const runQuery = () => setQuery(queryDraft.trim())
+  const openDrilldown = (item: EntityDrilldown) => {
+    setDrilldown(item)
+    setView('table')
+    setQueryDraft('')
+    setQuery('')
+    setMainSuggestOpen(false)
+    setCatalogSuggestOpen(false)
+  }
+  const runQuery = () => {
+    const nextQuery = queryDraft.trim()
+    setQuery(nextQuery)
+    setMainSuggestOpen(false)
+    if (nextQuery) {
+      openDrilldown({ label: nextQuery, token: nextQuery, count: 83, kind: 'entity' })
+    }
+  }
+  const clearDrilldown = () => {
+    setDrilldown(null)
+    setQuery('')
+    setQueryDraft('')
+  }
 
   return (
     <div className="entity-page">
@@ -133,17 +196,31 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
             <button className={queryMode === 'spl' ? 'active' : ''} type="button" onClick={() => setQueryMode('spl')}>SPL</button>
           </div>
           <button className="entity-icon-button" type="button"><Grid2X2 size={15} /></button>
+          {drilldown && (
+            <button className="entity-selected-filter" type="button" onClick={clearDrilldown}>
+              <span>{drilldown.token}</span>
+              <X size={14} />
+            </button>
+          )}
           <button className="entity-icon-button" type="button"><Filter size={15} /></button>
-          <div className="entity-search">
+          <div className="entity-search entity-search-with-popover">
             <Search size={15} />
             <input
               value={queryDraft}
-              onChange={(event) => setQueryDraft(event.target.value)}
+              onFocus={() => setMainSuggestOpen(true)}
+              onBlur={() => window.setTimeout(() => setMainSuggestOpen(false), 120)}
+              onChange={(event) => {
+                setQueryDraft(event.target.value)
+                setMainSuggestOpen(true)
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') runQuery()
               }}
               placeholder={queryMode === 'spl' ? '输入 SPL，例如 * | where entity_type like Kubernetes' : '请输入实体名称、类型、IP...'}
             />
+            {mainSuggestOpen && (
+              <EntitySearchPopover compact onSelect={openDrilldown} />
+            )}
           </div>
           <button className="entity-primary" type="button" onClick={runQuery}>查询</button>
           <div className="entity-view-tabs">
@@ -154,68 +231,85 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
         </header>
 
         <section className="entity-content">
-          <div className="entity-summary-grid">
-            <EntityStatCard title="实体" items={[
-              { value: stats.total.toLocaleString(), label: '实体总数' },
-              { value: stats.domainCount.toLocaleString(), label: '实体Domain' },
-              { value: stats.typeCount.toLocaleString(), label: '实体类型' },
-            ]} />
-            <EventCard stats={stats} />
-            <HealthCard stats={stats} />
-          </div>
-
-          <div className="entity-lower-grid">
-            <FilterPanel
-              total={filtered.length}
-              scope={scope}
-              selectedDomain={selectedDomain}
-              selectedType={selectedType}
-              collapsed={!filtersOpen}
-              domains={domainStats}
-              types={typeStats}
-              onScopeChange={setScope}
-              onDomainChange={setSelectedDomain}
-              onTypeChange={setSelectedType}
-              onToggleCollapsed={() => setFiltersOpen((value) => !value)}
-            />
-            <EntityCatalog apps={catalogApps} query={catalogQuery} onQueryChange={setCatalogQuery} />
-            <section className="entity-result-panel">
-              <div className="entity-panel-head">
-                <div>
-                  <strong>{viewTitle(view)}</strong>
-                  <span>当前 {filteredStats.total.toLocaleString()} 个实体</span>
-                </div>
-                <button type="button" onClick={() => {
-                  setScope('all')
-                  setSelectedDomain('all')
-                  setSelectedType('all')
-                  setQuery('')
-                  setQueryDraft('')
-                }}>重置</button>
+          {drilldown ? (
+            <EntityMetricsResult selection={drilldown} />
+          ) : (
+            <>
+              <div className="entity-summary-grid">
+                <EntityStatCard title="实体" items={[
+                  { value: stats.total.toLocaleString(), label: '实体总数' },
+                  { value: stats.domainCount.toLocaleString(), label: '实体Domain' },
+                  { value: stats.typeCount.toLocaleString(), label: '实体类型' },
+                ]} />
+                <EventCard stats={stats} />
+                <HealthCard stats={stats} />
               </div>
-              {view === 'table' && <EntityTable records={filtered.slice(0, 80)} selected={selected} onSelect={setSelected} />}
-              {view === 'topology' && (
-                <EntityTopologyView
-                  data={data}
-                  focusedTypes={topologyTypes}
-                  selectedNode={selectedTopoNode}
-                  records={filtered.slice(0, 12)}
-                  onSelectNode={(node) => {
-                    setSelectedTopoNode(node)
-                    if (node) {
-                      const match = filtered.find((record) => stripSyntheticType(record.type) === node.type || record.label.includes(node.label.replace(/\s+\d+$/, '')))
-                      if (match) setSelected(match)
-                    }
-                  }}
-                  onFocusType={(type) => {
-                    const match = typeStats.find((item) => stripSyntheticType(item.key) === type)
-                    if (match) setSelectedType(match.key)
-                  }}
+
+              <div className="entity-lower-grid">
+                <FilterPanel
+                  total={filtered.length}
+                  scope={scope}
+                  selectedDomain={selectedDomain}
+                  selectedType={selectedType}
+                  collapsed={!filtersOpen}
+                  domains={domainStats}
+                  types={typeStats}
+                  onScopeChange={setScope}
+                  onDomainChange={setSelectedDomain}
+                  onTypeChange={setSelectedType}
+                  onToggleCollapsed={() => setFiltersOpen((value) => !value)}
                 />
-              )}
-              {view === 'health' && <EntityHealthGrid records={filtered.slice(0, 80)} onSelect={setSelected} />}
-            </section>
-          </div>
+                <EntityCatalog
+                  apps={catalogApps}
+                  query={catalogQuery}
+                  suggestOpen={catalogSuggestOpen}
+                  onQueryChange={(value) => {
+                    setCatalogQuery(value)
+                    setCatalogSuggestOpen(true)
+                  }}
+                  onFocusSearch={() => setCatalogSuggestOpen(true)}
+                  onBlurSearch={() => window.setTimeout(() => setCatalogSuggestOpen(false), 120)}
+                  onSelect={openDrilldown}
+                />
+                <section className="entity-result-panel">
+                  <div className="entity-panel-head">
+                    <div>
+                      <strong>{viewTitle(view)}</strong>
+                      <span>当前 {filteredStats.total.toLocaleString()} 个实体</span>
+                    </div>
+                    <button type="button" onClick={() => {
+                      setScope('all')
+                      setSelectedDomain('all')
+                      setSelectedType('all')
+                      setQuery('')
+                      setQueryDraft('')
+                    }}>重置</button>
+                  </div>
+                  {view === 'table' && <EntityTable records={filtered.slice(0, 80)} selected={selected} onSelect={setSelected} />}
+                  {view === 'topology' && (
+                    <EntityTopologyView
+                      data={data}
+                      focusedTypes={topologyTypes}
+                      selectedNode={selectedTopoNode}
+                      records={filtered.slice(0, 12)}
+                      onSelectNode={(node) => {
+                        setSelectedTopoNode(node)
+                        if (node) {
+                          const match = filtered.find((record) => stripSyntheticType(record.type) === node.type || record.label.includes(node.label.replace(/\s+\d+$/, '')))
+                          if (match) setSelected(match)
+                        }
+                      }}
+                      onFocusType={(type) => {
+                        const match = typeStats.find((item) => stripSyntheticType(item.key) === type)
+                        if (match) setSelectedType(match.key)
+                      }}
+                    />
+                  )}
+                  {view === 'health' && <EntityHealthGrid records={filtered.slice(0, 80)} onSelect={setSelected} />}
+                </section>
+              </div>
+            </>
+          )}
         </section>
       </main>
 
@@ -359,11 +453,19 @@ function FilterPanel({
 function EntityCatalog({
   apps,
   query,
+  suggestOpen,
   onQueryChange,
+  onFocusSearch,
+  onBlurSearch,
+  onSelect,
 }: {
   apps: Array<{ key: string; count: number }>
   query: string
+  suggestOpen: boolean
   onQueryChange: (value: string) => void
+  onFocusSearch: () => void
+  onBlurSearch: () => void
+  onSelect: (item: EntityDrilldown) => void
 }) {
   return (
     <section className="entity-card entity-catalog">
@@ -372,14 +474,34 @@ function EntityCatalog({
           <strong>实体目录</strong>
           <span>最近访问 0 条记录</span>
         </div>
-        <label className="entity-catalog-search">
+        <label
+          className="entity-catalog-search"
+          onMouseDown={onFocusSearch}
+          onFocus={onFocusSearch}
+        >
           <Search size={13} />
-          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="搜索" />
+          <input
+            value={query}
+            onFocus={onFocusSearch}
+            onBlur={onBlurSearch}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="搜索实体目录"
+          />
         </label>
+        {suggestOpen && <EntitySearchPopover onSelect={onSelect} />}
       </div>
       <div className="entity-app-list">
         {apps.map((item, index) => (
-          <button key={item.key} type="button">
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => onSelect({
+              label: item.key,
+              token: item.key === 'apm' ? 'apm@apm.genai.service' : item.key,
+              count: item.count,
+              kind: 'catalog',
+            })}
+          >
             <span className="entity-app-icon"><Box size={14} /></span>
             <span>
               <b>{item.key}</b>
@@ -390,6 +512,125 @@ function EntityCatalog({
         ))}
       </div>
     </section>
+  )
+}
+
+function EntitySearchPopover({ compact = false, onSelect }: { compact?: boolean; onSelect: (item: EntityDrilldown) => void }) {
+  return (
+    <div className={compact ? 'entity-search-popover compact' : 'entity-search-popover'} onMouseDown={(event) => event.preventDefault()}>
+      <div className="entity-search-popover-title">
+        <Search size={14} />
+        <strong>推荐搜索</strong>
+      </div>
+      <EntityRecommendationGroup title="推荐域" items={recommendedDomains} onSelect={onSelect} />
+      <EntityRecommendationGroup title="推荐实体" items={recommendedEntities} onSelect={onSelect} />
+      <p>点击固定标签可多选；输入关键词后搜索目录中的可见文字</p>
+    </div>
+  )
+}
+
+function EntityRecommendationGroup({
+  title,
+  items,
+  onSelect,
+}: {
+  title: string
+  items: EntityDrilldown[]
+  onSelect: (item: EntityDrilldown) => void
+}) {
+  return (
+    <div className="entity-recommendation-group">
+      <strong>{title}</strong>
+      <div>
+        {items.map((item, index) => (
+          <button key={item.token} type="button" onClick={() => onSelect(item)}>
+            <b>#{index + 1}</b>
+            <span>{item.label}</span>
+            <small>{item.count.toLocaleString()}</small>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function EntityMetricsResult({ selection }: { selection: EntityDrilldown }) {
+  return (
+    <section className="entity-metrics-result">
+      <div className="entity-metrics-table-wrap">
+        <table className="entity-metrics-table">
+          <thead>
+            <tr>
+              <th>应用名称</th>
+              <th>探针类型</th>
+              <th>语言</th>
+              <th>区域</th>
+              <th>平均模型调用次数 <span>?</span></th>
+              <th>平均模型调用错误次数 <span>?</span></th>
+              <th>平均模型调用耗时 <span>?</span></th>
+              <th>每分钟平均token消耗</th>
+            </tr>
+          </thead>
+          <tbody>
+            {appMetricsRows.map((row, index) => (
+              <tr key={row.name}>
+                <td><a href="#entity-result" onClick={(event) => event.preventDefault()}>{row.name}</a></td>
+                <td>{row.probe}</td>
+                <td>{row.language}</td>
+                <td>{row.region}</td>
+                <MetricCell color="#7069ff" value={row.calls} active={row.active} seed={index} />
+                <MetricCell color="#ef4444" value={row.errors} active={false} seed={index + 2} />
+                <MetricCell color="#5cbdb9" value={row.latency} active={row.active} seed={index + 4} />
+                <MetricCell color="#ff9a3d" value={row.tokens} active={row.active} seed={index + 6} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="entity-metrics-footer">
+        <span>每页显示：</span>
+        <button type="button">10 <ChevronDown size={14} /></button>
+        <span>总数: {selection.count || 83}</span>
+        <button type="button" disabled>上一页</button>
+        <button type="button" className="active">1</button>
+        <button type="button">2</button>
+        <button type="button">3</button>
+        <button type="button">4</button>
+        <span>...</span>
+        <button type="button">9</button>
+        <button type="button">下一页</button>
+        <span>1/9</span>
+        <span>到第</span>
+        <input aria-label="页码" />
+        <span>页</span>
+        <button type="button">确定</button>
+      </div>
+    </section>
+  )
+}
+
+function MetricCell({ color, value, active, seed }: { color: string; value: string; active: boolean; seed: number }) {
+  return (
+    <td className="entity-metric-cell">
+      <Sparkline color={color} active={active} seed={seed} />
+      <b>{value}</b>
+    </td>
+  )
+}
+
+function Sparkline({ color, active, seed }: { color: string; active: boolean; seed: number }) {
+  const points = active
+    ? Array.from({ length: 18 }, (_, index) => {
+      const x = 4 + index * 5
+      const wave = Math.sin((index + seed) * 1.3) * 11
+      const jitter = ((index * 7 + seed * 5) % 13) - 6
+      return `${x},${Math.max(8, Math.min(38, 24 + wave + jitter))}`
+    }).join(' ')
+    : '4,25 89,25'
+  return (
+    <svg className="entity-sparkline" viewBox="0 0 94 44" aria-hidden="true">
+      <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }
 
