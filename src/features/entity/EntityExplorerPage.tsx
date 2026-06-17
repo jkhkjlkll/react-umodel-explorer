@@ -691,7 +691,7 @@ function EntityTopologyView({
   const selectedId = selectedNode?.id
   const [zoom, setZoom] = useState(10)
   const zoomScale = zoom / 10
-  const sceneTransform = zoom === 10 ? 'translate(0 0)' : `translate(-430 -70) scale(${zoomScale})`
+  const sceneTransform = zoom === 10 ? 'translate(0 0)' : `translate(-2550 -425) scale(${zoomScale})`
   const zoomOut = () => setZoom((value) => value === 46 ? 10 : value)
   const zoomIn = () => setZoom((value) => value === 10 ? 46 : value)
 
@@ -739,18 +739,18 @@ function EntityTopologyView({
                 }}
               >
                 <clipPath id={`entity-reference-title-clip-${index}`}>
-                  <rect x="7.8" y="3" width={Math.max(11, item.width - 24)} height="6.2" />
+                  <rect x="7.6" y="3.2" width={Math.max(12, item.width - 22)} height="6.4" />
                 </clipPath>
                 <clipPath id={`entity-reference-subtitle-clip-${index}`}>
-                  <rect x="7.8" y={item.height - 7.2} width={Math.max(16, item.width - 10)} height="5.6" />
+                  <rect x="7.6" y={item.height - 6.8} width={Math.max(17, item.width - 9)} height="5.4" />
                 </clipPath>
                 <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx="1.8" fill={item.color} />
                 <rect className="entity-reference-card" width={item.width} height={item.height} rx="1.8" fill="none" stroke={item.color} />
-                <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="1.45" rx="0.72" fill={item.color} />
-                <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(3.2 5.2) scale(0.16)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <text x="7.8" y="7.2" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
-                <text x={item.width - 2.4} y="7.2" className="count" textAnchor="end">已接入: {item.access}</text>
-                <text x="7.8" y={item.height - 3} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
+                <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="1.55" rx="0.78" fill={item.color} />
+                <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(3.1 5.3) scale(0.17)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <text x="7.6" y="7.45" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
+                <text x={item.width - 2.2} y="7.45" className="count" textAnchor="end">已接入: {item.access}</text>
+                <text x="7.6" y={item.height - 2.8} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
               </g>
             ))}
           </g>

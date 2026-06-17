@@ -975,11 +975,11 @@
 }
 
 .entity-reference-card {
-  stroke-width: 0.54;
+  stroke-width: 0.58;
 }
 
 .entity-reference-card-fill {
-  opacity: 0.09;
+  opacity: 0.11;
 }
 
 .entity-reference-card-bar {
@@ -992,20 +992,20 @@
 
 .entity-reference-nodes text {
   fill: #2f3742;
-  font-size: 3.6px;
+  font-size: 3.75px;
   font-weight: 700;
   pointer-events: none;
 }
 
 .entity-reference-nodes text.count {
   fill: #4f5966;
-  font-size: 3.05px;
+  font-size: 3.12px;
   font-weight: 500;
 }
 
 .entity-reference-nodes text.muted {
   fill: #75808d;
-  font-size: 3.05px;
+  font-size: 3.12px;
   font-weight: 500;
 }
 
