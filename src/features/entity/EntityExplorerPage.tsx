@@ -171,6 +171,12 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
     setQuery('')
     setQueryDraft('')
   }
+  const switchView = (nextView: EntityView) => {
+    setView(nextView)
+    if (nextView !== 'table') {
+      setDrilldown(null)
+    }
+  }
 
   return (
     <div className="entity-page">
@@ -213,15 +219,32 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
           </div>
           <button className="entity-primary" type="button" onClick={runQuery}>查询</button>
           <div className="entity-view-tabs">
-            <button className={view === 'table' ? 'active' : ''} type="button" onClick={() => setView('table')}><Table2 size={14} />表格</button>
-            <button className={view === 'topology' ? 'active' : ''} type="button" onClick={() => setView('topology')}><Network size={14} />拓扑</button>
-            <button className={view === 'health' ? 'active' : ''} type="button" onClick={() => setView('health')}><HeartPulse size={14} />健康度</button>
+            <button className={view === 'table' ? 'active' : ''} type="button" onClick={() => switchView('table')}><Table2 size={14} />表格</button>
+            <button className={view === 'topology' ? 'active' : ''} type="button" onClick={() => switchView('topology')}><Network size={14} />拓扑</button>
+            <button className={view === 'health' ? 'active' : ''} type="button" onClick={() => switchView('health')}><HeartPulse size={14} />健康度</button>
           </div>
         </header>
 
         <section className="entity-content">
           {drilldown ? (
             <EntityMetricsResult selection={drilldown} />
+          ) : view === 'topology' ? (
+            <EntityTopologyView
+              data={data}
+              focusedTypes={topologyTypes}
+              selectedNode={selectedTopoNode}
+              onSelectNode={(node) => {
+                setSelectedTopoNode(node)
+                if (node) {
+                  const match = filtered.find((record) => stripSyntheticType(record.type) === node.type || record.label.includes(node.label.replace(/\s+\d+$/, '')))
+                  if (match) setSelected(match)
+                }
+              }}
+              onFocusType={(type) => {
+                const match = typeStats.find((item) => stripSyntheticType(item.key) === type)
+                if (match) setSelectedType(match.key)
+              }}
+            />
           ) : (
             <>
               <div className="entity-summary-grid">
@@ -275,25 +298,6 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
                     }}>重置</button>
                   </div>
                   {view === 'table' && <EntityTable records={filtered.slice(0, 80)} selected={selected} onSelect={setSelected} />}
-                  {view === 'topology' && (
-                    <EntityTopologyView
-                      data={data}
-                      focusedTypes={topologyTypes}
-                      selectedNode={selectedTopoNode}
-                      records={filtered.slice(0, 12)}
-                      onSelectNode={(node) => {
-                        setSelectedTopoNode(node)
-                        if (node) {
-                          const match = filtered.find((record) => stripSyntheticType(record.type) === node.type || record.label.includes(node.label.replace(/\s+\d+$/, '')))
-                          if (match) setSelected(match)
-                        }
-                      }}
-                      onFocusType={(type) => {
-                        const match = typeStats.find((item) => stripSyntheticType(item.key) === type)
-                        if (match) setSelectedType(match.key)
-                      }}
-                    />
-                  )}
                   {view === 'health' && <EntityHealthGrid records={filtered.slice(0, 80)} onSelect={setSelected} />}
                 </section>
               </div>
@@ -675,56 +679,36 @@ function EntityTopologyView({
   data,
   focusedTypes,
   selectedNode,
-  records,
   onSelectNode,
   onFocusType,
 }: {
   data: ReturnType<typeof createAliyunLikeTopologyData>
   focusedTypes: string[]
   selectedNode: TopologyNode | null
-  records: EntityRecord[]
   onSelectNode: (node: TopologyNode | null) => void
   onFocusType: (type: string) => void
 }) {
   return (
-    <div className="entity-topology-view">
-      <div className="entity-topology-toolbar">
-        <div>
-          <strong>实体拓扑</strong>
-          <span>按实体连接关系展示当前筛选结果</span>
-        </div>
-        <div className="entity-topology-tags">
-          {focusedTypes.slice(0, 4).map((type) => <span key={type}>{type}</span>)}
-        </div>
+    <section className="entity-topology-full">
+      <div className="entity-topology-zoom" aria-hidden="true">
+        <span>−</span>
+        <b>13%</b>
+        <span>＋</span>
+        <span>⌖</span>
       </div>
-      <div className="entity-topology-body">
-        <TopologyCanvas
-          data={data}
-          layoutMode="force"
-          focusedTypes={focusedTypes}
-          selectedNode={selectedNode}
-          showLabels
-          showClusterLabels
-          allowDrag={false}
-          playhead={1}
-          onSelectNode={onSelectNode}
-          onFocusType={onFocusType}
-        />
-        <div className="entity-topology-index">
-          <strong>实体列表</strong>
-          {records.map((record) => (
-            <button key={record.id} type="button" onClick={() => onFocusType(stripSyntheticType(record.type))}>
-              <i style={{ background: record.color }} />
-              <span>
-                <b>{record.label.replace(/\s+\d+$/, '')}</b>
-                <small>{record.domain} · 已接入</small>
-              </span>
-              <StatusPill status={record.status} />
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
+      <TopologyCanvas
+        data={data}
+        layoutMode="force"
+        focusedTypes={focusedTypes}
+        selectedNode={selectedNode}
+        showLabels
+        showClusterLabels
+        allowDrag={false}
+        playhead={1}
+        onSelectNode={onSelectNode}
+        onFocusType={onFocusType}
+      />
+    </section>
   )
 }
 
