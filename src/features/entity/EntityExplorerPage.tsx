@@ -13,7 +13,6 @@ import {
 } from 'lucide-react'
 import { createAliyunLikeTopologyData, type TopologyNode } from '../topology/topologyModel'
 import { resolveTopologyNodeIconPreset, TopologyPresetIcon } from '../topology/topologyIcons'
-import { TopologyCanvas } from '../topology/TopologyCanvas'
 import './entity.css'
 
 type EntityView = 'table' | 'topology' | 'health'
@@ -688,6 +687,9 @@ function EntityTopologyView({
   onSelectNode: (node: TopologyNode | null) => void
   onFocusType: (type: string) => void
 }) {
+  const cmsTopology = useMemo(() => createCmsTopologyLayout(data), [data])
+  const selectedId = selectedNode?.id
+
   return (
     <section className="entity-topology-full">
       <div className="entity-topology-zoom" aria-hidden="true">
@@ -696,18 +698,68 @@ function EntityTopologyView({
         <span>＋</span>
         <span>⌖</span>
       </div>
-      <TopologyCanvas
-        data={data}
-        layoutMode="force"
-        focusedTypes={focusedTypes}
-        selectedNode={selectedNode}
-        showLabels
-        showClusterLabels
-        allowDrag={false}
-        playhead={1}
-        onSelectNode={onSelectNode}
-        onFocusType={onFocusType}
-      />
+      <div className="entity-topology-hint">负载均衡 SLB (ServerGroup)</div>
+      <svg className="entity-cms-topology" viewBox="0 0 2500 1180" role="img" aria-label="实体拓扑关系图">
+        <defs>
+          <pattern id="entity-topology-grid" width="12" height="12" patternUnits="userSpaceOnUse">
+            <path d="M 12 0 L 0 0 0 12" fill="none" stroke="#f2f4f8" strokeWidth="1" />
+          </pattern>
+          <marker id="entity-topology-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 Z" fill="#cfd6df" />
+          </marker>
+        </defs>
+        <rect width="2500" height="1180" fill="#fff" />
+        <rect width="2500" height="1180" fill="url(#entity-topology-grid)" opacity="0.72" />
+        <g className="entity-cms-links">
+          {cmsTopology.edges.map((edge, index) => (
+            <g key={edge.id}>
+              <path
+                d={cmsEdgePath(edge)}
+                markerEnd="url(#entity-topology-arrow)"
+                className={index % 7 === 0 ? 'emphasized' : ''}
+              />
+              {index % 9 === 0 && (
+                <text x={(edge.source.x + edge.target.x) / 2} y={(edge.source.y + edge.target.y) / 2 - 4}>
+                  {edge.label}
+                </text>
+              )}
+            </g>
+          ))}
+        </g>
+        <g className="entity-cms-nodes">
+          {cmsTopology.nodes.map((item, index) => (
+            <g
+              key={item.node.id}
+              className={selectedId === item.node.id ? 'selected' : ''}
+              transform={`translate(${item.x} ${item.y})`}
+              onClick={() => {
+                onSelectNode(item.node)
+                onFocusType(item.node.type)
+              }}
+            >
+              <rect
+                width={item.width}
+                height={item.height}
+                rx="1.5"
+                fill={index % 17 === 0 ? '#fff7ee' : softenColor(item.node.color, 0.88)}
+                stroke={item.node.color}
+              />
+              <rect width={item.width} height="3" rx="1.5" fill={item.node.color} opacity="0.45" />
+              <text x="4" y="8">{cmsShortTitle(item.node.label)}</text>
+              <text x="4" y="14" className="muted">{cmsSubtitle(item.node.type)}</text>
+            </g>
+          ))}
+        </g>
+      </svg>
+      <div className="entity-cms-minimap" aria-hidden="true">
+        <svg viewBox="0 0 2500 1180">
+          <rect width="2500" height="1180" fill="#fff" />
+          {cmsTopology.nodes.map((item) => (
+            <rect key={item.node.id} x={item.x} y={item.y} width="18" height="5" fill="#cfd5dd" opacity="0.8" />
+          ))}
+          <rect x="120" y="80" width="1960" height="940" fill="none" stroke="#e1e5eb" strokeWidth="28" />
+        </svg>
+      </div>
     </section>
   )
 }
@@ -760,6 +812,121 @@ function EntityDetail({ record, onClose }: { record: EntityRecord | null; onClos
 function StatusPill({ status }: { status: EntityStatus }) {
   const meta = statusMeta[status]
   return <span className={`entity-status-pill status-${status}`}><i style={{ background: meta.color }} />{meta.label}</span>
+}
+
+interface CmsTopologyNode {
+  node: TopologyNode
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+interface CmsTopologyEdge {
+  id: string
+  source: CmsTopologyNode
+  target: CmsTopologyNode
+  label: string
+}
+
+function createCmsTopologyLayout(data: ReturnType<typeof createAliyunLikeTopologyData>) {
+  const anchorNodes = data.nodes.slice(0, 216)
+  const groups = [
+    { x: 215, y: 54, columns: 5, rows: 14, gapX: 94, gapY: 50, slant: -12 },
+    { x: 430, y: 410, columns: 8, rows: 8, gapX: 104, gapY: 50, slant: 13 },
+    { x: 720, y: 640, columns: 9, rows: 7, gapX: 100, gapY: 47, slant: 9 },
+    { x: 1020, y: 825, columns: 11, rows: 4, gapX: 92, gapY: 42, slant: -7 },
+    { x: 970, y: 240, columns: 4, rows: 6, gapX: 96, gapY: 56, slant: 18 },
+    { x: 1560, y: 920, columns: 8, rows: 4, gapX: 82, gapY: 38, slant: 5 },
+  ]
+  const nodes: CmsTopologyNode[] = []
+  let cursor = 0
+  groups.forEach((group, groupIndex) => {
+    const capacity = group.columns * group.rows
+    for (let index = 0; index < capacity && cursor < anchorNodes.length; index += 1) {
+      const column = index % group.columns
+      const row = Math.floor(index / group.columns)
+      const jitterX = ((index * 17 + groupIndex * 11) % 23) - 11
+      const jitterY = ((index * 13 + groupIndex * 7) % 17) - 8
+      nodes.push({
+        node: anchorNodes[cursor],
+        x: group.x + column * group.gapX + row * group.slant + jitterX,
+        y: group.y + row * group.gapY + Math.sin((index + groupIndex) * 0.9) * 9 + jitterY,
+        width: 42 + (index % 5 === 0 ? 8 : 0),
+        height: 16,
+      })
+      cursor += 1
+    }
+  })
+
+  const byId = new Map(nodes.map((item) => [item.node.id, item]))
+  const edges: CmsTopologyEdge[] = []
+  data.edges.forEach((edge) => {
+    const source = byId.get(edge.source)
+    const target = byId.get(edge.target)
+    if (!source || !target || edges.length > 190) return
+    edges.push({
+      id: edge.id,
+      source,
+      target,
+      label: edge.type === 'contains' ? '包含' : '依赖',
+    })
+  })
+  for (let index = 4; index < nodes.length && edges.length < 300; index += 1) {
+    const targetIndex = Math.max(0, index - 1 - (index % 7))
+    edges.push({
+      id: `cms-extra-${index}`,
+      source: nodes[index],
+      target: nodes[targetIndex],
+      label: index % 2 === 0 ? '关联' : '包含',
+    })
+  }
+  for (let index = 12; index < nodes.length && edges.length < 330; index += 8) {
+    const targetIndex = Math.max(0, index - 28)
+    edges.push({
+      id: `cms-long-${index}`,
+      source: nodes[index],
+      target: nodes[targetIndex],
+      label: '依赖',
+    })
+  }
+  return { nodes, edges }
+}
+
+function cmsEdgePath(edge: CmsTopologyEdge) {
+  const sourceX = edge.source.x + edge.source.width / 2
+  const sourceY = edge.source.y + edge.source.height / 2
+  const targetX = edge.target.x + edge.target.width / 2
+  const targetY = edge.target.y + edge.target.height / 2
+  const dx = targetX - sourceX
+  const curve = Math.max(28, Math.min(180, Math.abs(dx) * 0.32))
+  return `M ${sourceX} ${sourceY} C ${sourceX + curve} ${sourceY}, ${targetX - curve} ${targetY}, ${targetX} ${targetY}`
+}
+
+function cmsShortTitle(label: string) {
+  const clean = label.replace(/\s+\d+$/, '')
+  if (clean.includes('Kubernetes')) return clean.replace('容器服务 Kubernetes', 'Kubernetes')
+  if (clean.includes('云原生API网关')) return '云原生API网关'
+  if (clean.includes('负载均衡')) return clean.replace('负载均衡 ', '负载均衡')
+  return clean.length > 12 ? `${clean.slice(0, 12)}...` : clean
+}
+
+function cmsSubtitle(type: string) {
+  if (type.includes('SLB')) return 'ServerGroup'
+  if (type.includes('Kubernetes')) return 'Cluster'
+  if (type.includes('ECS')) return 'Instance'
+  if (type.includes('PAI')) return 'Workspace'
+  if (type.includes('Kafka')) return 'Topic'
+  return type.length > 14 ? `${type.slice(0, 14)}...` : type
+}
+
+function softenColor(color: string, amount: number) {
+  const hex = color.replace('#', '')
+  const r = parseInt(hex.slice(0, 2), 16)
+  const g = parseInt(hex.slice(2, 4), 16)
+  const b = parseInt(hex.slice(4, 6), 16)
+  const mix = (value: number) => Math.round(value + (255 - value) * amount)
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`
 }
 
 function createEntityRecords(nodes: TopologyNode[]): EntityRecord[] {

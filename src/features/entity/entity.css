@@ -887,28 +887,6 @@
   background: #fff;
 }
 
-.entity-topology-full .topo-canvas-shell {
-  position: absolute;
-  inset: 0;
-}
-
-.entity-topology-full .topo-minimap {
-  right: 24px;
-  bottom: 22px;
-  padding: 10px;
-  border: 0;
-  border-radius: 0;
-  background: rgba(247, 247, 247, 0.94);
-  box-shadow: none;
-}
-
-.entity-topology-full .topo-minimap canvas {
-  width: 196px !important;
-  height: 118px !important;
-  border: 0;
-  background: #fff;
-}
-
 .entity-topology-zoom {
   position: absolute;
   left: 18px;
@@ -949,6 +927,97 @@
 .entity-topology-zoom b {
   color: #687386;
   font-size: 13px;
+}
+
+.entity-cms-topology {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.entity-cms-links path {
+  fill: none;
+  stroke: #cbd3dc;
+  stroke-width: 1;
+  stroke-opacity: 0.52;
+}
+
+.entity-cms-links path.emphasized {
+  stroke-opacity: 0.68;
+  stroke-width: 1.25;
+}
+
+.entity-cms-links text {
+  fill: #8d96a6;
+  font-size: 7px;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+}
+
+.entity-cms-nodes g {
+  cursor: pointer;
+}
+
+.entity-cms-nodes g:hover rect:first-child,
+.entity-cms-nodes g.selected rect:first-child {
+  filter: drop-shadow(0 2px 5px rgba(49, 74, 116, 0.22));
+  stroke-width: 1.8;
+}
+
+.entity-cms-nodes rect:first-child {
+  stroke-width: 1.15;
+}
+
+.entity-cms-nodes text {
+  fill: #405064;
+  font-size: 5.8px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.entity-cms-nodes text.muted {
+  fill: #8c98a9;
+  font-size: 5px;
+  font-weight: 600;
+}
+
+.entity-topology-hint {
+  position: absolute;
+  left: 132px;
+  top: 64%;
+  z-index: 11;
+  min-width: 268px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid #c9ced5;
+  border-radius: 2px;
+  background: linear-gradient(#f4f6f8, #e6e9ed);
+  color: #485160;
+  box-shadow: 0 2px 5px rgba(31, 45, 75, 0.18);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.entity-cms-minimap {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  z-index: 9;
+  width: 254px;
+  height: 160px;
+  padding: 28px 18px 18px;
+  background: rgba(244, 244, 244, 0.94);
+}
+
+.entity-cms-minimap svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #fff;
 }
 
 .entity-health-grid {
