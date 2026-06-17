@@ -885,6 +885,7 @@
   height: 100%;
   overflow: hidden;
   background: #fff;
+  overscroll-behavior: contain;
 }
 
 .entity-topology-zoom {

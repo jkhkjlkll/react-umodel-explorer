@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { type WheelEvent, useMemo, useState } from 'react'
 import {
   Box,
   ChevronDown,
@@ -691,12 +691,22 @@ function EntityTopologyView({
   const selectedId = selectedNode?.id
   const [zoom, setZoom] = useState(10)
   const zoomScale = zoom / 10
-  const sceneTransform = zoom === 10 ? 'translate(0 0)' : `translate(-2550 -425) scale(${zoomScale})`
-  const zoomOut = () => setZoom((value) => value === 46 ? 10 : value)
-  const zoomIn = () => setZoom((value) => value === 10 ? 46 : value)
+  const zoomProgress = (zoom - 10) / 36
+  const sceneX = -2550 * zoomProgress
+  const sceneY = -425 * zoomProgress
+  const sceneTransform = `translate(${sceneX} ${sceneY}) scale(${zoomScale})`
+  const changeZoom = (direction: 1 | -1) => {
+    setZoom((value) => Math.max(10, Math.min(46, value + direction * 6)))
+  }
+  const zoomOut = () => changeZoom(-1)
+  const zoomIn = () => changeZoom(1)
+  const handleWheelZoom = (event: WheelEvent<HTMLElement>) => {
+    event.preventDefault()
+    changeZoom(event.deltaY < 0 ? 1 : -1)
+  }
 
   return (
-    <section className="entity-topology-full">
+    <section className="entity-topology-full" onWheel={handleWheelZoom}>
       <div className="entity-topology-zoom">
         <button className="entity-topology-zoom-action" type="button" data-zoom-action="out" aria-label="缩小拓扑" onClick={zoomOut}>−</button>
         <b>{zoom}%</b>
