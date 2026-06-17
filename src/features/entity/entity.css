@@ -951,18 +951,18 @@
 
 .entity-reference-links path {
   fill: none;
-  stroke: #b8bec7;
-  stroke-width: 0.42;
-  stroke-opacity: 0.66;
+  stroke: #aeb5bf;
+  stroke-width: 0.48;
+  stroke-opacity: 0.72;
 }
 
 .entity-reference-links text {
-  fill: #636b75;
-  font-size: 3.8px;
+  fill: #4f5965;
+  font-size: 4px;
   font-weight: 700;
   paint-order: stroke;
   stroke: #fff;
-  stroke-width: 1.7px;
+  stroke-width: 1.9px;
 }
 
 .entity-reference-nodes g {
@@ -975,11 +975,11 @@
 }
 
 .entity-reference-card {
-  stroke-width: 0.58;
+  stroke-width: 0.62;
 }
 
 .entity-reference-card-fill {
-  opacity: 0.11;
+  opacity: 0.13;
 }
 
 .entity-reference-card-bar {
@@ -991,33 +991,33 @@
 }
 
 .entity-reference-nodes text {
-  fill: #2f3742;
+  fill: #202a36;
   font-size: 3.75px;
   font-weight: 700;
   pointer-events: none;
 }
 
 .entity-reference-nodes text.count {
-  fill: #4f5966;
+  fill: #3f4854;
   font-size: 3.12px;
   font-weight: 500;
 }
 
 .entity-reference-nodes text.muted {
-  fill: #75808d;
+  fill: #687386;
   font-size: 3.12px;
   font-weight: 500;
 }
 
 .entity-cms-minimap {
   position: absolute;
-  right: 34px;
-  bottom: 30px;
+  right: 28px;
+  bottom: 26px;
   z-index: 9;
-  width: 330px;
-  height: 190px;
-  padding: 34px 22px 22px;
-  background: rgba(241, 241, 241, 0.96);
+  width: 350px;
+  height: 206px;
+  padding: 34px 24px 22px;
+  background: rgba(240, 240, 240, 0.97);
 }
 
 .entity-cms-minimap svg {
