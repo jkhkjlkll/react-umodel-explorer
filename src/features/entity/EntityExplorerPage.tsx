@@ -737,16 +737,13 @@ function EntityTopologyView({
                 onFocusType(item.node.type)
               }}
             >
-              <rect
-                width={item.width}
-                height={item.height}
-                rx="1.5"
-                fill={index % 17 === 0 ? '#fff7ee' : softenColor(item.node.color, 0.88)}
-                stroke={item.node.color}
-              />
-              <rect width={item.width} height="3" rx="1.5" fill={item.node.color} opacity="0.45" />
-              <text x="4" y="8">{cmsShortTitle(item.node.label)}</text>
-              <text x="4" y="14" className="muted">{cmsSubtitle(item.node.type)}</text>
+              <rect className="entity-cms-card-bg" width={item.width} height={item.height} rx="3" fill="#fff" stroke={item.node.color} />
+              <rect className="entity-cms-card-top" x="35" width={Math.max(24, item.width - 70)} height="3" rx="1.5" fill={item.node.color} />
+              <circle cx="12" cy="17" r="6.2" fill={softenColor(item.node.color, 0.9)} stroke={item.node.color} />
+              <path d={cmsIconPath(item.node.type)} transform="translate(8 13) scale(0.55)" fill="none" stroke={item.node.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <text x="24" y="16" className="title">{cmsShortTitle(item.node.label)}</text>
+              <text x={item.width - 10} y="16" className="count" textAnchor="end">已接入: {cmsAccessCount(index, item.node)}</text>
+              <text x="24" y={item.height - 9} className="muted">{cmsSubtitle(item.node.type)}</text>
             </g>
           ))}
         </g>
@@ -831,14 +828,7 @@ interface CmsTopologyEdge {
 
 function createCmsTopologyLayout(data: ReturnType<typeof createAliyunLikeTopologyData>) {
   const anchorNodes = data.nodes.slice(0, 216)
-  const groups = [
-    { x: 215, y: 54, columns: 5, rows: 14, gapX: 94, gapY: 50, slant: -12 },
-    { x: 430, y: 410, columns: 8, rows: 8, gapX: 104, gapY: 50, slant: 13 },
-    { x: 720, y: 640, columns: 9, rows: 7, gapX: 100, gapY: 47, slant: 9 },
-    { x: 1020, y: 825, columns: 11, rows: 4, gapX: 92, gapY: 42, slant: -7 },
-    { x: 970, y: 240, columns: 4, rows: 6, gapX: 96, gapY: 56, slant: 18 },
-    { x: 1560, y: 920, columns: 8, rows: 4, gapX: 82, gapY: 38, slant: 5 },
-  ]
+  const groups = cmsLayoutGroups()
   const nodes: CmsTopologyNode[] = []
   let cursor = 0
   groups.forEach((group, groupIndex) => {
@@ -846,14 +836,14 @@ function createCmsTopologyLayout(data: ReturnType<typeof createAliyunLikeTopolog
     for (let index = 0; index < capacity && cursor < anchorNodes.length; index += 1) {
       const column = index % group.columns
       const row = Math.floor(index / group.columns)
-      const jitterX = ((index * 17 + groupIndex * 11) % 23) - 11
-      const jitterY = ((index * 13 + groupIndex * 7) % 17) - 8
+      const jitterX = ((index * 17 + groupIndex * 11) % 19) - 9
+      const jitterY = ((index * 13 + groupIndex * 7) % 13) - 6
       nodes.push({
         node: anchorNodes[cursor],
         x: group.x + column * group.gapX + row * group.slant + jitterX,
         y: group.y + row * group.gapY + Math.sin((index + groupIndex) * 0.9) * 9 + jitterY,
-        width: 42 + (index % 5 === 0 ? 8 : 0),
-        height: 16,
+        width: group.width,
+        height: group.height,
       })
       cursor += 1
     }
@@ -893,14 +883,27 @@ function createCmsTopologyLayout(data: ReturnType<typeof createAliyunLikeTopolog
   return { nodes, edges }
 }
 
+function cmsLayoutGroups() {
+  return [
+    { x: 610, y: 62, columns: 4, rows: 1, gapX: 236, gapY: 78, slant: 0, width: 180, height: 60 },
+    { x: 210, y: 205, columns: 5, rows: 4, gapX: 200, gapY: 130, slant: -16, width: 166, height: 56 },
+    { x: 640, y: 485, columns: 5, rows: 4, gapX: 220, gapY: 128, slant: 14, width: 176, height: 58 },
+    { x: 930, y: 705, columns: 5, rows: 3, gapX: 230, gapY: 126, slant: 0, width: 176, height: 58 },
+    { x: 1510, y: 725, columns: 4, rows: 3, gapX: 210, gapY: 126, slant: 8, width: 176, height: 58 },
+    { x: 1550, y: 955, columns: 7, rows: 2, gapX: 166, gapY: 72, slant: 4, width: 142, height: 46 },
+    { x: 132, y: 912, columns: 4, rows: 2, gapX: 228, gapY: 120, slant: -6, width: 176, height: 58 },
+  ]
+}
+
 function cmsEdgePath(edge: CmsTopologyEdge) {
   const sourceX = edge.source.x + edge.source.width / 2
   const sourceY = edge.source.y + edge.source.height / 2
   const targetX = edge.target.x + edge.target.width / 2
   const targetY = edge.target.y + edge.target.height / 2
   const dx = targetX - sourceX
-  const curve = Math.max(28, Math.min(180, Math.abs(dx) * 0.32))
-  return `M ${sourceX} ${sourceY} C ${sourceX + curve} ${sourceY}, ${targetX - curve} ${targetY}, ${targetX} ${targetY}`
+  const curve = Math.max(60, Math.min(260, Math.abs(dx) * 0.42))
+  const lift = Math.max(-180, Math.min(160, (targetY - sourceY) * 0.18))
+  return `M ${sourceX} ${sourceY} C ${sourceX + curve} ${sourceY + lift}, ${targetX - curve} ${targetY - lift}, ${targetX} ${targetY}`
 }
 
 function cmsShortTitle(label: string) {
@@ -918,6 +921,21 @@ function cmsSubtitle(type: string) {
   if (type.includes('PAI')) return 'Workspace'
   if (type.includes('Kafka')) return 'Topic'
   return type.length > 14 ? `${type.slice(0, 14)}...` : type
+}
+
+function cmsAccessCount(index: number, node: TopologyNode) {
+  const relationCount = Number(node.properties.relationCount || 0)
+  if (node.type.includes('应用')) return 220
+  if (node.type.includes('接口')) return 164
+  return Math.max(1, relationCount + (index % 11))
+}
+
+function cmsIconPath(type: string) {
+  if (type.includes('数据库') || type.includes('RDS') || type.includes('ClickHouse')) return 'M2 4 C2 2 14 2 14 4 V12 C14 14 2 14 2 12 Z M2 4 C2 6 14 6 14 4 M2 8 C2 10 14 10 14 8'
+  if (type.includes('Kafka') || type.includes('消息')) return 'M8 2 L14 5.5 V12.5 L8 16 L2 12.5 V5.5 Z M8 2 V8 M2 5.5 L8 8 L14 5.5'
+  if (type.includes('API') || type.includes('接口')) return 'M3 8 H13 M8 3 V13 M4 4 L12 12 M12 4 L4 12'
+  if (type.includes('Agent') || type.includes('模型') || type.includes('工具')) return 'M3 12 C4 6 12 6 13 12 M5 12 H11 M8 3 V6 M5 15 L11 15'
+  return 'M3 3 H13 V13 H3 Z M5 6 H11 M5 9 H11'
 }
 
 function softenColor(color: string, amount: number) {
