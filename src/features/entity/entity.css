@@ -936,24 +936,25 @@
   left: 0;
   top: 0;
   width: 100%;
-  height: 100%;
+  height: auto;
+  min-height: 100%;
   display: block;
 }
 
 .entity-reference-links path {
   fill: none;
-  stroke: #aeb5be;
-  stroke-width: 1.1;
-  stroke-opacity: 0.66;
+  stroke: #a9b0ba;
+  stroke-width: 0.95;
+  stroke-opacity: 0.76;
 }
 
 .entity-reference-links text {
   fill: #5b6470;
-  font-size: 9px;
+  font-size: 7px;
   font-weight: 700;
   paint-order: stroke;
   stroke: #fff;
-  stroke-width: 4px;
+  stroke-width: 3px;
 }
 
 .entity-reference-nodes g {
@@ -962,12 +963,11 @@
 
 .entity-reference-nodes g:hover .entity-reference-card,
 .entity-reference-nodes g.selected .entity-reference-card {
-  filter: drop-shadow(0 2px 5px rgba(49, 74, 116, 0.18));
-  stroke-width: 1.8;
+  stroke-width: 1.35;
 }
 
 .entity-reference-card {
-  stroke-width: 1.15;
+  stroke-width: 0.78;
 }
 
 .entity-reference-card-bar {
@@ -976,20 +976,20 @@
 
 .entity-reference-nodes text {
   fill: #2d3540;
-  font-size: 9px;
+  font-size: 6.2px;
   font-weight: 700;
   pointer-events: none;
 }
 
 .entity-reference-nodes text.count {
   fill: #4f5966;
-  font-size: 7.5px;
+  font-size: 5.6px;
   font-weight: 500;
 }
 
 .entity-reference-nodes text.muted {
   fill: #6f7987;
-  font-size: 7.2px;
+  font-size: 5.4px;
   font-weight: 500;
 }
 

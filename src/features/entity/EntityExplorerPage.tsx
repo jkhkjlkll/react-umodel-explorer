@@ -709,46 +709,50 @@ function EntityTopologyView({
         </defs>
         <rect width="2478" height="1238" fill="#fff" />
         <rect width="2478" height="1238" fill="url(#entity-reference-dot-grid)" opacity="0.52" />
-        <g className="entity-reference-links">
-          {referenceTopology.edges.map((edge, index) => (
-            <g key={edge.id}>
-              <path d={referenceEdgePath(edge)} markerEnd="url(#entity-reference-arrow)" />
-              {edge.showLabel && (
-                <text x={(edge.source.x + edge.target.x) / 2} y={(edge.source.y + edge.target.y) / 2 - 4}>
-                  {edge.label}
-                </text>
-              )}
-            </g>
-          ))}
-        </g>
-        <g className="entity-reference-nodes">
-          {referenceTopology.nodes.map((item) => (
-            <g
-              key={item.node.id}
-              className={selectedId === item.node.id ? 'selected' : ''}
-              transform={`translate(${item.x} ${item.y})`}
-              onClick={() => {
-                onSelectNode(item.node)
-                onFocusType(item.node.type)
-              }}
-            >
-              <rect className="entity-reference-card" width={item.width} height={item.height} rx="2.5" fill="#fff" stroke={item.color} />
-              <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="3" rx="1.5" fill={item.color} />
-              <path d={referenceIconPath(item.title)} transform="translate(9 12) scale(0.42)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <text x="23" y="17" className="title">{item.title}</text>
-              <text x={item.width - 8} y="17" className="count" textAnchor="end">已接入: {item.access}</text>
-              <text x="23" y={item.height - 7} className="muted">{item.subtitle}</text>
-            </g>
-          ))}
+        <g className="entity-reference-scene" transform="translate(100 86) scale(0.72)">
+          <g className="entity-reference-links">
+            {referenceTopology.edges.map((edge) => (
+              <g key={edge.id}>
+                <path d={referenceEdgePath(edge)} markerEnd="url(#entity-reference-arrow)" />
+                {edge.showLabel && (
+                  <text x={(edge.source.x + edge.target.x) / 2} y={(edge.source.y + edge.target.y) / 2 - 4}>
+                    {edge.label}
+                  </text>
+                )}
+              </g>
+            ))}
+          </g>
+          <g className="entity-reference-nodes">
+            {referenceTopology.nodes.map((item) => (
+              <g
+                key={item.node.id}
+                className={selectedId === item.node.id ? 'selected' : ''}
+                transform={`translate(${item.x} ${item.y})`}
+                onClick={() => {
+                  onSelectNode(item.node)
+                  onFocusType(item.node.type)
+                }}
+              >
+                <rect className="entity-reference-card" width={item.width} height={item.height} rx="2.5" fill="#fff" stroke={item.color} />
+                <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="2" rx="1" fill={item.color} />
+                <path d={referenceIconPath(item.title)} transform="translate(6.5 8.5) scale(0.3)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <text x="16" y="12" className="title">{item.title}</text>
+                <text x={item.width - 5} y="12" className="count" textAnchor="end">已接入: {item.access}</text>
+                <text x="16" y={item.height - 5} className="muted">{item.subtitle}</text>
+              </g>
+            ))}
+          </g>
         </g>
       </svg>
       <div className="entity-cms-minimap" aria-hidden="true">
         <svg viewBox="0 0 2478 1238">
           <rect width="2478" height="1238" fill="#fff" />
-          {referenceTopology.nodes.map((item) => (
-            <rect key={item.node.id} x={item.x} y={item.y} width="12" height="4" fill="#cfd5dd" opacity="0.75" />
-          ))}
-          <rect x="620" y="125" width="950" height="660" fill="none" stroke="#e0e5ec" strokeWidth="34" />
+          <g transform="translate(100 86) scale(0.72)">
+            {referenceTopology.nodes.map((item) => (
+              <rect key={item.node.id} x={item.x} y={item.y} width="12" height="4" fill="#cfd5dd" opacity="0.75" />
+            ))}
+          </g>
+          <rect x="430" y="80" width="1080" height="720" fill="none" stroke="#e0e5ec" strokeWidth="34" />
         </svg>
       </div>
     </section>
@@ -834,13 +838,13 @@ function createReferenceStyleTopology(data: ReturnType<typeof createAliyunLikeTo
       node,
       x: template.x,
       y: template.y,
-      width: template.width || 112,
-      height: template.height || 42,
+      width: template.width || 82,
+      height: template.height || 26,
       title: template.title,
       subtitle: template.subtitle,
       color: template.color,
       access: template.access,
-      barWidth: Math.max(36, Math.min(52, (template.width || 112) * 0.38)),
+      barWidth: Math.max(24, Math.min(42, (template.width || 82) * 0.38)),
     }
   })
   const edges: ReferenceTopologyEdge[] = []
@@ -931,25 +935,25 @@ function referenceTopologyCoordinates() {
     { x: 550, y: 790 }, { x: 720, y: 785 }, { x: 920, y: 778 },
     { x: 1115, y: 780 }, { x: 1308, y: 778 }, { x: 1488, y: 770 },
     { x: 1665, y: 760 }, { x: 1840, y: 748 }, { x: 410, y: 930 },
-    { x: 585, y: 920 }, { x: 760, y: 905 }, { x: 930, y: 900, width: 124 },
+    { x: 585, y: 920 }, { x: 760, y: 905 }, { x: 930, y: 900, width: 94 },
     { x: 1125, y: 932 }, { x: 1305, y: 905 }, { x: 1500, y: 918 },
     { x: 1695, y: 895 }, { x: 550, y: 1065 }, { x: 730, y: 1045 },
-    { x: 910, y: 1030 }, { x: 1085, y: 1020, width: 124 }, { x: 1275, y: 1038 },
+    { x: 910, y: 1030 }, { x: 1085, y: 1020, width: 94 }, { x: 1275, y: 1038 },
     { x: 1460, y: 1020 }, { x: 1650, y: 1002 }, { x: 1840, y: 990 },
-    { x: 670, y: 1160, width: 92, height: 34 }, { x: 840, y: 1150, width: 92, height: 34 },
-    { x: 1010, y: 1142, width: 92, height: 34 }, { x: 1180, y: 1135, width: 92, height: 34 },
-    { x: 1350, y: 1138, width: 92, height: 34 }, { x: 1520, y: 1148, width: 92, height: 34 },
-    { x: 1690, y: 1160, width: 92, height: 34 }, { x: 1120, y: 1012, width: 124 },
-    { x: 1000, y: 790, width: 124 }, { x: 1185, y: 790 }, { x: 1370, y: 790 },
+    { x: 670, y: 1160, width: 68, height: 24 }, { x: 840, y: 1150, width: 68, height: 24 },
+    { x: 1010, y: 1142, width: 68, height: 24 }, { x: 1180, y: 1135, width: 68, height: 24 },
+    { x: 1350, y: 1138, width: 68, height: 24 }, { x: 1520, y: 1148, width: 68, height: 24 },
+    { x: 1690, y: 1160, width: 68, height: 24 }, { x: 1120, y: 1012, width: 94 },
+    { x: 1000, y: 790, width: 94 }, { x: 1185, y: 790 }, { x: 1370, y: 790 },
     { x: 1555, y: 780 }, { x: 970, y: 930 }, { x: 1150, y: 952 },
     { x: 1325, y: 965 }, { x: 1510, y: 955 }, { x: 795, y: 1050 },
     { x: 975, y: 1085 }, { x: 1155, y: 1108 }, { x: 1340, y: 1112 },
     { x: 1525, y: 1098 }, { x: 1710, y: 1070 }, { x: 1900, y: 1048 },
-    { x: 2055, y: 1030 }, { x: 2200, y: 1020 }, { x: 1550, y: 930, width: 84, height: 32 },
-    { x: 1675, y: 930, width: 84, height: 32 }, { x: 1800, y: 930, width: 84, height: 32 },
-    { x: 1560, y: 1005, width: 84, height: 32 }, { x: 1685, y: 1005, width: 84, height: 32 },
-    { x: 1810, y: 1005, width: 84, height: 32 }, { x: 1570, y: 1080, width: 84, height: 32 },
-    { x: 1695, y: 1080, width: 84, height: 32 }, { x: 1820, y: 1080, width: 84, height: 32 },
+    { x: 2055, y: 1030 }, { x: 2200, y: 1020 }, { x: 1550, y: 930, width: 64, height: 23 },
+    { x: 1675, y: 930, width: 64, height: 23 }, { x: 1800, y: 930, width: 64, height: 23 },
+    { x: 1560, y: 1005, width: 64, height: 23 }, { x: 1685, y: 1005, width: 64, height: 23 },
+    { x: 1810, y: 1005, width: 64, height: 23 }, { x: 1570, y: 1080, width: 64, height: 23 },
+    { x: 1695, y: 1080, width: 64, height: 23 }, { x: 1820, y: 1080, width: 64, height: 23 },
     { x: 1740, y: 885 }, { x: 1880, y: 885 }, { x: 2020, y: 885 },
     { x: 1760, y: 960 }, { x: 1900, y: 960 }, { x: 2040, y: 960 },
     { x: 1780, y: 1038 }, { x: 1920, y: 1038 }, { x: 2060, y: 1038 },
