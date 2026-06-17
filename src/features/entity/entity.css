@@ -906,7 +906,7 @@
   font-weight: 500;
 }
 
-.entity-topology-zoom span,
+.entity-topology-zoom button,
 .entity-topology-zoom b {
   min-width: 34px;
   display: inline-flex;
@@ -914,15 +914,23 @@
   justify-content: center;
 }
 
-.entity-topology-zoom span {
+.entity-topology-zoom button {
+  height: 34px;
+  border: 0;
+  background: transparent;
   color: #69717d;
+  cursor: pointer;
   font-size: 27px;
   font-weight: 300;
   line-height: 1;
 }
 
-.entity-topology-zoom span:last-child {
+.entity-topology-zoom button:last-child {
   font-size: 19px;
+}
+
+.entity-topology-zoom button:hover {
+  color: #1677ff;
 }
 
 .entity-topology-zoom b {
@@ -963,11 +971,15 @@
 
 .entity-reference-nodes g:hover .entity-reference-card,
 .entity-reference-nodes g.selected .entity-reference-card {
-  stroke-width: 0.85;
+  stroke-width: 0.9;
 }
 
 .entity-reference-card {
-  stroke-width: 0.48;
+  stroke-width: 0.54;
+}
+
+.entity-reference-card-fill {
+  opacity: 0.09;
 }
 
 .entity-reference-card-bar {
@@ -975,25 +987,25 @@
 }
 
 .entity-reference-card-icon {
-  opacity: 0.86;
+  opacity: 0.95;
 }
 
 .entity-reference-nodes text {
   fill: #2f3742;
-  font-size: 3.55px;
+  font-size: 3.6px;
   font-weight: 700;
   pointer-events: none;
 }
 
 .entity-reference-nodes text.count {
   fill: #4f5966;
-  font-size: 3px;
+  font-size: 3.05px;
   font-weight: 500;
 }
 
 .entity-reference-nodes text.muted {
   fill: #75808d;
-  font-size: 3px;
+  font-size: 3.05px;
   font-weight: 500;
 }
 

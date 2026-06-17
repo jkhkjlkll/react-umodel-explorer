@@ -689,14 +689,19 @@ function EntityTopologyView({
 }) {
   const referenceTopology = useMemo(() => createReferenceStyleTopology(data), [data])
   const selectedId = selectedNode?.id
+  const [zoom, setZoom] = useState(10)
+  const zoomScale = zoom / 10
+  const sceneTransform = zoom === 10 ? 'translate(0 0)' : `translate(-430 -70) scale(${zoomScale})`
+  const zoomOut = () => setZoom((value) => value === 46 ? 10 : value)
+  const zoomIn = () => setZoom((value) => value === 10 ? 46 : value)
 
   return (
     <section className="entity-topology-full">
-      <div className="entity-topology-zoom" aria-hidden="true">
-        <span>−</span>
-        <b>10%</b>
-        <span>＋</span>
-        <span>⌖</span>
+      <div className="entity-topology-zoom">
+        <button className="entity-topology-zoom-action" type="button" data-zoom-action="out" aria-label="缩小拓扑" onClick={zoomOut}>−</button>
+        <b>{zoom}%</b>
+        <button className="entity-topology-zoom-action" type="button" data-zoom-action="in" aria-label="放大拓扑" onClick={zoomIn}>＋</button>
+        <button className="entity-topology-zoom-action" type="button" data-zoom-action="fit" aria-label="适应画布" onClick={() => setZoom(10)}>⌖</button>
       </div>
       <svg className="entity-cms-reference-graph" viewBox="0 0 2478 1238" preserveAspectRatio="xMinYMin meet" role="img" aria-label="实体拓扑关系图">
         <defs>
@@ -709,7 +714,7 @@ function EntityTopologyView({
         </defs>
         <rect width="2478" height="1238" fill="#fff" />
         <rect width="2478" height="1238" fill="url(#entity-reference-dot-grid)" opacity="0.52" />
-        <g className="entity-reference-scene" transform="translate(0 0)">
+        <g className="entity-reference-scene" transform={sceneTransform}>
           <g className="entity-reference-links">
             {referenceTopology.edges.map((edge) => (
               <g key={edge.id}>
@@ -739,7 +744,8 @@ function EntityTopologyView({
                 <clipPath id={`entity-reference-subtitle-clip-${index}`}>
                   <rect x="7.8" y={item.height - 7.2} width={Math.max(16, item.width - 10)} height="5.6" />
                 </clipPath>
-                <rect className="entity-reference-card" width={item.width} height={item.height} rx="1.8" fill="#fff" stroke={item.color} />
+                <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx="1.8" fill={item.color} />
+                <rect className="entity-reference-card" width={item.width} height={item.height} rx="1.8" fill="none" stroke={item.color} />
                 <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="1.45" rx="0.72" fill={item.color} />
                 <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(3.2 5.2) scale(0.16)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 <text x="7.8" y="7.2" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
