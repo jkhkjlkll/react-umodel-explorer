@@ -739,7 +739,7 @@ function EntityTopologyView({
                 }}
               >
                 <clipPath id={`entity-reference-title-clip-${index}`}>
-                  <rect x="7.6" y="3.2" width={Math.max(11, item.width - 25)} height="6.4" />
+                  <rect x="7.6" y="3.2" width={Math.max(12, item.width - 26)} height="6.4" />
                 </clipPath>
                 <clipPath id={`entity-reference-subtitle-clip-${index}`}>
                   <rect x="7.6" y={item.height - 6.8} width={Math.max(17, item.width - 9)} height="5.4" />
@@ -861,13 +861,13 @@ function createReferenceStyleTopology(data: ReturnType<typeof createAliyunLikeTo
       node,
       x: template.x,
       y: template.y,
-      width: template.width || 40,
+      width: template.width || 43,
       height: template.height || 18,
       title: template.title,
       subtitle: template.subtitle,
       color: template.color,
       access: template.access,
-      barWidth: Math.max(15, Math.min(24, (template.width || 40) * 0.38)),
+      barWidth: Math.max(16, Math.min(25, (template.width || 43) * 0.38)),
     }
   })
   const edges: ReferenceTopologyEdge[] = []
