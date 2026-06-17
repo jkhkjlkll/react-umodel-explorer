@@ -694,22 +694,22 @@ function EntityTopologyView({
     <section className="entity-topology-full">
       <div className="entity-topology-zoom" aria-hidden="true">
         <span>−</span>
-        <b>13%</b>
+        <b>10%</b>
         <span>＋</span>
         <span>⌖</span>
       </div>
       <div className="entity-topology-hint">负载均衡 SLB (ServerGroup)</div>
-      <svg className="entity-cms-topology" viewBox="0 0 2500 1180" role="img" aria-label="实体拓扑关系图">
+      <svg className="entity-cms-topology" viewBox="0 0 5600 2600" preserveAspectRatio="xMinYMin meet" role="img" aria-label="实体拓扑关系图">
         <defs>
           <pattern id="entity-topology-grid" width="12" height="12" patternUnits="userSpaceOnUse">
-            <path d="M 12 0 L 0 0 0 12" fill="none" stroke="#f2f4f8" strokeWidth="1" />
+            <circle cx="1" cy="1" r="1" fill="#e9edf3" />
           </pattern>
           <marker id="entity-topology-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-            <path d="M0,0 L7,3.5 L0,7 Z" fill="#cfd6df" />
+            <path d="M0,0 L7,3.5 L0,7 Z" fill="#b9c1cc" />
           </marker>
         </defs>
-        <rect width="2500" height="1180" fill="#fff" />
-        <rect width="2500" height="1180" fill="url(#entity-topology-grid)" opacity="0.72" />
+        <rect width="5600" height="2600" fill="#fff" />
+        <rect width="5600" height="2600" fill="url(#entity-topology-grid)" opacity="0.92" />
         <g className="entity-cms-links">
           {cmsTopology.edges.map((edge, index) => (
             <g key={edge.id}>
@@ -718,7 +718,7 @@ function EntityTopologyView({
                 markerEnd="url(#entity-topology-arrow)"
                 className={index % 7 === 0 ? 'emphasized' : ''}
               />
-              {index % 9 === 0 && (
+              {edge.showLabel && (
                 <text x={(edge.source.x + edge.target.x) / 2} y={(edge.source.y + edge.target.y) / 2 - 4}>
                   {edge.label}
                 </text>
@@ -737,24 +737,23 @@ function EntityTopologyView({
                 onFocusType(item.node.type)
               }}
             >
-              <rect className="entity-cms-card-bg" width={item.width} height={item.height} rx="3" fill="#fff" stroke={item.node.color} />
-              <rect className="entity-cms-card-top" x="35" width={Math.max(24, item.width - 70)} height="3" rx="1.5" fill={item.node.color} />
-              <circle cx="12" cy="17" r="6.2" fill={softenColor(item.node.color, 0.9)} stroke={item.node.color} />
-              <path d={cmsIconPath(item.node.type)} transform="translate(8 13) scale(0.55)" fill="none" stroke={item.node.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              <text x="24" y="16" className="title">{cmsShortTitle(item.node.label)}</text>
-              <text x={item.width - 10} y="16" className="count" textAnchor="end">已接入: {cmsAccessCount(index, item.node)}</text>
-              <text x="24" y={item.height - 9} className="muted">{cmsSubtitle(item.node.type)}</text>
+              <rect className="entity-cms-card-bg" width={item.width} height={item.height} rx="3" fill="#fff" stroke={item.color} />
+              <rect className="entity-cms-card-top" x={(item.width - Math.max(54, item.width * 0.42)) / 2} width={Math.max(54, item.width * 0.42)} height="3" rx="1.5" fill={item.color} />
+              <path d={cmsIconPath(item.title)} transform="translate(10.5 12.6) scale(0.48)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <text x="27" y="18" className="title">{item.title}</text>
+              <text x={item.width - 9} y="18" className="count" textAnchor="end">已接入: {item.access}</text>
+              <text x="27" y={item.height - 9} className="muted">{item.subtitle}</text>
             </g>
           ))}
         </g>
       </svg>
       <div className="entity-cms-minimap" aria-hidden="true">
-        <svg viewBox="0 0 2500 1180">
-          <rect width="2500" height="1180" fill="#fff" />
+        <svg viewBox="0 0 5600 2600">
+          <rect width="5600" height="2600" fill="#fff" />
           {cmsTopology.nodes.map((item) => (
             <rect key={item.node.id} x={item.x} y={item.y} width="18" height="5" fill="#cfd5dd" opacity="0.8" />
           ))}
-          <rect x="120" y="80" width="1960" height="940" fill="none" stroke="#e1e5eb" strokeWidth="28" />
+          <rect x="100" y="70" width="3100" height="1700" fill="none" stroke="#e1e5eb" strokeWidth="50" />
         </svg>
       </div>
     </section>
@@ -817,6 +816,10 @@ interface CmsTopologyNode {
   y: number
   width: number
   height: number
+  title: string
+  subtitle: string
+  color: string
+  access: number
 }
 
 interface CmsTopologyEdge {
@@ -824,74 +827,178 @@ interface CmsTopologyEdge {
   source: CmsTopologyNode
   target: CmsTopologyNode
   label: string
+  showLabel?: boolean
 }
 
 function createCmsTopologyLayout(data: ReturnType<typeof createAliyunLikeTopologyData>) {
-  const anchorNodes = data.nodes.slice(0, 216)
-  const groups = cmsLayoutGroups()
-  const nodes: CmsTopologyNode[] = []
-  let cursor = 0
-  groups.forEach((group, groupIndex) => {
-    const capacity = group.columns * group.rows
-    for (let index = 0; index < capacity && cursor < anchorNodes.length; index += 1) {
-      const column = index % group.columns
-      const row = Math.floor(index / group.columns)
-      const jitterX = ((index * 17 + groupIndex * 11) % 19) - 9
-      const jitterY = ((index * 13 + groupIndex * 7) % 13) - 6
-      nodes.push({
-        node: anchorNodes[cursor],
-        x: group.x + column * group.gapX + row * group.slant + jitterX,
-        y: group.y + row * group.gapY + Math.sin((index + groupIndex) * 0.9) * 9 + jitterY,
-        width: group.width,
-        height: group.height,
-      })
-      cursor += 1
+  const templates = cmsLayoutTemplates()
+  const nodes = templates.map((template, index) => {
+    const sourceNode = data.nodes[(index * 19 + 7) % data.nodes.length]
+    return {
+      node: sourceNode,
+      x: template.x,
+      y: template.y,
+      width: template.width || 190,
+      height: template.height || 58,
+      title: template.title,
+      subtitle: template.subtitle,
+      color: template.color,
+      access: template.access,
     }
   })
-
-  const byId = new Map(nodes.map((item) => [item.node.id, item]))
   const edges: CmsTopologyEdge[] = []
-  data.edges.forEach((edge) => {
-    const source = byId.get(edge.source)
-    const target = byId.get(edge.target)
-    if (!source || !target || edges.length > 190) return
-    edges.push({
-      id: edge.id,
-      source,
-      target,
-      label: edge.type === 'contains' ? '包含' : '依赖',
-    })
-  })
-  for (let index = 4; index < nodes.length && edges.length < 300; index += 1) {
-    const targetIndex = Math.max(0, index - 1 - (index % 7))
-    edges.push({
-      id: `cms-extra-${index}`,
-      source: nodes[index],
-      target: nodes[targetIndex],
-      label: index % 2 === 0 ? '关联' : '包含',
-    })
+
+  function addEdge(sourceIndex: number, targetIndex: number, label: string, showLabel = false) {
+    const source = nodes[sourceIndex]
+    const target = nodes[targetIndex]
+    if (!source || !target) return
+    edges.push({ id: `cms-edge-${edges.length}`, source, target, label, showLabel })
   }
-  for (let index = 12; index < nodes.length && edges.length < 330; index += 8) {
-    const targetIndex = Math.max(0, index - 28)
-    edges.push({
-      id: `cms-long-${index}`,
-      source: nodes[index],
-      target: nodes[targetIndex],
-      label: '依赖',
-    })
-  }
+
+  const relations: Array<[number, number, string, boolean?]> = [
+    [0, 3, 'contains', true], [1, 4, 'contains'], [2, 4, 'related_to', true],
+    [3, 6, 'contains'], [4, 7, 'same_as', true], [5, 8, 'contains'],
+    [6, 9, 'contains', true], [7, 11, 'same_as'], [8, 12, 'contains'],
+    [9, 14, 'contains'], [10, 15, 'contains'], [11, 18, 'calls', true],
+    [12, 17, 'same_as'], [13, 20, 'calls'], [14, 22, 'contains', true],
+    [15, 24, 'calls'], [16, 27, 'contains'], [17, 29, 'same_as', true],
+    [18, 30, 'calls'], [19, 32, 'contains'], [20, 33, 'contains'],
+    [21, 36, 'contains'], [22, 38, 'same_as'], [23, 40, 'calls', true],
+    [24, 41, 'calls'], [25, 43, 'contains'], [26, 44, 'calls'],
+    [27, 46, 'same_as'], [28, 48, 'contains', true], [29, 49, 'calls'],
+    [30, 52, 'calls'], [31, 52, 'calls', true], [32, 52, 'calls'],
+    [33, 52, 'calls'], [34, 52, 'calls'], [35, 52, 'calls', true],
+    [36, 52, 'contains'], [37, 52, 'calls'], [38, 52, 'calls'],
+    [39, 52, 'contains'], [40, 52, 'same_as', true], [41, 52, 'calls'],
+    [42, 52, 'calls'], [43, 52, 'calls'], [44, 52, 'same_as'],
+    [45, 52, 'contains'], [46, 52, 'calls'], [47, 52, 'calls'],
+    [48, 52, 'contains'], [49, 52, 'calls'], [50, 52, 'calls', true],
+    [51, 52, 'contains'], [52, 53, 'calls'], [52, 54, 'calls', true],
+    [52, 55, 'same_as'], [52, 56, 'contains'], [52, 57, 'calls'],
+    [52, 58, 'calls'], [52, 59, 'same_as', true], [52, 60, 'contains'],
+    [52, 61, 'calls'], [52, 62, 'calls'], [52, 63, 'contains'],
+    [53, 64, 'contains'], [54, 65, 'contains'], [55, 66, 'same_as'],
+    [56, 67, 'calls'], [57, 68, 'calls'], [58, 69, 'contains'],
+    [59, 70, 'same_as'], [60, 71, 'calls'], [61, 72, 'calls'],
+    [62, 73, 'contains'], [63, 74, 'calls'], [64, 75, 'contains'],
+    [65, 76, 'same_as'], [66, 77, 'calls'], [67, 78, 'calls'],
+    [68, 79, 'contains'], [70, 80, 'contains'], [71, 81, 'calls'],
+    [72, 82, 'contains'], [73, 83, 'same_as'], [74, 84, 'calls'],
+    [77, 90, 'contains', true], [78, 91, 'calls'], [79, 92, 'calls'],
+    [80, 93, 'contains'], [81, 94, 'calls'], [82, 95, 'same_as'],
+    [85, 86, 'calls', true], [86, 87, 'contains'], [87, 88, 'calls'],
+    [88, 89, 'contains'], [89, 96, 'same_as'], [96, 97, 'contains'],
+    [97, 98, 'contains'], [98, 99, 'calls'], [99, 100, 'calls'],
+    [100, 101, 'contains'], [101, 102, 'same_as'], [102, 103, 'calls'],
+    [103, 104, 'contains'], [104, 105, 'calls'], [105, 106, 'contains'],
+    [106, 107, 'calls'], [107, 108, 'same_as'], [108, 109, 'contains'],
+    [109, 110, 'calls'], [110, 111, 'contains'], [111, 112, 'calls'],
+    [76, 12, 'same_as'], [1, 90, 'same_as', true], [5, 92, 'same_as'],
+    [52, 88, 'contains'], [69, 95, 'calls'], [15, 52, 'contains'],
+  ]
+  relations.forEach(([source, target, label, showLabel]) => addEdge(source, target, label, showLabel))
+
   return { nodes, edges }
 }
 
-function cmsLayoutGroups() {
+function cmsLayoutTemplates() {
+  const blue = '#5c9ded'
+  const red = '#f06456'
+  const green = '#7db443'
+  const orange = '#f59b42'
+  const purple = '#c05adf'
+  const cyan = '#54bdb9'
   return [
-    { x: 610, y: 62, columns: 4, rows: 1, gapX: 236, gapY: 78, slant: 0, width: 180, height: 60 },
-    { x: 210, y: 205, columns: 5, rows: 4, gapX: 200, gapY: 130, slant: -16, width: 166, height: 56 },
-    { x: 640, y: 485, columns: 5, rows: 4, gapX: 220, gapY: 128, slant: 14, width: 176, height: 58 },
-    { x: 930, y: 705, columns: 5, rows: 3, gapX: 230, gapY: 126, slant: 0, width: 176, height: 58 },
-    { x: 1510, y: 725, columns: 4, rows: 3, gapX: 210, gapY: 126, slant: 8, width: 176, height: 58 },
-    { x: 1550, y: 955, columns: 7, rows: 2, gapX: 166, gapY: 72, slant: 4, width: 142, height: 46 },
-    { x: 132, y: 912, columns: 4, rows: 2, gapX: 228, gapY: 120, slant: -6, width: 176, height: 58 },
+    { x: 980, y: 70, title: '云原生API网关', subtitle: 'acs.apig.instance', color: blue, access: 2 },
+    { x: 1700, y: 140, title: 'Kubernetes 集群', subtitle: 'acs.cs.cluster', color: blue, access: 1 },
+    { x: 2460, y: 128, title: '云消息队列 Kafka', subtitle: 'acs.alikafka.instance', color: red, access: 6 },
+    { x: 1030, y: 270, title: '网关监听', subtitle: 'acs.apig.listener', color: blue, access: 3 },
+    { x: 1320, y: 300, title: '容器服务 Kubernetes', subtitle: 'k8s.cluster', color: blue, access: 5 },
+    { x: 1620, y: 292, title: '云数据库 ClickHouse', subtitle: 'acs.clickhouse.cluster', color: blue, access: 2 },
+    { x: 1110, y: 505, title: 'ServerGroup', subtitle: 'acs.slb.servergroup', color: blue, access: 9 },
+    { x: 1325, y: 510, title: 'Ingress', subtitle: 'k8s.ingress', color: blue, access: 12 },
+    { x: 1550, y: 508, title: '云消息队列 Kafka', subtitle: 'acs.alikafka.topic', color: red, access: 3 },
+    { x: 1120, y: 705, title: '负载均衡 SLB', subtitle: 'acs.slb.instance', color: blue, access: 4 },
+    { x: 1340, y: 702, title: 'Kubernetes Service', subtitle: 'k8s.service', color: blue, access: 18 },
+    { x: 1595, y: 695, title: 'Kafka Topic', subtitle: 'acs.alikafka.topic', color: red, access: 4 },
+    { x: 1845, y: 688, title: 'PolarDB 代理', subtitle: 'acs.polardb.endpoint', color: blue, access: 10 },
+    { x: 2080, y: 700, title: '云数据库 RDS', subtitle: 'acs.rds.instance', color: purple, access: 16 },
+    { x: 980, y: 885, title: '容器组 Pod', subtitle: 'k8s.pod', color: blue, access: 22 },
+    { x: 1230, y: 890, title: '无状态应用', subtitle: 'k8s.deployment', color: blue, access: 16 },
+    { x: 1480, y: 875, title: '配置项', subtitle: 'k8s.configmap', color: green, access: 8 },
+    { x: 1750, y: 872, title: '云数据库 PolarDB', subtitle: 'acs.polardb.cluster', color: orange, access: 1 },
+    { x: 2045, y: 855, title: '数据库', subtitle: 'apm.external.database', color: purple, access: 4 },
+    { x: 2295, y: 840, title: 'Elasticsearch', subtitle: 'acs.elasticsearch.instance', color: cyan, access: 2 },
+    { x: 2535, y: 820, title: '云数据库 Tair', subtitle: 'acs.kvstore.instance', color: red, access: 32 },
+    { x: 920, y: 1075, title: '节点', subtitle: 'k8s.node', color: green, access: 59 },
+    { x: 1170, y: 1080, title: '消息服务', subtitle: 'apm.external.message', color: purple, access: 3 },
+    { x: 1420, y: 1080, title: '其他外部服务', subtitle: 'apm.external.others', color: green, access: 1 },
+    { x: 1700, y: 1068, title: 'RPC 服务', subtitle: 'apm.external.rpc_client', color: green, access: 18 },
+    { x: 1988, y: 1075, title: 'NoSQL 数据库', subtitle: 'apm.external.nosql', color: green, access: 9 },
+    { x: 2255, y: 1070, title: '云原生API网关', subtitle: 'acs.apig.gateway', color: orange, access: 9 },
+    { x: 2530, y: 1060, title: '大模型', subtitle: 'apm.external.model', color: green, access: 12 },
+    { x: 2785, y: 1060, title: '工具', subtitle: 'apm.external.tool', color: green, access: 48 },
+    { x: 730, y: 1300, title: '训练任务', subtitle: 'acs.pai.trainingjob', color: orange, access: 9 },
+    { x: 1000, y: 1290, title: '人工智能平台PAI', subtitle: 'acs.pai.eas.instance', color: orange, access: 9 },
+    { x: 1285, y: 1290, title: '知识库', subtitle: 'apm.external.knowledge', color: green, access: 4 },
+    { x: 1565, y: 1270, title: '接口', subtitle: 'apm.operation', color: orange, access: 164, width: 205 },
+    { x: 1870, y: 1300, title: '调用链 Span', subtitle: 'apm.span', color: blue, access: 28 },
+    { x: 2145, y: 1305, title: 'AI Agent', subtitle: 'apm.genai.agent', color: blue, access: 20 },
+    { x: 2420, y: 1300, title: '任务', subtitle: 'apm.genai.task', color: red, access: 5 },
+    { x: 2700, y: 1288, title: '函数工具', subtitle: 'apm.genai.tool_call', color: green, access: 15 },
+    { x: 820, y: 1515, title: '百炼工作空间', subtitle: 'acs.bailian.workspace', color: purple, access: 2 },
+    { x: 1090, y: 1515, title: 'PAI 工作空间', subtitle: 'acs.pai.workspace', color: orange, access: 2 },
+    { x: 1360, y: 1510, title: '模型服务', subtitle: 'apm.model_service', color: green, access: 7 },
+    { x: 1640, y: 1515, title: '应用', subtitle: 'apm.service', color: blue, access: 220, width: 205 },
+    { x: 1925, y: 1520, title: '网关实例', subtitle: 'acs.apig.instance', color: orange, access: 13 },
+    { x: 2198, y: 1520, title: 'AI 应用', subtitle: 'apm.genai.app', color: blue, access: 82 },
+    { x: 2468, y: 1515, title: 'K8s 节点', subtitle: 'k8s.node', color: red, access: 32 },
+    { x: 2740, y: 1510, title: '容器', subtitle: 'k8s.container', color: blue, access: 77 },
+    { x: 745, y: 1745, title: 'GPU 节点池', subtitle: 'acs.cs.nodepool', color: green, access: 5 },
+    { x: 1015, y: 1742, title: 'ECS 实例', subtitle: 'acs.ecs.instance', color: blue, access: 19 },
+    { x: 1290, y: 1738, title: '云盘', subtitle: 'acs.ecs.disk', color: blue, access: 16 },
+    { x: 1565, y: 1730, title: '网络接口', subtitle: 'acs.ecs.eni', color: blue, access: 12 },
+    { x: 1840, y: 1738, title: '安全组', subtitle: 'acs.ecs.securitygroup', color: blue, access: 8 },
+    { x: 2115, y: 1742, title: 'VPC', subtitle: 'acs.vpc', color: cyan, access: 4 },
+    { x: 2388, y: 1738, title: '日志库', subtitle: 'acs.sls.logstore', color: orange, access: 6 },
+    { x: 1680, y: 1498, title: '应用', subtitle: 'apm.service', color: blue, access: 220, width: 205 },
+    { x: 1835, y: 1190, title: '接口', subtitle: 'apm.operation', color: orange, access: 164, width: 205 },
+    { x: 2050, y: 1188, title: '数据库', subtitle: 'apm.external.database', color: purple, access: 4 },
+    { x: 2260, y: 1198, title: 'NoSQL 数据库', subtitle: 'apm.external.nosql', color: green, access: 9 },
+    { x: 2470, y: 1186, title: '云原生API网关', subtitle: 'acs.apig.aiapi', color: orange, access: 13 },
+    { x: 1580, y: 1395, title: 'HTTP 请求', subtitle: 'apm.http', color: orange, access: 27 },
+    { x: 1900, y: 1398, title: '数据库调用', subtitle: 'apm.db_call', color: purple, access: 11 },
+    { x: 2230, y: 1402, title: '模型调用', subtitle: 'apm.llm_call', color: green, access: 35 },
+    { x: 2560, y: 1398, title: '工具调用', subtitle: 'apm.tool_call', color: green, access: 42 },
+    { x: 1300, y: 1588, title: '消息队列调用', subtitle: 'apm.message_call', color: red, access: 6 },
+    { x: 1505, y: 1605, title: '缓存调用', subtitle: 'apm.cache_call', color: red, access: 13 },
+    { x: 1710, y: 1618, title: 'RPC 调用', subtitle: 'apm.rpc_call', color: green, access: 18 },
+    { x: 1915, y: 1625, title: '服务调用', subtitle: 'apm.service_call', color: blue, access: 31 },
+    { x: 2120, y: 1615, title: '链路入口', subtitle: 'apm.entry', color: blue, access: 7 },
+    { x: 2325, y: 1603, title: '节点', subtitle: 'k8s.node', color: red, access: 18 },
+    { x: 2530, y: 1588, title: '任务', subtitle: 'apm.task', color: blue, access: 6 },
+    { x: 2735, y: 1575, title: 'Pod', subtitle: 'k8s.pod', color: blue, access: 46 },
+    { x: 2940, y: 1565, title: '容器组', subtitle: 'k8s.pod', color: blue, access: 28 },
+    { x: 1030, y: 1878, title: '告警', subtitle: 'cms.alarm', color: red, access: 7, width: 158, height: 48 },
+    { x: 1210, y: 1882, title: '事件', subtitle: 'cms.event', color: orange, access: 11, width: 158, height: 48 },
+    { x: 1390, y: 1888, title: '指标', subtitle: 'cms.metric', color: blue, access: 34, width: 158, height: 48 },
+    { x: 1570, y: 1892, title: '日志', subtitle: 'sls.log', color: orange, access: 18, width: 158, height: 48 },
+    { x: 1750, y: 1890, title: 'Trace', subtitle: 'xtrace.trace', color: purple, access: 21, width: 158, height: 48 },
+    { x: 1930, y: 1885, title: '变更', subtitle: 'cms.change', color: green, access: 9, width: 158, height: 48 },
+    { x: 2110, y: 1878, title: 'SLO', subtitle: 'cms.slo', color: cyan, access: 5, width: 158, height: 48 },
+    { x: 2290, y: 1874, title: '拨测', subtitle: 'cms.synthetic', color: cyan, access: 4, width: 158, height: 48 },
+    { x: 2470, y: 1878, title: '仪表盘', subtitle: 'cms.dashboard', color: blue, access: 12, width: 158, height: 48 },
+    { x: 2650, y: 1884, title: '巡检', subtitle: 'cms.check', color: green, access: 6, width: 158, height: 48 },
+    { x: 2830, y: 1888, title: '根因分析', subtitle: 'cms.rca', color: purple, access: 3, width: 158, height: 48 },
+    { x: 3180, y: 1740, title: 'AI Agent', subtitle: 'apm.genai.agent', color: blue, access: 20 },
+    { x: 3385, y: 1740, title: '大模型', subtitle: 'apm.external.model', color: green, access: 12 },
+    { x: 3590, y: 1740, title: '工具', subtitle: 'apm.external.tool', color: green, access: 48 },
+    { x: 3188, y: 1850, title: '节点', subtitle: 'k8s.node', color: red, access: 6 },
+    { x: 3393, y: 1850, title: '任务', subtitle: 'apm.genai.task', color: blue, access: 8 },
+    { x: 3598, y: 1850, title: '日志任务', subtitle: 'sls.task', color: orange, access: 4 },
+    { x: 3196, y: 1960, title: '函数', subtitle: 'fc.function', color: green, access: 5 },
+    { x: 3401, y: 1960, title: '插件', subtitle: 'apm.plugin', color: purple, access: 7 },
+    { x: 3606, y: 1960, title: '配置', subtitle: 'apm.config', color: blue, access: 9 },
   ]
 }
 
@@ -901,9 +1008,11 @@ function cmsEdgePath(edge: CmsTopologyEdge) {
   const targetX = edge.target.x + edge.target.width / 2
   const targetY = edge.target.y + edge.target.height / 2
   const dx = targetX - sourceX
-  const curve = Math.max(60, Math.min(260, Math.abs(dx) * 0.42))
-  const lift = Math.max(-180, Math.min(160, (targetY - sourceY) * 0.18))
-  return `M ${sourceX} ${sourceY} C ${sourceX + curve} ${sourceY + lift}, ${targetX - curve} ${targetY - lift}, ${targetX} ${targetY}`
+  const dy = targetY - sourceY
+  const curve = Math.max(80, Math.min(420, Math.abs(dx) * 0.34 + Math.abs(dy) * 0.08))
+  const direction = dx >= 0 ? 1 : -1
+  const lift = Math.max(-220, Math.min(220, dy * 0.22))
+  return `M ${sourceX} ${sourceY} C ${sourceX + curve * direction} ${sourceY + lift}, ${targetX - curve * direction} ${targetY - lift}, ${targetX} ${targetY}`
 }
 
 function cmsShortTitle(label: string) {
