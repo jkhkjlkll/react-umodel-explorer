@@ -709,7 +709,7 @@ function EntityTopologyView({
         </defs>
         <rect width="2478" height="1238" fill="#fff" />
         <rect width="2478" height="1238" fill="url(#entity-reference-dot-grid)" opacity="0.52" />
-        <g className="entity-reference-scene" transform="translate(100 86) scale(0.72)">
+        <g className="entity-reference-scene" transform="translate(100 171) scale(0.72)">
           <g className="entity-reference-links">
             {referenceTopology.edges.map((edge) => (
               <g key={edge.id}>
@@ -747,7 +747,7 @@ function EntityTopologyView({
       <div className="entity-cms-minimap" aria-hidden="true">
         <svg viewBox="0 0 2478 1238">
           <rect width="2478" height="1238" fill="#fff" />
-          <g transform="translate(100 86) scale(0.72)">
+          <g transform="translate(100 171) scale(0.72)">
             {referenceTopology.nodes.map((item) => (
               <rect key={item.node.id} x={item.x} y={item.y} width="12" height="4" fill="#cfd5dd" opacity="0.75" />
             ))}
@@ -828,6 +828,17 @@ interface ReferenceTopologyEdge {
   target: ReferenceTopologyNode
   label: string
   showLabel?: boolean
+}
+
+interface ReferenceTopologyTemplate {
+  title: string
+  subtitle: string
+  color: string
+  access: number
+  x: number
+  y: number
+  width?: number
+  height?: number
 }
 
 function createReferenceStyleTopology(data: ReturnType<typeof createAliyunLikeTopologyData>) {
@@ -914,7 +925,7 @@ function referenceTopologyTemplates() {
     ['插件', 'apm.plugin', purple, 7], ['配置', 'apm.config', blue, 9],
   ] as const
   const coordinates = referenceTopologyCoordinates()
-  return base.map(([title, subtitle, color, access], index) => ({
+  return base.map(([title, subtitle, color, access], index): ReferenceTopologyTemplate => ({
     title,
     subtitle,
     color,
@@ -924,62 +935,76 @@ function referenceTopologyTemplates() {
 }
 
 function referenceTopologyCoordinates() {
-  return [
-    { x: 580, y: 80 }, { x: 1040, y: 120 }, { x: 1530, y: 105 },
-    { x: 625, y: 205 }, { x: 770, y: 248 }, { x: 940, y: 235 },
-    { x: 655, y: 345 }, { x: 775, y: 385 }, { x: 930, y: 395 },
-    { x: 642, y: 500 }, { x: 775, y: 510 }, { x: 940, y: 528 },
-    { x: 1120, y: 512 }, { x: 1308, y: 520 }, { x: 625, y: 638 },
-    { x: 785, y: 654 }, { x: 950, y: 638 }, { x: 1120, y: 655 },
-    { x: 1300, y: 640 }, { x: 1488, y: 628 }, { x: 1656, y: 620 },
-    { x: 550, y: 790 }, { x: 720, y: 785 }, { x: 920, y: 778 },
-    { x: 1115, y: 780 }, { x: 1308, y: 778 }, { x: 1488, y: 770 },
-    { x: 1665, y: 760 }, { x: 1840, y: 748 }, { x: 410, y: 930 },
-    { x: 585, y: 920 }, { x: 760, y: 905 }, { x: 930, y: 900, width: 94 },
-    { x: 1125, y: 932 }, { x: 1305, y: 905 }, { x: 1500, y: 918 },
-    { x: 1695, y: 895 }, { x: 550, y: 1065 }, { x: 730, y: 1045 },
-    { x: 910, y: 1030 }, { x: 1085, y: 1020, width: 94 }, { x: 1275, y: 1038 },
-    { x: 1460, y: 1020 }, { x: 1650, y: 1002 }, { x: 1840, y: 990 },
-    { x: 670, y: 1160, width: 68, height: 24 }, { x: 840, y: 1150, width: 68, height: 24 },
-    { x: 1010, y: 1142, width: 68, height: 24 }, { x: 1180, y: 1135, width: 68, height: 24 },
-    { x: 1350, y: 1138, width: 68, height: 24 }, { x: 1520, y: 1148, width: 68, height: 24 },
-    { x: 1690, y: 1160, width: 68, height: 24 }, { x: 1120, y: 1012, width: 94 },
-    { x: 1000, y: 790, width: 94 }, { x: 1185, y: 790 }, { x: 1370, y: 790 },
-    { x: 1555, y: 780 }, { x: 970, y: 930 }, { x: 1150, y: 952 },
-    { x: 1325, y: 965 }, { x: 1510, y: 955 }, { x: 795, y: 1050 },
-    { x: 975, y: 1085 }, { x: 1155, y: 1108 }, { x: 1340, y: 1112 },
-    { x: 1525, y: 1098 }, { x: 1710, y: 1070 }, { x: 1900, y: 1048 },
-    { x: 2055, y: 1030 }, { x: 2200, y: 1020 }, { x: 1550, y: 930, width: 64, height: 23 },
-    { x: 1675, y: 930, width: 64, height: 23 }, { x: 1800, y: 930, width: 64, height: 23 },
-    { x: 1560, y: 1005, width: 64, height: 23 }, { x: 1685, y: 1005, width: 64, height: 23 },
-    { x: 1810, y: 1005, width: 64, height: 23 }, { x: 1570, y: 1080, width: 64, height: 23 },
-    { x: 1695, y: 1080, width: 64, height: 23 }, { x: 1820, y: 1080, width: 64, height: 23 },
-    { x: 1740, y: 885 }, { x: 1880, y: 885 }, { x: 2020, y: 885 },
-    { x: 1760, y: 960 }, { x: 1900, y: 960 }, { x: 2040, y: 960 },
-    { x: 1780, y: 1038 }, { x: 1920, y: 1038 }, { x: 2060, y: 1038 },
+  const topChain = [
+    { x: 575, y: 88 }, { x: 980, y: 132 }, { x: 620, y: 205 }, { x: 760, y: 248 },
+    { x: 880, y: 245 }, { x: 640, y: 320 }, { x: 740, y: 360 }, { x: 610, y: 425 },
+    { x: 735, y: 455 }, { x: 630, y: 535 }, { x: 760, y: 535 }, { x: 720, y: 615 },
   ]
+  const upperFan = [
+    { x: 925, y: 440 }, { x: 1065, y: 450 }, { x: 1210, y: 438 }, { x: 1360, y: 420 },
+    { x: 1505, y: 396 }, { x: 1125, y: 575 }, { x: 1295, y: 568 }, { x: 1465, y: 548 },
+    { x: 1640, y: 520 }, { x: 1810, y: 492 },
+  ]
+  const midMesh = [
+    { x: 610, y: 695 }, { x: 760, y: 695 }, { x: 910, y: 688 }, { x: 1060, y: 692 },
+    { x: 1210, y: 688 }, { x: 1360, y: 675 }, { x: 1510, y: 650 }, { x: 1660, y: 640 },
+    { x: 520, y: 820 }, { x: 700, y: 805 }, { x: 880, y: 790 }, { x: 1040, y: 780 },
+    { x: 1195, y: 760, width: 94 }, { x: 1360, y: 785 }, { x: 1540, y: 770 },
+    { x: 1715, y: 745 }, { x: 430, y: 930 }, { x: 610, y: 930 }, { x: 790, y: 910 },
+    { x: 970, y: 895 }, { x: 1135, y: 890, width: 94 }, { x: 1310, y: 900 },
+    { x: 1490, y: 880 }, { x: 1670, y: 862 },
+  ]
+  const lowerArc = [
+    { x: 640, y: 1058, width: 68, height: 24 }, { x: 810, y: 1050, width: 68, height: 24 },
+    { x: 980, y: 1040, width: 68, height: 24 }, { x: 1150, y: 1035, width: 68, height: 24 },
+    { x: 1320, y: 1040, width: 68, height: 24 }, { x: 1490, y: 1050, width: 68, height: 24 },
+    { x: 1660, y: 1065, width: 68, height: 24 },
+  ]
+  const centralCluster = [
+    { x: 1110, y: 808, width: 94 }, { x: 955, y: 708, width: 94 }, { x: 1115, y: 710 },
+    { x: 1280, y: 708 }, { x: 1460, y: 685 }, { x: 920, y: 840 }, { x: 1070, y: 850 },
+    { x: 1220, y: 856 }, { x: 1370, y: 848 }, { x: 785, y: 935 }, { x: 960, y: 970 },
+    { x: 1135, y: 995 }, { x: 1310, y: 990 }, { x: 1485, y: 960 }, { x: 1665, y: 920 },
+    { x: 1845, y: 900 }, { x: 2025, y: 890 },
+  ]
+  const rightBranch = [
+    { x: 1545, y: 910, width: 64, height: 23 }, { x: 1665, y: 910, width: 64, height: 23 },
+    { x: 1785, y: 910, width: 64, height: 23 }, { x: 1910, y: 918, width: 64, height: 23 },
+    { x: 1535, y: 990, width: 64, height: 23 }, { x: 1660, y: 995, width: 64, height: 23 },
+    { x: 1785, y: 1000, width: 64, height: 23 }, { x: 1910, y: 1008, width: 64, height: 23 },
+    { x: 2035, y: 1020, width: 64, height: 23 },
+  ]
+  const farRight = [
+    { x: 1690, y: 815 }, { x: 1830, y: 815 }, { x: 1970, y: 818 },
+    { x: 1710, y: 890 }, { x: 1850, y: 895 }, { x: 1990, y: 900 },
+    { x: 1730, y: 980 }, { x: 1870, y: 990 }, { x: 2010, y: 1000 },
+  ]
+  return [...topChain, ...upperFan, ...midMesh, ...lowerArc, ...centralCluster, ...rightBranch, ...farRight]
 }
 
 function referenceTopologyRelations() {
   return [
-    [0, 3, 'contains', true], [3, 6, 'contains'], [6, 9, 'contains'], [9, 14, 'contains'],
-    [14, 21, 'contains'], [21, 29, 'same_as', true], [1, 4, 'contains'], [4, 7, 'same_as', true],
-    [7, 10, 'contains'], [10, 15, 'contains'], [15, 23, 'calls', true], [23, 31, 'calls'],
-    [2, 5, 'related_to', true], [5, 8, 'contains'], [8, 11, 'contains'], [11, 17, 'same_as'],
-    [17, 24, 'calls'], [24, 32, 'calls'], [12, 18, 'same_as', true], [13, 20, 'same_as'],
-    [16, 27, 'contains'], [18, 25, 'calls'], [19, 26, 'contains'], [20, 28, 'calls'],
-    [30, 40, 'calls'], [31, 40, 'calls', true], [32, 40, 'calls'], [33, 40, 'calls'],
-    [34, 40, 'calls'], [35, 40, 'calls', true], [36, 40, 'contains'], [37, 40, 'calls'],
-    [38, 40, 'calls'], [39, 40, 'contains'], [40, 52, 'same_as', true], [40, 53, 'calls'],
-    [40, 54, 'calls'], [40, 55, 'same_as'], [40, 56, 'contains'], [40, 57, 'calls'],
-    [40, 58, 'calls'], [40, 59, 'calls', true], [40, 60, 'contains'], [52, 64, 'contains'],
-    [53, 65, 'contains'], [54, 66, 'same_as'], [55, 67, 'calls'], [56, 68, 'calls'],
-    [57, 69, 'contains'], [58, 70, 'same_as'], [59, 71, 'calls'], [60, 72, 'calls'],
-    [61, 73, 'contains'], [62, 74, 'calls'], [63, 75, 'contains'], [76, 77, 'calls', true],
-    [77, 78, 'contains'], [78, 79, 'calls'], [79, 80, 'contains'], [80, 81, 'same_as'],
-    [81, 82, 'contains'], [82, 83, 'contains'], [83, 84, 'calls'], [84, 85, 'calls'],
-    [85, 86, 'contains'], [86, 87, 'same_as'], [87, 88, 'calls'], [2, 40, 'same_as', true],
-    [5, 25, 'same_as'], [12, 40, 'same_as'], [20, 40, 'calls'], [40, 76, 'contains'],
+    [0, 1, 'same_as', true], [0, 2, 'contains'], [2, 5, 'contains'], [5, 7, 'contains'],
+    [7, 9, 'contains', true], [9, 11, 'same_as'], [11, 18, 'calls'],
+    [3, 6, 'contains'], [4, 8, 'contains'], [6, 10, 'contains'], [8, 12, 'same_as'],
+    [10, 16, 'contains'], [12, 20, 'calls'], [13, 22, 'same_as'], [14, 24, 'contains'],
+    [15, 25, 'calls'], [16, 26, 'contains'], [17, 27, 'same_as'], [18, 30, 'calls'],
+    [19, 31, 'contains'], [20, 33, 'calls'], [21, 35, 'contains'], [22, 36, 'calls'],
+    [23, 40, 'calls'], [24, 40, 'calls', true], [25, 40, 'calls'], [26, 40, 'contains'],
+    [27, 40, 'same_as'], [28, 40, 'calls'], [29, 40, 'contains'], [30, 40, 'calls'],
+    [31, 40, 'calls'], [32, 40, 'calls', true], [33, 40, 'calls'], [34, 40, 'contains'],
+    [35, 40, 'calls'], [36, 40, 'same_as'], [37, 40, 'calls'], [38, 40, 'calls'],
+    [39, 40, 'contains'], [40, 52, 'contains', true], [40, 53, 'calls'], [40, 54, 'calls'],
+    [40, 55, 'same_as'], [40, 56, 'contains'], [40, 57, 'calls'], [40, 58, 'calls'],
+    [40, 59, 'calls', true], [40, 60, 'contains'], [52, 61, 'contains'], [53, 62, 'contains'],
+    [54, 63, 'same_as'], [55, 64, 'calls'], [56, 65, 'calls'], [57, 66, 'contains'],
+    [58, 67, 'same_as'], [59, 68, 'calls'], [60, 69, 'calls'], [70, 71, 'calls', true],
+    [71, 72, 'contains'], [72, 73, 'calls'], [73, 74, 'contains'], [74, 75, 'same_as'],
+    [76, 77, 'calls'], [77, 78, 'contains'], [78, 79, 'calls'], [79, 80, 'contains'],
+    [80, 81, 'same_as'], [81, 82, 'contains'], [2, 40, 'same_as', true],
+    [1, 40, 'same_as'], [5, 25, 'same_as'], [12, 40, 'same_as'], [20, 40, 'calls'],
+    [40, 76, 'contains'], [40, 83, 'same_as'], [83, 84, 'calls'], [84, 85, 'contains'],
+    [85, 86, 'calls'], [86, 87, 'contains'], [87, 88, 'calls'],
   ] as Array<[number, number, string, boolean?]>
 }
 
@@ -990,10 +1015,11 @@ function referenceEdgePath(edge: ReferenceTopologyEdge) {
   const targetY = edge.target.y + edge.target.height / 2
   const dx = targetX - sourceX
   const dy = targetY - sourceY
-  const curve = Math.max(46, Math.min(240, Math.abs(dx) * 0.38 + Math.abs(dy) * 0.12))
+  const curve = Math.max(60, Math.min(300, Math.abs(dx) * 0.46 + Math.abs(dy) * 0.1))
   const direction = dx >= 0 ? 1 : -1
-  const lift = Math.max(-90, Math.min(90, dy * 0.2))
-  return `M ${sourceX} ${sourceY} C ${sourceX + curve * direction} ${sourceY + lift}, ${targetX - curve * direction} ${targetY - lift}, ${targetX} ${targetY}`
+  const lift = Math.max(-130, Math.min(130, dy * 0.16))
+  const bow = Math.max(-80, Math.min(80, dx * 0.06))
+  return `M ${sourceX} ${sourceY} C ${sourceX + curve * direction} ${sourceY + lift - bow}, ${targetX - curve * direction} ${targetY - lift + bow}, ${targetX} ${targetY}`
 }
 
 function referenceIconPath(type: string) {
