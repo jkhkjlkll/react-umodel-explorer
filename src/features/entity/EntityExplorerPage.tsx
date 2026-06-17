@@ -709,7 +709,7 @@ function EntityTopologyView({
         </defs>
         <rect width="2478" height="1238" fill="#fff" />
         <rect width="2478" height="1238" fill="url(#entity-reference-dot-grid)" opacity="0.52" />
-        <g className="entity-reference-scene" transform="translate(100 171) scale(0.72)">
+        <g className="entity-reference-scene" transform="translate(0 0)">
           <g className="entity-reference-links">
             {referenceTopology.edges.map((edge) => (
               <g key={edge.id}>
@@ -723,7 +723,7 @@ function EntityTopologyView({
             ))}
           </g>
           <g className="entity-reference-nodes">
-            {referenceTopology.nodes.map((item) => (
+            {referenceTopology.nodes.map((item, index) => (
               <g
                 key={item.node.id}
                 className={selectedId === item.node.id ? 'selected' : ''}
@@ -733,12 +733,18 @@ function EntityTopologyView({
                   onFocusType(item.node.type)
                 }}
               >
-                <rect className="entity-reference-card" width={item.width} height={item.height} rx="2.5" fill="#fff" stroke={item.color} />
-                <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="2" rx="1" fill={item.color} />
-                <path d={referenceIconPath(item.title)} transform="translate(6.5 8.5) scale(0.3)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <text x="16" y="12" className="title">{item.title}</text>
-                <text x={item.width - 5} y="12" className="count" textAnchor="end">已接入: {item.access}</text>
-                <text x="16" y={item.height - 5} className="muted">{item.subtitle}</text>
+                <clipPath id={`entity-reference-title-clip-${index}`}>
+                  <rect x="9" y="3" width={Math.max(12, item.width - 28)} height="7" />
+                </clipPath>
+                <clipPath id={`entity-reference-subtitle-clip-${index}`}>
+                  <rect x="9" y={item.height - 7.4} width={Math.max(16, item.width - 12)} height="5.8" />
+                </clipPath>
+                <rect className="entity-reference-card" width={item.width} height={item.height} rx="2.2" fill="#fff" stroke={item.color} />
+                <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="1.8" rx="0.9" fill={item.color} />
+                <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(3.6 5.5) scale(0.19)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <text x="9" y="7.9" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
+                <text x={item.width - 3.2} y="7.9" className="count" textAnchor="end">已接入: {item.access}</text>
+                <text x="9" y={item.height - 3.1} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
               </g>
             ))}
           </g>
@@ -747,7 +753,7 @@ function EntityTopologyView({
       <div className="entity-cms-minimap" aria-hidden="true">
         <svg viewBox="0 0 2478 1238">
           <rect width="2478" height="1238" fill="#fff" />
-          <g transform="translate(100 171) scale(0.72)">
+          <g transform="translate(0 0)">
             {referenceTopology.nodes.map((item) => (
               <rect key={item.node.id} x={item.x} y={item.y} width="12" height="4" fill="#cfd5dd" opacity="0.75" />
             ))}
@@ -849,13 +855,13 @@ function createReferenceStyleTopology(data: ReturnType<typeof createAliyunLikeTo
       node,
       x: template.x,
       y: template.y,
-      width: template.width || 82,
-      height: template.height || 26,
+      width: template.width || 44,
+      height: template.height || 17,
       title: template.title,
       subtitle: template.subtitle,
       color: template.color,
       access: template.access,
-      barWidth: Math.max(24, Math.min(42, (template.width || 82) * 0.38)),
+      barWidth: Math.max(16, Math.min(26, (template.width || 44) * 0.38)),
     }
   })
   const edges: ReferenceTopologyEdge[] = []
@@ -936,48 +942,48 @@ function referenceTopologyTemplates() {
 
 function referenceTopologyCoordinates() {
   const topChain = [
-    { x: 575, y: 88 }, { x: 980, y: 132 }, { x: 620, y: 205 }, { x: 760, y: 248 },
-    { x: 880, y: 245 }, { x: 640, y: 320 }, { x: 740, y: 360 }, { x: 610, y: 425 },
-    { x: 735, y: 455 }, { x: 630, y: 535 }, { x: 760, y: 535 }, { x: 720, y: 615 },
+    { x: 590, y: 99 }, { x: 1042, y: 143 }, { x: 731, y: 186 }, { x: 619, y: 230 },
+    { x: 776, y: 230 }, { x: 655, y: 318 }, { x: 740, y: 360 }, { x: 728, y: 404 },
+    { x: 693, y: 448 }, { x: 673, y: 535 }, { x: 881, y: 535 }, { x: 747, y: 644 },
   ]
   const upperFan = [
-    { x: 925, y: 440 }, { x: 1065, y: 450 }, { x: 1210, y: 438 }, { x: 1360, y: 420 },
-    { x: 1505, y: 396 }, { x: 1125, y: 575 }, { x: 1295, y: 568 }, { x: 1465, y: 548 },
-    { x: 1640, y: 520 }, { x: 1810, y: 492 },
+    { x: 956, y: 448 }, { x: 1043, y: 579 }, { x: 1018, y: 643 }, { x: 1240, y: 731 },
+    { x: 1410, y: 731 }, { x: 1480, y: 731 }, { x: 866, y: 796 }, { x: 967, y: 796 },
+    { x: 1068, y: 796, width: 70 }, { x: 1219, y: 796, width: 70 },
   ]
   const midMesh = [
-    { x: 610, y: 695 }, { x: 760, y: 695 }, { x: 910, y: 688 }, { x: 1060, y: 692 },
-    { x: 1210, y: 688 }, { x: 1360, y: 675 }, { x: 1510, y: 650 }, { x: 1660, y: 640 },
-    { x: 520, y: 820 }, { x: 700, y: 805 }, { x: 880, y: 790 }, { x: 1040, y: 780 },
-    { x: 1195, y: 760, width: 94 }, { x: 1360, y: 785 }, { x: 1540, y: 770 },
-    { x: 1715, y: 745 }, { x: 430, y: 930 }, { x: 610, y: 930 }, { x: 790, y: 910 },
-    { x: 970, y: 895 }, { x: 1135, y: 890, width: 94 }, { x: 1310, y: 900 },
-    { x: 1490, y: 880 }, { x: 1670, y: 862 },
+    { x: 760, y: 840 }, { x: 866, y: 840 }, { x: 697, y: 876 }, { x: 915, y: 876 },
+    { x: 1055, y: 880 }, { x: 1195, y: 892 }, { x: 1269, y: 904 }, { x: 1410, y: 900 },
+    { x: 650, y: 948 }, { x: 820, y: 945 }, { x: 980, y: 930 }, { x: 1120, y: 920 },
+    { x: 1195, y: 948, width: 70 }, { x: 1340, y: 940 }, { x: 1480, y: 930 },
+    { x: 1605, y: 910 }, { x: 585, y: 1015 }, { x: 720, y: 1010 }, { x: 860, y: 1000 },
+    { x: 1000, y: 992 }, { x: 1135, y: 985, width: 70 }, { x: 1270, y: 988 },
+    { x: 1400, y: 974 }, { x: 1535, y: 962 },
   ]
   const lowerArc = [
-    { x: 640, y: 1058, width: 68, height: 24 }, { x: 810, y: 1050, width: 68, height: 24 },
-    { x: 980, y: 1040, width: 68, height: 24 }, { x: 1150, y: 1035, width: 68, height: 24 },
-    { x: 1320, y: 1040, width: 68, height: 24 }, { x: 1490, y: 1050, width: 68, height: 24 },
-    { x: 1660, y: 1065, width: 68, height: 24 },
+    { x: 860, y: 1100, width: 46, height: 18 }, { x: 990, y: 1110, width: 46, height: 18 },
+    { x: 1120, y: 1116, width: 46, height: 18 }, { x: 1250, y: 1118, width: 46, height: 18 },
+    { x: 1380, y: 1112, width: 46, height: 18 }, { x: 1510, y: 1102, width: 46, height: 18 },
+    { x: 1640, y: 1090, width: 46, height: 18 },
   ]
   const centralCluster = [
-    { x: 1110, y: 808, width: 94 }, { x: 955, y: 708, width: 94 }, { x: 1115, y: 710 },
-    { x: 1280, y: 708 }, { x: 1460, y: 685 }, { x: 920, y: 840 }, { x: 1070, y: 850 },
-    { x: 1220, y: 856 }, { x: 1370, y: 848 }, { x: 785, y: 935 }, { x: 960, y: 970 },
-    { x: 1135, y: 995 }, { x: 1310, y: 990 }, { x: 1485, y: 960 }, { x: 1665, y: 920 },
-    { x: 1845, y: 900 }, { x: 2025, y: 890 },
+    { x: 1095, y: 735, width: 70 }, { x: 950, y: 700, width: 70 }, { x: 1045, y: 735 },
+    { x: 1180, y: 725 }, { x: 1320, y: 710 }, { x: 930, y: 805 }, { x: 1060, y: 825 },
+    { x: 1190, y: 835 }, { x: 1325, y: 825 }, { x: 820, y: 900 }, { x: 960, y: 925 },
+    { x: 1100, y: 940 }, { x: 1240, y: 936 }, { x: 1385, y: 910 }, { x: 1515, y: 875 },
+    { x: 1650, y: 860 }, { x: 1785, y: 850 },
   ]
   const rightBranch = [
-    { x: 1545, y: 910, width: 64, height: 23 }, { x: 1665, y: 910, width: 64, height: 23 },
-    { x: 1785, y: 910, width: 64, height: 23 }, { x: 1910, y: 918, width: 64, height: 23 },
-    { x: 1535, y: 990, width: 64, height: 23 }, { x: 1660, y: 995, width: 64, height: 23 },
-    { x: 1785, y: 1000, width: 64, height: 23 }, { x: 1910, y: 1008, width: 64, height: 23 },
-    { x: 2035, y: 1020, width: 64, height: 23 },
+    { x: 1565, y: 960, width: 44, height: 18 }, { x: 1685, y: 960, width: 44, height: 18 },
+    { x: 1805, y: 960, width: 44, height: 18 }, { x: 1925, y: 965, width: 44, height: 18 },
+    { x: 1555, y: 1030, width: 44, height: 18 }, { x: 1680, y: 1038, width: 44, height: 18 },
+    { x: 1805, y: 1046, width: 44, height: 18 }, { x: 1930, y: 1052, width: 44, height: 18 },
+    { x: 2055, y: 1060, width: 44, height: 18 },
   ]
   const farRight = [
-    { x: 1690, y: 815 }, { x: 1830, y: 815 }, { x: 1970, y: 818 },
-    { x: 1710, y: 890 }, { x: 1850, y: 895 }, { x: 1990, y: 900 },
-    { x: 1730, y: 980 }, { x: 1870, y: 990 }, { x: 2010, y: 1000 },
+    { x: 1585, y: 890 }, { x: 1715, y: 890 }, { x: 1845, y: 895 },
+    { x: 1605, y: 955 }, { x: 1735, y: 962 }, { x: 1865, y: 970 },
+    { x: 1625, y: 1025 }, { x: 1755, y: 1035 }, { x: 1885, y: 1045 },
   ]
   return [...topChain, ...upperFan, ...midMesh, ...lowerArc, ...centralCluster, ...rightBranch, ...farRight]
 }
@@ -1009,16 +1015,21 @@ function referenceTopologyRelations() {
 }
 
 function referenceEdgePath(edge: ReferenceTopologyEdge) {
-  const sourceX = edge.source.x + edge.source.width / 2
-  const sourceY = edge.source.y + edge.source.height / 2
-  const targetX = edge.target.x + edge.target.width / 2
-  const targetY = edge.target.y + edge.target.height / 2
+  const sourceCenterX = edge.source.x + edge.source.width / 2
+  const sourceCenterY = edge.source.y + edge.source.height / 2
+  const targetCenterX = edge.target.x + edge.target.width / 2
+  const targetCenterY = edge.target.y + edge.target.height / 2
+  const vertical = Math.abs(targetCenterY - sourceCenterY) > Math.abs(targetCenterX - sourceCenterX) * 0.35
+  const sourceX = sourceCenterX
+  const sourceY = vertical && targetCenterY > sourceCenterY ? edge.source.y + edge.source.height : vertical ? edge.source.y : sourceCenterY
+  const targetX = targetCenterX
+  const targetY = vertical && targetCenterY > sourceCenterY ? edge.target.y : vertical ? edge.target.y + edge.target.height : targetCenterY
   const dx = targetX - sourceX
   const dy = targetY - sourceY
-  const curve = Math.max(60, Math.min(300, Math.abs(dx) * 0.46 + Math.abs(dy) * 0.1))
+  const curve = Math.max(48, Math.min(330, Math.abs(dx) * 0.48 + Math.abs(dy) * 0.12))
   const direction = dx >= 0 ? 1 : -1
-  const lift = Math.max(-130, Math.min(130, dy * 0.16))
-  const bow = Math.max(-80, Math.min(80, dx * 0.06))
+  const lift = Math.max(-150, Math.min(150, dy * 0.18))
+  const bow = Math.max(-88, Math.min(88, dx * 0.065))
   return `M ${sourceX} ${sourceY} C ${sourceX + curve * direction} ${sourceY + lift - bow}, ${targetX - curve * direction} ${targetY - lift + bow}, ${targetX} ${targetY}`
 }
 
