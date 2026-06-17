@@ -931,89 +931,66 @@
   font-weight: 500;
 }
 
-.entity-cms-topology {
+.entity-cms-reference-graph {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: 0;
   width: 100%;
   height: 100%;
+  display: block;
 }
 
-.entity-cms-links path {
+.entity-reference-links path {
   fill: none;
-  stroke: #a3abb6;
-  stroke-width: 1.55;
-  stroke-opacity: 0.58;
-}
-
-.entity-cms-links path.emphasized {
+  stroke: #aeb5be;
+  stroke-width: 1.1;
   stroke-opacity: 0.66;
-  stroke-width: 1.75;
 }
 
-.entity-cms-links text {
+.entity-reference-links text {
   fill: #5b6470;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 9px;
+  font-weight: 700;
   paint-order: stroke;
   stroke: #fff;
-  stroke-width: 6px;
+  stroke-width: 4px;
 }
 
-.entity-cms-nodes g {
+.entity-reference-nodes g {
   cursor: pointer;
 }
 
-.entity-cms-nodes g:hover rect:first-child,
-.entity-cms-nodes g.selected rect:first-child {
+.entity-reference-nodes g:hover .entity-reference-card,
+.entity-reference-nodes g.selected .entity-reference-card {
   filter: drop-shadow(0 2px 5px rgba(49, 74, 116, 0.18));
-  stroke-width: 2;
+  stroke-width: 1.8;
 }
 
-.entity-cms-card-bg {
-  stroke-width: 1.45;
-  filter: drop-shadow(0 1px 1px rgba(47, 65, 90, 0.06));
+.entity-reference-card {
+  stroke-width: 1.15;
 }
 
-.entity-cms-card-top {
-  opacity: 0.95;
+.entity-reference-card-bar {
+  opacity: 0.96;
 }
 
-.entity-cms-nodes text {
-  fill: #2c3440;
-  font-size: 13px;
+.entity-reference-nodes text {
+  fill: #2d3540;
+  font-size: 9px;
   font-weight: 700;
   pointer-events: none;
 }
 
-.entity-cms-nodes text.count {
+.entity-reference-nodes text.count {
   fill: #4f5966;
-  font-size: 12px;
+  font-size: 7.5px;
   font-weight: 500;
 }
 
-.entity-cms-nodes text.muted {
+.entity-reference-nodes text.muted {
   fill: #6f7987;
-  font-size: 11px;
+  font-size: 7.2px;
   font-weight: 500;
-}
-
-.entity-topology-hint {
-  position: absolute;
-  left: 128px;
-  top: 58%;
-  z-index: 11;
-  min-width: 288px;
-  height: 38px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 14px;
-  border: 1px solid #c9ced5;
-  border-radius: 2px;
-  background: linear-gradient(#f4f6f8, #e6e9ed);
-  color: #485160;
-  box-shadow: 0 2px 5px rgba(31, 45, 75, 0.18);
-  font-size: 16px;
-  font-weight: 700;
 }
 
 .entity-cms-minimap {
