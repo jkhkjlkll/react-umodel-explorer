@@ -703,8 +703,8 @@ function EntityTopologyView({
           <pattern id="entity-reference-dot-grid" width="12" height="12" patternUnits="userSpaceOnUse">
             <circle cx="1.2" cy="1.2" r="1" fill="#e7ebf1" />
           </pattern>
-          <marker id="entity-reference-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-            <path d="M0,0 L7,3.5 L0,7 Z" fill="#b7bec8" />
+          <marker id="entity-reference-arrow" markerWidth="5" markerHeight="5" refX="4.6" refY="2.5" orient="auto">
+            <path d="M0,0 L5,2.5 L0,5 Z" fill="#c3c8d0" />
           </marker>
         </defs>
         <rect width="2478" height="1238" fill="#fff" />
@@ -734,17 +734,17 @@ function EntityTopologyView({
                 }}
               >
                 <clipPath id={`entity-reference-title-clip-${index}`}>
-                  <rect x="9" y="3" width={Math.max(12, item.width - 28)} height="7" />
+                  <rect x="7.8" y="3" width={Math.max(11, item.width - 24)} height="6.2" />
                 </clipPath>
                 <clipPath id={`entity-reference-subtitle-clip-${index}`}>
-                  <rect x="9" y={item.height - 7.4} width={Math.max(16, item.width - 12)} height="5.8" />
+                  <rect x="7.8" y={item.height - 7.2} width={Math.max(16, item.width - 10)} height="5.6" />
                 </clipPath>
-                <rect className="entity-reference-card" width={item.width} height={item.height} rx="2.2" fill="#fff" stroke={item.color} />
-                <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="1.8" rx="0.9" fill={item.color} />
-                <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(3.6 5.5) scale(0.19)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <text x="9" y="7.9" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
-                <text x={item.width - 3.2} y="7.9" className="count" textAnchor="end">已接入: {item.access}</text>
-                <text x="9" y={item.height - 3.1} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
+                <rect className="entity-reference-card" width={item.width} height={item.height} rx="1.8" fill="#fff" stroke={item.color} />
+                <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="1.45" rx="0.72" fill={item.color} />
+                <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(3.2 5.2) scale(0.16)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <text x="7.8" y="7.2" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
+                <text x={item.width - 2.4} y="7.2" className="count" textAnchor="end">已接入: {item.access}</text>
+                <text x="7.8" y={item.height - 3} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
               </g>
             ))}
           </g>
@@ -855,13 +855,13 @@ function createReferenceStyleTopology(data: ReturnType<typeof createAliyunLikeTo
       node,
       x: template.x,
       y: template.y,
-      width: template.width || 44,
-      height: template.height || 17,
+      width: template.width || 40,
+      height: template.height || 18,
       title: template.title,
       subtitle: template.subtitle,
       color: template.color,
       access: template.access,
-      barWidth: Math.max(16, Math.min(26, (template.width || 44) * 0.38)),
+      barWidth: Math.max(15, Math.min(24, (template.width || 40) * 0.38)),
     }
   })
   const edges: ReferenceTopologyEdge[] = []
@@ -941,51 +941,42 @@ function referenceTopologyTemplates() {
 }
 
 function referenceTopologyCoordinates() {
-  const topChain = [
-    { x: 590, y: 99 }, { x: 1042, y: 143 }, { x: 731, y: 186 }, { x: 619, y: 230 },
-    { x: 776, y: 230 }, { x: 655, y: 318 }, { x: 740, y: 360 }, { x: 728, y: 404 },
-    { x: 693, y: 448 }, { x: 673, y: 535 }, { x: 881, y: 535 }, { x: 747, y: 644 },
+  return [
+    { x: 590, y: 99 }, { x: 1042, y: 142, width: 41 }, { x: 619, y: 230, width: 41, height: 13 },
+    { x: 732, y: 186, width: 39, height: 13 }, { x: 775, y: 230, width: 41, height: 13 },
+    { x: 850, y: 230, height: 17 }, { x: 737, y: 273, width: 39 }, { x: 678, y: 317, width: 41 },
+    { x: 743, y: 317, height: 17 }, { x: 694, y: 360, width: 41 }, { x: 678, y: 404 },
+    { x: 728, y: 404, width: 41 }, { x: 693, y: 448, height: 17 }, { x: 743, y: 448, height: 17 },
+    { x: 906, y: 448, height: 17 }, { x: 956, y: 448, width: 41, height: 17 },
+    { x: 1032, y: 448, height: 17 }, { x: 693, y: 491 }, { x: 743, y: 491 },
+    { x: 830, y: 491, width: 41 }, { x: 931, y: 491 }, { x: 981, y: 491, width: 41 },
+    { x: 1032, y: 491 }, { x: 673, y: 535, width: 41 }, { x: 880, y: 535, width: 41 },
+    { x: 931, y: 535, height: 17 }, { x: 649, y: 578, height: 13 }, { x: 1043, y: 578, width: 41 },
+    { x: 896, y: 579, height: 17 }, { x: 746, y: 643, width: 41 }, { x: 867, y: 643 },
+    { x: 967, y: 643, width: 41, height: 13 }, { x: 1063, y: 687, width: 39, height: 13 },
+    { x: 1119, y: 643, height: 13 }, { x: 1237, y: 687, height: 13 }, { x: 1358, y: 687, height: 13 },
+    { x: 866, y: 731, width: 41, height: 17 }, { x: 1240, y: 731, height: 13 },
+    { x: 1320, y: 731, height: 13 }, { x: 1410, y: 731, width: 41, height: 17 },
+    { x: 1118, y: 796, width: 41, height: 17 }, { x: 1480, y: 731, height: 17 },
+    { x: 1378, y: 767, height: 17 }, { x: 967, y: 796, height: 13 },
+    { x: 1018, y: 796, height: 13 }, { x: 1169, y: 796, height: 17 },
+    { x: 1219, y: 796, width: 41, height: 17 }, { x: 1269, y: 796, width: 41, height: 13 },
+    { x: 1335, y: 796, height: 17 }, { x: 1400, y: 796, height: 17 }, { x: 1480, y: 796, height: 17 },
+    { x: 1219, y: 839, width: 41 }, { x: 1270, y: 839 }, { x: 1367, y: 839, width: 41 },
+    { x: 697, y: 875, width: 41, height: 13 }, { x: 830, y: 948, width: 41 },
+    { x: 1195, y: 948, width: 41 }, { x: 1510, y: 904 }, { x: 1610, y: 948, width: 41 },
+    { x: 1661, y: 904 }, { x: 1711, y: 904, width: 41 }, { x: 1762, y: 904 },
+    { x: 1661, y: 948, height: 13 }, { x: 1761, y: 948, width: 41 },
+    { x: 1812, y: 948 }, { x: 1913, y: 948 }, { x: 1963, y: 948, width: 41 },
+    { x: 2013, y: 948 }, { x: 2064, y: 948 }, { x: 1580, y: 1036 },
+    { x: 1635, y: 1038 }, { x: 1690, y: 1040 }, { x: 1745, y: 1042 },
+    { x: 1800, y: 1044 }, { x: 1855, y: 1046 }, { x: 1910, y: 1048 },
+    { x: 1965, y: 1050 }, { x: 2020, y: 1052 }, { x: 2075, y: 1054 },
+    { x: 2130, y: 1056 }, { x: 2185, y: 1058 }, { x: 1605, y: 1100 },
+    { x: 1660, y: 1102 }, { x: 1715, y: 1104 }, { x: 1770, y: 1106 },
+    { x: 1825, y: 1108 }, { x: 1880, y: 1110 }, { x: 1935, y: 1112 },
+    { x: 1990, y: 1114 }, { x: 2045, y: 1116 },
   ]
-  const upperFan = [
-    { x: 956, y: 448 }, { x: 1043, y: 579 }, { x: 1018, y: 643 }, { x: 1240, y: 731 },
-    { x: 1410, y: 731 }, { x: 1480, y: 731 }, { x: 866, y: 796 }, { x: 967, y: 796 },
-    { x: 1068, y: 796, width: 70 }, { x: 1219, y: 796, width: 70 },
-  ]
-  const midMesh = [
-    { x: 760, y: 840 }, { x: 866, y: 840 }, { x: 697, y: 876 }, { x: 915, y: 876 },
-    { x: 1055, y: 880 }, { x: 1195, y: 892 }, { x: 1269, y: 904 }, { x: 1410, y: 900 },
-    { x: 650, y: 948 }, { x: 820, y: 945 }, { x: 980, y: 930 }, { x: 1120, y: 920 },
-    { x: 1195, y: 948, width: 70 }, { x: 1340, y: 940 }, { x: 1480, y: 930 },
-    { x: 1605, y: 910 }, { x: 585, y: 1015 }, { x: 720, y: 1010 }, { x: 860, y: 1000 },
-    { x: 1000, y: 992 }, { x: 1135, y: 985, width: 70 }, { x: 1270, y: 988 },
-    { x: 1400, y: 974 }, { x: 1535, y: 962 },
-  ]
-  const lowerArc = [
-    { x: 860, y: 1100, width: 46, height: 18 }, { x: 990, y: 1110, width: 46, height: 18 },
-    { x: 1120, y: 1116, width: 46, height: 18 }, { x: 1250, y: 1118, width: 46, height: 18 },
-    { x: 1380, y: 1112, width: 46, height: 18 }, { x: 1510, y: 1102, width: 46, height: 18 },
-    { x: 1640, y: 1090, width: 46, height: 18 },
-  ]
-  const centralCluster = [
-    { x: 1095, y: 735, width: 70 }, { x: 950, y: 700, width: 70 }, { x: 1045, y: 735 },
-    { x: 1180, y: 725 }, { x: 1320, y: 710 }, { x: 930, y: 805 }, { x: 1060, y: 825 },
-    { x: 1190, y: 835 }, { x: 1325, y: 825 }, { x: 820, y: 900 }, { x: 960, y: 925 },
-    { x: 1100, y: 940 }, { x: 1240, y: 936 }, { x: 1385, y: 910 }, { x: 1515, y: 875 },
-    { x: 1650, y: 860 }, { x: 1785, y: 850 },
-  ]
-  const rightBranch = [
-    { x: 1565, y: 960, width: 44, height: 18 }, { x: 1685, y: 960, width: 44, height: 18 },
-    { x: 1805, y: 960, width: 44, height: 18 }, { x: 1925, y: 965, width: 44, height: 18 },
-    { x: 1555, y: 1030, width: 44, height: 18 }, { x: 1680, y: 1038, width: 44, height: 18 },
-    { x: 1805, y: 1046, width: 44, height: 18 }, { x: 1930, y: 1052, width: 44, height: 18 },
-    { x: 2055, y: 1060, width: 44, height: 18 },
-  ]
-  const farRight = [
-    { x: 1585, y: 890 }, { x: 1715, y: 890 }, { x: 1845, y: 895 },
-    { x: 1605, y: 955 }, { x: 1735, y: 962 }, { x: 1865, y: 970 },
-    { x: 1625, y: 1025 }, { x: 1755, y: 1035 }, { x: 1885, y: 1045 },
-  ]
-  return [...topChain, ...upperFan, ...midMesh, ...lowerArc, ...centralCluster, ...rightBranch, ...farRight]
 }
 
 function referenceTopologyRelations() {
