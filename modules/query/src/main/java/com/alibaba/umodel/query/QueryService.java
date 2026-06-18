@@ -39,6 +39,7 @@ public class QueryService {
     private static final Pattern GRAPH_CALL_PATTERN = Pattern.compile("^graph-call\\s+(.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern ENTITY_CALL_PATTERN = Pattern.compile("^entity-call\\s+(.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern SIMPLE_PREDICATE_PATTERN = Pattern.compile("^([A-Za-z0-9_.$-]+)\\s*=\\s*(.+)$");
+    private static final Pattern FILTER_PREDICATE_PATTERN = Pattern.compile("^([A-Za-z0-9_.$-]+)\\s*(=|==|:|!=|in|not\\s+in)\\s*(.+)$", Pattern.CASE_INSENSITIVE);
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final GraphStore graphStore;
@@ -506,34 +507,90 @@ public class QueryService {
         EntityCallPlan call = plan.entityCall();
         String metric = stringValue(call.parameters().get("metric"));
         String step = stringValue(call.parameters().get("step"));
-        String queryType = firstNonEmpty(stringValue(call.parameters().get("query_type")), stringValue(spec(metricSet).get("query_type")), "range");
+        String queryType = firstNonEmpty(
+                stringValue(call.parameters().get("query_type")),
+                defaultMetricQueryMode(metrics),
+                stringValue(spec(binding.storage()).get("default_query_type")),
+                "range"
+        );
+        Map<String, Object> dataLinkMapping = mapValue(spec(dataLink).get("fields_mapping"));
+        Map<String, Object> storageLinkMapping = mapValue(spec(binding.link()).get("fields_mapping"));
+        List<String> entityIds = stringList(plan.filters().get("ids"));
+        String entityQuery = stringValue(plan.filters().get("query"));
+        String dataFilter = stringValue(spec(dataLink).get("data_filter"));
+        String methodQuery = stringValue(call.parameters().get("query"));
+        PrometheusQueryParts queryParts = prometheusQueryParts(
+                binding.storage(),
+                dataLinkMapping,
+                storageLinkMapping,
+                entityIds,
+                entityQuery,
+                dataFilter,
+                methodQuery
+        );
         Map<String, Object> query = new LinkedHashMap<>();
         query.put("dialect", storageDialect(binding.storage(), "prometheus_promql"));
         query.put("endpoint", spec(binding.storage()).get("endpoint"));
+        query.put("api_prefix", firstNonEmpty(stringValue(spec(binding.storage()).get("api_prefix")), "/api/v1"));
         query.put("query_type", queryType);
         query.put("step", firstNonEmpty(step, stringValue(spec(binding.storage()).get("default_step"))));
+        if (spec(binding.storage()).containsKey("lookback_delta")) {
+            query.put("lookback_delta", spec(binding.storage()).get("lookback_delta"));
+        }
         query.put("metrics", metrics.stream().map(QueryService::metricItem).toList());
-        query.put("label_matchers", labelMatchers(dataLink, binding.link(), plan));
+        query.put("queries", metrics.stream()
+                .map(item -> metricQueryItemWithPromql(item, queryParts.matchers()))
+                .toList());
+        query.put("label_matchers", queryParts.matchers());
+        if (!queryParts.rawFilters().isEmpty()) {
+            query.put("raw_filters", queryParts.rawFilters());
+        }
+        if (!stringValue(spec(binding.storage()).get("tenant")).isBlank()) {
+            query.put("tenant", spec(binding.storage()).get("tenant"));
+        }
+        if (!stringValue(spec(binding.storage()).get("tenant_header")).isBlank()) {
+            query.put("tenant_header", spec(binding.storage()).get("tenant_header"));
+        }
+        if (spec(binding.storage()).get("external_labels") instanceof Map<?, ?> externalLabels && !externalLabels.isEmpty()) {
+            query.put("external_labels", mapValue(externalLabels));
+        }
+        if (!stringValue(spec(metricSet).get("query_type")).isBlank()) {
+            query.put("query_family", spec(metricSet).get("query_type"));
+        }
+        query.put("entity_ids", entityIds);
+        query.put("entity_query", entityQuery);
+        query.put("data_filter", dataFilter);
+        query.put("query", methodQuery);
         query.put("limit", plan.limit());
 
         Map<String, Object> out = basePlan(plan, "get_metrics", metricSet, dataLink, binding);
-        out.put("description", describeMetricPlan(metricSet, binding.storage(), metric, stringValue(call.parameters().get("query")), queryType, step));
+        out.put("description", describeMetricPlan(metricSet, binding.storage(), metric, methodQuery, queryType, step));
         out.put("query", query);
         return out;
     }
 
     private static Map<String, Object> logQueryPlan(QueryPlan plan, UModelElement logSet, UModelElement dataLink, StorageBinding binding) {
         EntityCallPlan call = plan.entityCall();
+        Map<String, Object> dataLinkMapping = mapValue(spec(dataLink).get("fields_mapping"));
+        Map<String, Object> storageLinkMapping = mapValue(spec(binding.link()).get("fields_mapping"));
+        List<String> entityIds = stringList(plan.filters().get("ids"));
+        String entityQuery = stringValue(plan.filters().get("query"));
+        String dataFilter = stringValue(spec(dataLink).get("data_filter"));
+        String methodQuery = stringValue(call.parameters().get("query"));
         Map<String, Object> query = new LinkedHashMap<>();
         query.put("dialect", storageDialect(binding.storage(), "elasticsearch_dsl"));
         query.put("endpoint", spec(binding.storage()).get("endpoint"));
         query.put("index", firstNonEmpty(stringValue(spec(logSet).get("index")), stringValue(spec(binding.storage()).get("index"))));
         query.put("filters", labelMatchers(dataLink, binding.link(), plan));
-        query.put("query", stringValue(call.parameters().get("query")));
+        query.put("body", elasticsearchBody(logSet, binding.storage(), dataLinkMapping, storageLinkMapping, entityIds, entityQuery, dataFilter, methodQuery, plan.limit()));
+        query.put("entity_ids", entityIds);
+        query.put("entity_query", entityQuery);
+        query.put("data_filter", dataFilter);
+        query.put("query", methodQuery);
         query.put("limit", plan.limit());
 
         Map<String, Object> out = basePlan(plan, "get_logs", logSet, dataLink, binding);
-        out.put("description", describeLogPlan(logSet, binding.storage(), stringValue(call.parameters().get("query"))));
+        out.put("description", describeLogPlan(logSet, binding.storage(), methodQuery));
         out.put("query", query);
         return out;
     }
@@ -618,6 +675,312 @@ public class QueryService {
         out.put("operator", operator);
         out.put("value", value);
         return out;
+    }
+
+    private static PrometheusQueryParts prometheusQueryParts(
+            UModelElement storage,
+            Map<String, Object> dataLinkMapping,
+            Map<String, Object> storageLinkMapping,
+            List<String> entityIds,
+            String entityQuery,
+            String dataFilter,
+            String methodQuery
+    ) {
+        List<Map<String, Object>> matchers = new ArrayList<>();
+        List<String> rawFilters = new ArrayList<>();
+        String idField = mappedStorageField(dataLinkMapping, storageLinkMapping, "id");
+        if (!idField.isBlank() && entityIds != null && !entityIds.isEmpty()) {
+            matchers.add(valuesMatcher(idField, entityIds, false));
+        }
+        addPrometheusFilter(matchers, rawFilters,
+                firstNonEmpty(
+                        stringValue(spec(storage).get("search_filter")),
+                        stringValue(spec(storage).get("default_filter")),
+                        stringValue(spec(storage).get("query_filter"))
+                ),
+                field -> field);
+        addPrometheusFilter(matchers, rawFilters, dataFilter, field -> dataSetStorageField(storageLinkMapping, field));
+        addPrometheusFilter(matchers, rawFilters, entityQuery, field -> mappedStorageField(dataLinkMapping, storageLinkMapping, field));
+        addPrometheusFilter(matchers, rawFilters, methodQuery, field -> dataSetStorageField(storageLinkMapping, field));
+        return new PrometheusQueryParts(dedupeMatchers(matchers), rawFilters);
+    }
+
+    private static void addPrometheusFilter(
+            List<Map<String, Object>> matchers,
+            List<String> rawFilters,
+            String raw,
+            FieldMapper mapper
+    ) {
+        raw = raw == null ? "" : raw.trim();
+        if (raw.isBlank() || "*".equals(raw)) {
+            return;
+        }
+        boolean parsedAny = false;
+        for (String part : splitConjunctions(raw)) {
+            Matcher matcher = FILTER_PREDICATE_PATTERN.matcher(part.trim());
+            if (!matcher.matches()) {
+                rawFilters.add(part.trim());
+                continue;
+            }
+            String field = mapper.map(matcher.group(1).trim());
+            String op = matcher.group(2).trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+            Object value = parseValue(matcher.group(3).trim(), Map.of());
+            if (field.isBlank()) {
+                rawFilters.add(part.trim());
+                continue;
+            }
+            switch (op) {
+                case "=", "==", ":" -> {
+                    matchers.add(matcher(field, "=", stringValue(value)));
+                    parsedAny = true;
+                }
+                case "!=" -> {
+                    matchers.add(matcher(field, "!=", stringValue(value)));
+                    parsedAny = true;
+                }
+                case "in" -> {
+                    matchers.add(valuesMatcher(field, stringList(value), false));
+                    parsedAny = true;
+                }
+                case "not in" -> {
+                    matchers.add(valuesMatcher(field, stringList(value), true));
+                    parsedAny = true;
+                }
+                default -> rawFilters.add(part.trim());
+            }
+        }
+        if (!parsedAny && rawFilters.stream().noneMatch(raw::equals)) {
+            rawFilters.add(raw);
+        }
+    }
+
+    private static Map<String, Object> valuesMatcher(String label, List<String> values, boolean negative) {
+        if (values == null || values.isEmpty()) {
+            return matcher(label, negative ? "!=" : "=", "");
+        }
+        if (values.size() == 1) {
+            return matcher(label, negative ? "!=" : "=", values.get(0));
+        }
+        String value = values.stream().map(Pattern::quote).reduce((left, right) -> left + "|" + right).orElse("");
+        return matcher(label, negative ? "!~" : "=~", value);
+    }
+
+    private static Map<String, Object> metricQueryItemWithPromql(Map<String, Object> metric, List<Map<String, Object>> matchers) {
+        Map<String, Object> item = metricItem(metric);
+        String promql = firstNonEmpty(stringValue(metric.get("generator")), stringValue(metric.get("name")));
+        item.put("promql", renderPromQL(promql, matchers));
+        return item;
+    }
+
+    private static String renderPromQL(String promQL, List<Map<String, Object>> matchers) {
+        if (promQL == null || promQL.isBlank() || matchers == null || matchers.isEmpty()) {
+            return promQL;
+        }
+        List<Map<String, Object>> remaining = new ArrayList<>();
+        String rendered = promQL;
+        for (Map<String, Object> matcher : matchers) {
+            String label = stringValue(matcher.get("label"));
+            String operator = stringValue(matcher.get("operator"));
+            String value = stringValue(matcher.get("value"));
+            String placeholder = "$" + label;
+            if (rendered.contains(placeholder)) {
+                if ("=".equals(operator)) {
+                    rendered = rendered.replace(placeholder, escapePromQLStringContent(value));
+                    continue;
+                }
+                String pattern = label + "=\"" + placeholder + "\"";
+                if (rendered.contains(pattern)) {
+                    rendered = rendered.replace(pattern, label + operator + quotePromQLString(value));
+                    continue;
+                }
+            }
+            if (promQLSelectorHasLabel(rendered, label)) {
+                continue;
+            }
+            remaining.add(matcher);
+        }
+        return injectPromQLMatchers(rendered, remaining);
+    }
+
+    private static boolean promQLSelectorHasLabel(String promQL, String label) {
+        for (String op : List.of("=~", "!~", "!=", "=")) {
+            if (promQL.contains(label + op)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String injectPromQLMatchers(String promQL, List<Map<String, Object>> matchers) {
+        if (matchers == null || matchers.isEmpty()) {
+            return promQL;
+        }
+        int open = promQL.indexOf('{');
+        if (open < 0) {
+            return promQL;
+        }
+        String matcherText = prometheusMatcherText(matchers);
+        if (open + 1 < promQL.length() && promQL.charAt(open + 1) == '}') {
+            return promQL.substring(0, open + 1) + matcherText + promQL.substring(open + 1);
+        }
+        return promQL.substring(0, open + 1) + matcherText + "," + promQL.substring(open + 1);
+    }
+
+    private static String prometheusMatcherText(List<Map<String, Object>> matchers) {
+        List<String> parts = new ArrayList<>();
+        for (Map<String, Object> matcher : matchers) {
+            parts.add(stringValue(matcher.get("label"))
+                    + stringValue(matcher.get("operator"))
+                    + quotePromQLString(stringValue(matcher.get("value"))));
+        }
+        return String.join(",", parts);
+    }
+
+    private static String quotePromQLString(String value) {
+        return "\"" + escapePromQLStringContent(value) + "\"";
+    }
+
+    private static String escapePromQLStringContent(String value) {
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n");
+    }
+
+    private static Map<String, Object> elasticsearchBody(
+            UModelElement logSet,
+            UModelElement storage,
+            Map<String, Object> dataLinkMapping,
+            Map<String, Object> storageLinkMapping,
+            List<String> entityIds,
+            String entityQuery,
+            String dataFilter,
+            String methodQuery,
+            int limit
+    ) {
+        String timeField = firstNonEmpty(
+                stringValue(spec(storage).get("time_field")),
+                dataSetStorageField(storageLinkMapping, firstNonEmpty(stringValue(spec(logSet).get("time_field")), "timestamp"))
+        );
+        int size = intValue(spec(storage).get("default_size"));
+        if (limit > 0 && (size == 0 || limit < size)) {
+            size = limit;
+        }
+        if (size <= 0) {
+            size = 1000;
+        }
+
+        List<Map<String, Object>> filters = new ArrayList<>();
+        String idField = mappedStorageField(dataLinkMapping, storageLinkMapping, "id");
+        if (!idField.isBlank() && entityIds != null && !entityIds.isEmpty()) {
+            if (entityIds.size() == 1) {
+                filters.add(Map.of("term", Map.of(idField, entityIds.get(0))));
+            } else {
+                filters.add(Map.of("terms", Map.of(idField, entityIds)));
+            }
+        }
+        appendLogQueryFilter(filters,
+                firstNonEmpty(
+                        stringValue(spec(storage).get("search_filter")),
+                        stringValue(spec(storage).get("default_filter")),
+                        stringValue(spec(storage).get("query_filter"))
+                ),
+                field -> field);
+        appendLogQueryFilter(filters, dataFilter, field -> dataSetStorageField(storageLinkMapping, field));
+        appendLogQueryFilter(filters, entityQuery, field -> mappedStorageField(dataLinkMapping, storageLinkMapping, field));
+        appendLogQueryFilter(filters, methodQuery, field -> dataSetStorageField(storageLinkMapping, field));
+
+        Map<String, Object> query = new LinkedHashMap<>();
+        if (filters.isEmpty()) {
+            query.put("match_all", Map.of());
+        } else {
+            query.put("bool", Map.of("filter", filters));
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("size", size);
+        body.put("query", query);
+        body.put("sort", List.of(Map.of(timeField, Map.of("order", firstNonEmpty(stringValue(spec(logSet).get("default_order")), "desc")))));
+        List<String> outputFields = mappedLogOutputFields(logSet, storageLinkMapping);
+        if (!outputFields.isEmpty()) {
+            body.put("_source", outputFields);
+        }
+        return body;
+    }
+
+    private static void appendLogQueryFilter(List<Map<String, Object>> filters, String raw, FieldMapper mapper) {
+        raw = raw == null ? "" : raw.trim();
+        if (raw.isBlank() || "*".equals(raw)) {
+            return;
+        }
+        List<Map<String, Object>> current = new ArrayList<>();
+        for (String part : splitConjunctions(raw)) {
+            Map<String, Object> filter = logComparisonFilter(part.trim(), mapper);
+            if (filter == null) {
+                current.add(Map.of("query_string", Map.of("query", part.trim())));
+            } else {
+                current.add(filter);
+            }
+        }
+        if (current.size() == 1) {
+            filters.add(current.get(0));
+        } else if (!current.isEmpty()) {
+            filters.add(Map.of("bool", Map.of("filter", current)));
+        }
+    }
+
+    private static Map<String, Object> logComparisonFilter(String raw, FieldMapper mapper) {
+        Matcher matcher = FILTER_PREDICATE_PATTERN.matcher(raw);
+        if (!matcher.matches()) {
+            return null;
+        }
+        String field = mapper.map(matcher.group(1).trim());
+        String op = matcher.group(2).trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+        Object value = parseValue(matcher.group(3).trim(), Map.of());
+        if (field.isBlank()) {
+            return null;
+        }
+        return switch (op) {
+            case "=", "==", ":" -> Map.of("term", Map.of(field, stringValue(value)));
+            case "!=" -> Map.of("bool", Map.of("must_not", List.of(Map.of("term", Map.of(field, stringValue(value))))));
+            case "in" -> Map.of("terms", Map.of(field, stringList(value)));
+            case "not in" -> Map.of("bool", Map.of("must_not", List.of(Map.of("terms", Map.of(field, stringList(value))))));
+            default -> null;
+        };
+    }
+
+    private static List<String> mappedLogOutputFields(UModelElement logSet, Map<String, Object> storageLinkMapping) {
+        Object fields = spec(logSet).get("fields");
+        List<String> out = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        if (fields instanceof Map<?, ?> map) {
+            for (Object key : map.keySet()) {
+                addMappedOutputField(out, seen, storageLinkMapping, stringValue(key));
+            }
+        } else if (fields instanceof List<?> list) {
+            for (Object field : list) {
+                if (field instanceof Map<?, ?> item) {
+                    addMappedOutputField(out, seen, storageLinkMapping, stringValue(item.get("name")));
+                } else {
+                    addMappedOutputField(out, seen, storageLinkMapping, stringValue(field));
+                }
+            }
+        }
+        return out;
+    }
+
+    private static void addMappedOutputField(List<String> out, Set<String> seen, Map<String, Object> storageLinkMapping, String field) {
+        if (field.isBlank()) {
+            return;
+        }
+        String mapped = dataSetStorageField(storageLinkMapping, field);
+        if (seen.add(mapped)) {
+            out.add(mapped);
+        }
+    }
+
+    private static String dataSetStorageField(Map<String, Object> storageLinkMapping, String field) {
+        String mapped = stringValue(storageLinkMapping.get(field));
+        return mapped.isBlank() ? field : mapped;
     }
 
     private static String mappedStorageField(Map<String, Object> dataLinkMapping, Map<String, Object> storageLinkMapping, String entityField) {
@@ -1197,6 +1560,21 @@ public class QueryService {
         return item;
     }
 
+    private static String defaultMetricQueryMode(List<Map<String, Object>> metrics) {
+        for (Map<String, Object> metric : metrics) {
+            String mode = stringValue(metric.get("query_mode"));
+            if (!mode.isBlank() && !"both".equals(mode)) {
+                return mode;
+            }
+        }
+        for (Map<String, Object> metric : metrics) {
+            if ("both".equals(stringValue(metric.get("query_mode")))) {
+                return "range";
+            }
+        }
+        return "";
+    }
+
     private static Map<String, Object> storageInfo(UModelElement storage) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("domain", storage.domain());
@@ -1452,6 +1830,13 @@ public class QueryService {
     }
 
     private record StorageBinding(UModelElement link, UModelElement storage) {
+    }
+
+    private record PrometheusQueryParts(List<Map<String, Object>> matchers, List<String> rawFilters) {
+    }
+
+    private interface FieldMapper {
+        String map(String field);
     }
 
     private record MethodSpec(String name, List<EntityCallParam> params) {

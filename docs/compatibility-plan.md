@@ -126,6 +126,15 @@ Initial parser requirements:
   indexes upstream-aligned sections: `knowledge`, `observations`, `actions`,
   `automations`, and `skills`; Java also accepts `steps` for backward
   compatibility with earlier sample data.
+- `get_metrics` and `get_logs` now emit richer upstream-aligned plan payloads:
+  Prometheus plans include rendered PromQL, `api_prefix`, label matchers,
+  raw filters, tenant/external label metadata, entity ids/query, and data
+  filters; Elasticsearch plans include a runnable DSL-style body with bool
+  filters, sort, size, and mapped output fields.
+- The Java skill package now has the same root-level skill document layout as
+  upstream: `README.md`, `README.zh-CN.md`, `QUICKSTART.md`,
+  `QUICKSTART.zh-CN.md`, `umodel-query`, and `umodel-rca`. The Markdown content
+  is Chinese and Java HTTP/MCP-oriented.
 - `keyword`, `vector`, `hyper`, and `hybrid` search modes are accepted as memory
   keyword fallback until a real search provider is configured.
 - MCP stdio and HTTP+SSE transports are present.
@@ -136,7 +145,10 @@ Initial parser requirements:
 
 - Replace memory keyword fallback with a real vector/hybrid search provider.
 - Replace `local.ladybug` stub with a Java Ladybug runtime adapter.
-- Expand controlled Cypher fallback into full provider-backed Cypher parity.
+- Expand controlled Cypher fallback into full provider-backed Cypher parity or
+  port the upstream read-only Cypher engine semantics to Java.
+- Add `mode=data` telemetry execution provider parity for real metric/log rows.
+- Replace handwritten schema checks with generated schema validation parity.
 - Add SDK and CLI compatibility gates.
 - Add fixture-based Go/Java parity tests for newer AgentGateway and MCP
   surfaces.
