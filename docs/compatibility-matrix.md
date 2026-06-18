@@ -40,4 +40,4 @@ The Java backend is moving toward a 1:1 public-behavior replica, but the followi
 | Telemetry `mode=data` | Rejected with `NotImplemented`; Java returns executable plans. | Real telemetry data execution provider or PaaS-compatible data endpoint that returns rows. |
 | Generated schema validation | Handwritten expanded partial validation. | Generated schema loading/validation parity with upstream schema specs. |
 | SDK/CLI/UI | Java backend server/MCP only. | CLI, SDK, UI, and fixture gates that exercise the same public contracts against Java. |
-| Parity tests | Manual/API-oriented comparison. | Shared Go/Java fixture suite comparing response shape, stable fields, errors, MCP, AgentGateway, skills, and query output. |
+| Parity tests | Initial Java Query parity tests cover telemetry plan shape, runbook skill search, and the `mode=data` gap. | Shared Go/Java fixture suite comparing response shape, stable fields, errors, MCP, AgentGateway, skills, and query output. |

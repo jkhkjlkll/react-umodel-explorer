@@ -135,6 +135,8 @@ Initial parser requirements:
   upstream: `README.md`, `README.zh-CN.md`, `QUICKSTART.md`,
   `QUICKSTART.zh-CN.md`, `umodel-query`, and `umodel-rca`. The Markdown content
   is Chinese and Java HTTP/MCP-oriented.
+- `modules/query` has initial Java-side parity tests for telemetry plan fields,
+  `.runbook_set` skill search, and the explicit `mode=data` unsupported boundary.
 - `keyword`, `vector`, `hyper`, and `hybrid` search modes are accepted as memory
   keyword fallback until a real search provider is configured.
 - MCP stdio and HTTP+SSE transports are present.
@@ -150,8 +152,8 @@ Initial parser requirements:
 - Add `mode=data` telemetry execution provider parity for real metric/log rows.
 - Replace handwritten schema checks with generated schema validation parity.
 - Add SDK and CLI compatibility gates.
-- Add fixture-based Go/Java parity tests for newer AgentGateway and MCP
-  surfaces.
+- Expand the initial Java Query tests into shared fixture-based Go/Java parity
+  tests for REST, AgentGateway, MCP, skills, and query outputs.
 
 ## Non-Goals For The First Subset
 
