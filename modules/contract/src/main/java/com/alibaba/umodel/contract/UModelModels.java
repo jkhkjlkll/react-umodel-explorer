@@ -10,6 +10,10 @@ import java.util.Map;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class UModelModels {
+    public static final String FORMAT_ASSISTANT = "";
+    public static final String FORMAT_AGENT = "agent";
+    public static final String AGENT_PLAN_RESULT_COLUMN = "__agent_plan__";
+
     private UModelModels() {
     }
 
@@ -222,20 +226,45 @@ public final class UModelModels {
             String query,
             Map<String, Object> parameters,
             Integer limit,
+            @JsonProperty("timeout_ms")
             Integer timeoutMs,
+            @JsonProperty("time_range")
             Object timeRange,
-            String format
+            String format,
+            String mode,
+            @JsonProperty("include_spec")
+            Boolean includeSpec
     ) {
+        public QueryRequest(
+                String query,
+                Map<String, Object> parameters,
+                Integer limit,
+                Integer timeoutMs,
+                Object timeRange,
+                String format
+        ) {
+            this(query, parameters, limit, timeoutMs, timeRange, format, null, null);
+        }
+
+        public boolean includeSpecEnabled() {
+            return Boolean.TRUE.equals(includeSpec);
+        }
     }
 
     public record QueryPlan(
             String workspace,
             String source,
+            String query,
             Map<String, Object> filters,
             List<String> project,
             String sortField,
             int limit,
-            String graphCall
+            String graphCall,
+            EntityCallPlan entityCall,
+            String format,
+            boolean includeSpec,
+            String mode,
+            Integer topK
     ) {
     }
 
@@ -293,7 +322,64 @@ public final class UModelModels {
             Boolean timeRangeApplied,
             String searchMode,
             String searchProvider,
-            String embedModel
+            String embedModel,
+            EntityCallPlan entityCall
+    ) {
+        public QueryExplain(
+                String source,
+                String provider,
+                String storageProvider,
+                List<String> pushdown,
+                List<String> fallback,
+                List<String> operators,
+                Integer depth,
+                Map<String, Object> filters,
+                Integer limit,
+                Integer timeoutMs,
+                Boolean timeRangeApplied,
+                String searchMode,
+                String searchProvider,
+                String embedModel
+        ) {
+            this(
+                    source,
+                    provider,
+                    storageProvider,
+                    pushdown,
+                    fallback,
+                    operators,
+                    depth,
+                    filters,
+                    limit,
+                    timeoutMs,
+                    timeRangeApplied,
+                    searchMode,
+                    searchProvider,
+                    embedModel,
+                    null
+            );
+        }
+    }
+
+    public record EntityCallParam(
+            String key,
+            String type,
+            @JsonProperty("display_name")
+            String displayName,
+            String description,
+            boolean required,
+            @JsonProperty("default")
+            Object defaultValue
+    ) {
+    }
+
+    public record EntityCallPlan(
+            String name,
+            List<Object> arguments,
+            @JsonProperty("named_arguments")
+            Map<String, Object> namedArguments,
+            Map<String, Object> parameters,
+            List<EntityCallParam> signature
     ) {
     }
 
@@ -380,6 +466,28 @@ public final class UModelModels {
             String mimeType,
             Object content
     ) {
+    }
+
+    public static boolean isAgentPlanResult(QueryResult result) {
+        return result != null
+                && result.columns() != null
+                && result.columns().size() == 1
+                && AGENT_PLAN_RESULT_COLUMN.equals(result.columns().get(0));
+    }
+
+    public static Map<String, Object> agentPlanPayload(QueryResult result) {
+        if (!isAgentPlanResult(result) || result.rows() == null || result.rows().isEmpty()) {
+            return null;
+        }
+        Object payload = result.rows().get(0).get(AGENT_PLAN_RESULT_COLUMN);
+        if (!(payload instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Map<String, Object> copy = new java.util.LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            copy.put(String.valueOf(entry.getKey()), entry.getValue());
+        }
+        return copy;
     }
 
     public static String nullToEmpty(String value) {

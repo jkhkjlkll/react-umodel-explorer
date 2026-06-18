@@ -6,6 +6,7 @@ import com.alibaba.umodel.contract.UModelException;
 import com.alibaba.umodel.entitystore.EntityStoreService;
 import com.alibaba.umodel.graphstore.GraphStore;
 import com.alibaba.umodel.graphstore.file.FileMemoryGraphStore;
+import com.alibaba.umodel.graphstore.ladybug.LadybugGraphStore;
 import com.alibaba.umodel.graphstore.memory.MemoryGraphStore;
 import com.alibaba.umodel.query.QueryService;
 import com.alibaba.umodel.sampledata.SampleDataService;
@@ -27,10 +28,7 @@ public class UModelBackendConfiguration {
         return switch (provider == null ? "memory" : provider) {
             case "memory" -> new MemoryGraphStore();
             case "file.memory" -> new FileMemoryGraphStore(Path.of(dataRoot));
-            case "local.ladybug" -> throw new UModelException(
-                    ErrorCodes.PROVIDER_UNAVAILABLE,
-                    "local.ladybug is not implemented in the Java subset"
-            );
+            case "local.ladybug" -> new LadybugGraphStore();
             default -> throw new UModelException(ErrorCodes.INVALID_ARGUMENT, "unknown graphstore provider: " + provider);
         };
     }

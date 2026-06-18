@@ -24,6 +24,7 @@
         <module>modules/graphstore-api</module>
         <module>modules/graphstore-memory</module>
         <module>modules/graphstore-file</module>
+        <module>modules/graphstore-ladybug</module>
         <module>modules/workspace</module>
         <module>modules/umodel</module>
         <module>modules/entitystore</module>
@@ -32,6 +33,7 @@
         <module>modules/sampledata</module>
         <module>modules/bootstrap</module>
         <module>apps/umodel-server</module>
+        <module>apps/umodel-mcp-stdio</module>
     </modules>
 
     <properties>
@@ -40,4 +42,3 @@
         <maven.compiler.release>21</maven.compiler.release>
     </properties>
 </project>
-

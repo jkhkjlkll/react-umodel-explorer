@@ -11,6 +11,8 @@ The Java service must preserve:
 - REST contract shape from `compat/openapi/openapi.yaml`.
 - Query Service as the only public read path.
 - Public query sources: `.umodel`, `.entity`, and `.topo`.
+- Java extension query sources now also include `.entity_set` and `.runbook_set`
+  to match newer AgentGateway workflows.
 - Workspace-scoped operations.
 - GraphStore provider abstraction.
 - AgentGateway metadata-oriented resources and query-oriented tools.
@@ -49,18 +51,25 @@ Supported SPL subset:
 ```text
 .umodel with(kind='entity_set') | project domain,name,kind | sort name | limit 20
 .entity with(domain='devops', name='devops.service', query=$query) | limit 20
+.entity_set with(domain='devops', name='devops.service') | entity-call __list_method__()
+.entity_set with(domain='devops', name='devops.service') | entity-call list_data_set(['metric_set', 'log_set'], true)
+.entity_set with(domain='devops', name='devops.service', ids=['...']) | entity-call get_logs('devops', 'devops.log.service', query='level = "ERROR"')
+.entity_set with(domain='devops', name='devops.service', ids=['...']) | entity-call get_metrics('devops', 'devops.metric.service', 'request_count', step='30s')
 .topo | graph-call getDirectRelations(...) | limit 20
 .topo | graph-call getNeighborNodes(...) | limit 20
+.runbook_set with(domain='apm', type='knowledge', query='slow request', mode='hyper', topk=5)
 ```
 
 Initial parser requirements:
 
-- Source detection for `.umodel`, `.entity`, `.topo`.
+- Source detection for `.umodel`, `.entity_set`, `.entity`, `.topo`, `.runbook_set`.
 - `with(...)` filters with string, number, boolean, and `$parameter` values.
 - `project` comma-separated fields.
 - `sort` single field.
 - `limit` integer.
 - `graph-call` payload captured for topology dispatch.
+- `entity-call` payload captured for EntitySet method planning.
+- `format=agent` returns a top-level v1.1 JSON plan for `get_logs` and `get_metrics`; `include=spec` expands folded references.
 
 ### M4: AgentGateway REST
 
@@ -77,28 +86,53 @@ Initial parser requirements:
 - Tool calls reuse AgentGateway tools.
 - Write tools stay disabled by default through the same `UMODEL_AGENT_WRITE_ENABLED` switch.
 
+### M5.5: Enhanced Agent/MCP/Skill Surface
+
+- `/mcp` also covers resource templates, prompts, completion, and
+  `umodel/discovery`.
+- `/sse` and `/messages` provide HTTP+SSE compatibility for MCP clients that
+  still use the legacy transport split.
+- `apps/umodel-mcp-stdio` provides a line-delimited JSON-RPC stdio wrapper
+  backed by the same services and tools.
+- `skills/umodel-query` and `skills/umodel-rca` document Java backend query and
+  incident workflows for Codex-style skill clients.
+- AgentGateway exposes bundled skill metadata as a read-only resource.
+
 ### M6: Compatibility Fixtures
 
 - Reuse one quickstart fixture against both Go and Java services.
 - Compare JSON shape, stable fields, error codes, and core row values.
 - Keep differences documented in `docs/compatibility-matrix.md`.
 
-### M7: Complete Replacement
+### M7: Current Enhanced Replacement Scope
 
-- Expand schema validation.
-- Expand Query and topology graph calls.
-- Add MCP stdio and SSE transports.
-- Expand HTTP MCP coverage to the complete method set.
-- Add search/vector/hybrid modes when provider support exists.
+- Schema validation is expanded for core Java model pack shapes, including
+  EntitySet, MetricSet, LogSet, RunbookSet, storage endpoints, link endpoints,
+  and `fields_mapping`.
+- Query and topology graph calls are expanded with multi-hop
+  `getNeighborNodes`, direct relation filtering, and a controlled read-only
+  `cypher(...)` fallback for relation rows.
+- `.runbook_set` executes against in-memory UModel `runbook_set` definitions.
+- `keyword`, `vector`, `hyper`, and `hybrid` search modes are accepted as memory
+  keyword fallback until a real search provider is configured.
+- MCP stdio and HTTP+SSE transports are present.
+- `local.ladybug` is present as a compatibility stub with stable health and
+  provider-unavailable errors.
+
+### M8: Remaining Full-Parity Gates
+
+- Replace memory keyword fallback with a real vector/hybrid search provider.
+- Replace `local.ladybug` stub with a Java Ladybug runtime adapter.
+- Expand controlled Cypher fallback into full provider-backed Cypher parity.
 - Add SDK and CLI compatibility gates.
+- Add fixture-based Go/Java parity tests for newer AgentGateway and MCP
+  surfaces.
 
 ## Non-Goals For The First Subset
 
-- `local.ladybug`.
-- Full Cypher compatibility.
-- Full MCP stdio/SSE transport.
-- Full schema spec validation.
-- Vector and hybrid search.
+- Real `local.ladybug` execution without a Ladybug Java adapter.
+- Full Cypher engine compatibility beyond controlled read-only relation rows.
+- Real vector and hybrid search ranking beyond memory keyword fallback.
 - Generated SDK regeneration.
 
 ## Design Constraints

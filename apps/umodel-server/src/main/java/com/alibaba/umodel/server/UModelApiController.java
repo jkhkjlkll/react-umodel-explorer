@@ -32,6 +32,8 @@ import com.alibaba.umodel.workspace.WorkspaceService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,12 +44,20 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+import static com.alibaba.umodel.contract.UModelModels.FORMAT_AGENT;
+import static com.alibaba.umodel.contract.UModelModels.agentPlanPayload;
+import static com.alibaba.umodel.contract.UModelModels.isAgentPlanResult;
 
 @RestController
 @RequestMapping
@@ -60,6 +70,7 @@ public class UModelApiController {
     private final AgentGatewayService agentGatewayService;
     private final SampleDataService sampleDataService;
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private final Map<String, SseEmitter> sseSessions = new ConcurrentHashMap<>();
 
     public UModelApiController(
             WorkspaceService workspaceService,
@@ -93,7 +104,9 @@ public class UModelApiController {
                         "query", "/api/v1/query/{workspace}/execute",
                         "queryExplain", "/api/v1/query/{workspace}/explain",
                         "agent", "/api/v1/agent/{workspace}/discover",
-                        "mcp", "/mcp"
+                        "mcp", "/mcp",
+                        "mcpSse", "/sse",
+                        "mcpMessages", "/messages"
                 )
         );
     }
@@ -178,8 +191,18 @@ public class UModelApiController {
     }
 
     @PostMapping("/api/v1/query/{workspace}/execute")
-    public QueryExecuteResponse executeQuery(@PathVariable String workspace, @RequestBody QueryRequest request) {
-        return queryExecuteResponse(queryService.execute(workspace, request));
+    public Object executeQuery(
+            @PathVariable String workspace,
+            @RequestParam(name = "format", required = false) String format,
+            @RequestParam(name = "include", required = false) String include,
+            @RequestBody QueryRequest request
+    ) {
+        QueryRequest normalized = queryRequestWithParams(request, format, include);
+        QueryResult result = queryService.execute(workspace, normalized);
+        if (FORMAT_AGENT.equals(normalized.format()) && isAgentPlanResult(result)) {
+            return agentPlanPayload(result);
+        }
+        return queryExecuteResponse(result);
     }
 
     @PostMapping("/api/v1/query/{workspace}/explain")
@@ -208,6 +231,42 @@ public class UModelApiController {
             return batch.stream().map(item -> mcpRequest(asMap(item))).toList();
         }
         return mcpRequest(asMap(request));
+    }
+
+    @GetMapping(path = "/mcp", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter mcpStream() throws IOException {
+        SseEmitter emitter = new SseEmitter(0L);
+        emitter.send(SseEmitter.event().comment("umodel-server-java mcp stream ready"));
+        return emitter;
+    }
+
+    @GetMapping(path = "/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter legacySse() throws IOException {
+        String session = "s" + UUID.randomUUID();
+        SseEmitter emitter = new SseEmitter(0L);
+        sseSessions.put(session, emitter);
+        emitter.onCompletion(() -> sseSessions.remove(session));
+        emitter.onTimeout(() -> sseSessions.remove(session));
+        emitter.onError(error -> sseSessions.remove(session));
+        emitter.send(SseEmitter.event().name("endpoint").data("/messages?session=" + session));
+        return emitter;
+    }
+
+    @PostMapping("/messages")
+    public ResponseEntity<?> legacyMessages(
+            @RequestParam(name = "session", required = false) String session,
+            @RequestBody Object request
+    ) throws IOException {
+        Object response = mcp(request);
+        if (session != null && !session.isBlank()) {
+            SseEmitter emitter = sseSessions.get(session);
+            if (emitter == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "unknown SSE session"));
+            }
+            emitter.send(SseEmitter.event().name("message").data(response));
+            return ResponseEntity.accepted().build();
+        }
+        return ResponseEntity.ok(response);
     }
 
     private void ensureWorkspace(String workspace) {
@@ -239,6 +298,34 @@ public class UModelApiController {
                 "successful",
                 true
         );
+    }
+
+    private static QueryRequest queryRequestWithParams(QueryRequest request, String format, String include) {
+        if (request == null) {
+            return new QueryRequest(null, Map.of(), null, null, null, format, null, includeSpec(include));
+        }
+        return new QueryRequest(
+                request.query(),
+                request.parameters(),
+                request.limit(),
+                request.timeoutMs(),
+                request.timeRange(),
+                format == null || format.isBlank() ? request.format() : format,
+                request.mode(),
+                includeSpec(include) || request.includeSpecEnabled()
+        );
+    }
+
+    private static boolean includeSpec(String include) {
+        if (include == null || include.isBlank()) {
+            return false;
+        }
+        for (String item : include.split(",")) {
+            if ("spec".equalsIgnoreCase(item.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<String> queryMatrixHeader(List<String> columns, List<Map<String, Object>> rows) {
@@ -289,10 +376,12 @@ public class UModelApiController {
                 case "tools/list" -> jsonRpcResult(id, Map.of("tools", agentGatewayService.tools()));
                 case "tools/call" -> jsonRpcResult(id, mcpToolResult(workspace, params));
                 case "resources/list" -> jsonRpcResult(id, Map.of("resources", agentGatewayService.discover(workspace).resources()));
-                case "resources/templates/list" -> jsonRpcResult(id, Map.of("resourceTemplates", List.of()));
+                case "resources/templates/list" -> jsonRpcResult(id, Map.of("resourceTemplates", resourceTemplates(workspace)));
                 case "resources/read" -> jsonRpcResult(id, mcpResourceResult(workspace, params));
-                case "prompts/list" -> jsonRpcResult(id, Map.of("prompts", List.of()));
-                case "discovery" -> jsonRpcResult(id, agentGatewayService.discover(workspace));
+                case "prompts/list" -> jsonRpcResult(id, Map.of("prompts", prompts()));
+                case "prompts/get" -> jsonRpcResult(id, prompt(workspace, params));
+                case "completion/complete" -> jsonRpcResult(id, completion(workspace, params));
+                case "discovery", "umodel/discovery" -> jsonRpcResult(id, agentGatewayService.discover(workspace));
                 default -> jsonRpcError(id, -32601, "method not found: " + method);
             };
         } catch (UModelException e) {
@@ -310,15 +399,16 @@ public class UModelApiController {
                         asMap(params.get("arguments"))
                 )
         );
-        return Map.of(
-                "content", List.of(Map.of(
-                        "type", "text",
-                        "mimeType", "application/json",
-                        "text", json(result.output())
-                )),
-                "structuredContent", result.output(),
-                "isError", !result.ok()
-        );
+        Map<String, Object> textContent = new LinkedHashMap<>();
+        textContent.put("type", "text");
+        textContent.put("mimeType", "application/json");
+        textContent.put("text", json(result.output()));
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("content", List.of(textContent));
+        out.put("structuredContent", result.output());
+        out.put("isError", !result.ok());
+        return out;
     }
 
     private Map<String, Object> mcpResourceResult(String workspace, Map<String, Object> params) {
@@ -326,13 +416,14 @@ public class UModelApiController {
                 workspace,
                 new AgentResourceReadRequest(Objects.toString(params.get("uri"), ""))
         );
-        return Map.of(
-                "contents", List.of(Map.of(
-                        "uri", result.uri(),
-                        "mimeType", result.mimeType(),
-                        "text", json(result.content())
-                ))
-        );
+        Map<String, Object> content = new LinkedHashMap<>();
+        content.put("uri", result.uri());
+        content.put("mimeType", result.mimeType());
+        content.put("text", json(result.content()));
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("contents", List.of(content));
+        return out;
     }
 
     private static Map<String, Object> jsonRpcResult(Object id, Object result) {
@@ -352,6 +443,71 @@ public class UModelApiController {
                 "message", message == null ? "MCP request failed" : message
         ));
         return response;
+    }
+
+    private static List<Map<String, Object>> resourceTemplates(String workspace) {
+        return List.of(
+                Map.of(
+                        "name", "workspace-resource",
+                        "uriTemplate", "umodel://workspace/" + workspace + "/{resource}",
+                        "description", "Read a UModel workspace metadata resource.",
+                        "mimeType", "text/toon"
+                )
+        );
+    }
+
+    private static List<Map<String, Object>> prompts() {
+        return List.of(
+                Map.of(
+                        "name", "query",
+                        "title", "Use UModel Query Service",
+                        "description", "Run or refine a UModel SPL query.",
+                        "arguments", List.of(Map.of("name", "query", "required", false))
+                ),
+                Map.of(
+                        "name", "context",
+                        "title", "Review UModel Object Graph Context",
+                        "description", "Inspect model metadata before querying runtime rows.",
+                        "arguments", List.of(Map.of("name", "focus", "required", false))
+                )
+        );
+    }
+
+    private static Map<String, Object> prompt(String workspace, Map<String, Object> params) {
+        String name = Objects.toString(params.get("name"), "query");
+        Map<String, Object> arguments = asMap(params.get("arguments"));
+        String text = switch (name) {
+            case "context" -> "Workspace: " + workspace + "\nFocus: "
+                    + Objects.toString(arguments.getOrDefault("focus", "object graph"), "object graph")
+                    + "\nUse resources for metadata, then query tools for runtime rows.";
+            default -> "Workspace: " + workspace + "\nRun or refine this UModel SPL through query_spl_execute or query_spl_explain:\n"
+                    + Objects.toString(arguments.getOrDefault("query", ".umodel | limit 20"), ".umodel | limit 20");
+        };
+        return Map.of(
+                "description", name,
+                "messages", List.of(Map.of(
+                        "role", "user",
+                        "content", Map.of("type", "text", "text", text)
+                ))
+        );
+    }
+
+    private static Map<String, Object> completion(String workspace, Map<String, Object> params) {
+        String value = Objects.toString(params.get("argument"), "");
+        List<String> values = List.of(
+                ".umodel | limit 20",
+                ".umodel with(kind='entity_set') | project domain,name",
+                ".entity with(domain='devops', name='devops.service', query='checkout') | limit 20",
+                ".entity_set with(domain='devops', name='devops.service') | entity-call __list_method__()",
+                ".topo | graph-call getDirectRelations([]) | limit 20",
+                ".runbook_set with(domain='devops', type='knowledge', query='checkout', mode='hyper', topk=5)"
+        ).stream().filter(item -> value.isBlank() || item.contains(value)).toList();
+        return Map.of("completion", Map.of(
+                "values", values,
+                "total", values.size(),
+                "hasMore", false,
+                "workspace", workspace
+        ));
     }
 
     private String json(Object value) {

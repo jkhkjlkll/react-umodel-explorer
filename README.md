@@ -2,7 +2,7 @@
 
 UModel Java Backend 是 UModel 后端的 JDK 21 实现线。项目以公共契约兼容为目标，不做 Go 源码的机械翻译，而是用 Java 和 Spring Boot 重新实现同一套后端服务边界。
 
-当前版本已经完成可运行的 JDK 21 / Spring Boot 替代后端子集，覆盖 quickstart、核心 REST API、Query Service 子集、AgentGateway REST、HTTP MCP 子集和 `file.memory` JSON 持久化。它可以作为独立后端启动、部署和验证，并继续按公共契约扩展到完整替代。
+当前版本已经完成可运行的 JDK 21 / Spring Boot 替代后端增强子集，覆盖 quickstart、核心 REST API、Query Service、AgentGateway REST、MCP HTTP/SSE/stdio、Skill 包、`file.memory` JSON 持久化，以及 `local.ladybug` provider 兼容边界。它可以作为独立后端启动、部署和验证，并继续按公共契约扩展到完整替代。
 
 ## 当前能力
 
@@ -12,14 +12,19 @@ UModel Java Backend 是 UModel 后端的 JDK 21 实现线。项目以公共契�
 - `memory` GraphStore provider。
 - `file.memory` GraphStore provider，使用 JSON 快照持久化。
 - Workspace CRUD。
-- UModel validate、put/delete elements、inline import、path-based YAML/JSON import。
+- UModel validate、put/delete elements、inline import、path-based YAML/JSON import；校验覆盖 EntitySet、MetricSet、LogSet、RunbookSet、Storage endpoint、link endpoint 和 `fields_mapping`。
 - EntityStore entity/relation write，以及按 id expire。
-- 内置 `multi-domain-quickstart` 子集数据。
-- Query Service 子集：`.umodel`、`.entity`、`.topo`、`with(...)`、`project`、`sort`、`limit`、`getDirectRelations(...)`、`getNeighborNodes(...)`。
-- AgentGateway REST：discover、resource read、query tools、validate tool、可选写工具。
-- MCP streamable HTTP JSON-RPC 子集：`/mcp` 支持 initialize、ping、tools/list、tools/call、resources/list、resources/read、discovery。
-
-后续增强范围：完整 Cypher、MCP stdio/SSE transport、`local.ladybug`、vector/hybrid search、完整 schema spec validation、完整 Query/topology graph-call 覆盖。
+- 内置 `multi-domain-quickstart` 子集数据，包含 EntitySet、MetricSet、LogSet、RunbookSet、DataLink、StorageLink、runtime entity 和 topology relation。
+- Query Service 子集：`.umodel`、`.entity_set`、`.entity`、`.topo`、`.runbook_set`、`with(...)`、`where` 简单等值条件、`project`、`sort`、`limit`、`entity-call`、`getDirectRelations(...)`、`getNeighborNodes(...)`、只读受控 `cypher(...)`。
+- `.runbook_set` 可搜索 UModel 中的 runbook knowledge/automation/steps；`keyword`、`vector`、`hyper`、`hybrid` 当前都走内存 keyword fallback。
+- EntitySet method plan：`__list_method__`、`list_data_set`、`get_logs`、`get_metrics`，其中 `get_logs` / `get_metrics` 返回下游存储查询计划。
+- Agent query format：`POST /api/v1/query/{workspace}/execute?format=agent` 对计划类查询返回 v1.1 顶层 JSON plan；`&include=spec` 展开 storage/link 详情。
+- AgentGateway REST：discover、resource read、query tools、validate tool、skill metadata、可选写工具。
+- MCP streamable HTTP JSON-RPC 子集：`/mcp` 支持 initialize、ping、tools/list、tools/call、resources/list、resources/read、resource templates、prompts、completion、discovery。
+- MCP HTTP+SSE compatibility：`GET /sse` 建立会话，`POST /messages?session=...` 发送 JSON-RPC。
+- MCP stdio app：`apps/umodel-mcp-stdio` 提供 line-delimited JSON-RPC。
+- `skills/umodel-query` 和 `skills/umodel-rca` 提供 Java backend 查询与 RCA 工作流。
+- `local.ladybug` 已作为 GraphStore provider stub 暴露 health/capability/error 边界；真正 Ladybug Java runtime adapter 仍需单独接入。
 
 ## 目录结构
 
@@ -33,12 +38,15 @@ modules/entitystore       实体和关系写入服务
 modules/graphstore-api    GraphStore 抽象接口
 modules/graphstore-memory 内存 GraphStore provider
 modules/graphstore-file   file.memory JSON 快照 provider
+modules/graphstore-ladybug local.ladybug compatibility stub
 modules/query             SPL 子集解析、计划和执行
 modules/agentgateway      Agent 发现、资源和工具
 modules/sampledata        quickstart 示例数据导入
+apps/umodel-mcp-stdio     MCP stdio JSON-RPC 入口
 compat/openapi            从 Go 仓库同步的 OpenAPI 契约
 compat/mcp                从 Go 仓库同步的 MCP schema
 docs                      兼容计划和兼容矩阵
+skills                    Java backend query/RCA skills
 ```
 
 ## 环境要求
@@ -101,7 +109,7 @@ mvn spring-boot:run -pl apps/umodel-server -am
 
 ## 导入 quickstart 数据
 
-Java 版当前内置了一个小型 `multi-domain-quickstart` 子集，包含 UModel 定义、两个 runtime entity 和一条 topology relation。
+Java 版当前内置了一个小型 `multi-domain-quickstart` 子集，包含 UModel 定义、MetricSet/LogSet/RunbookSet 计划元数据、两个 runtime entity 和一条 topology relation。
 
 导入 demo workspace：
 
@@ -137,6 +145,51 @@ curl -X POST \
   -d '{"query":".topo | graph-call getDirectRelations([]) | limit 20"}'
 ```
 
+查询拓扑只读 Cypher 子集：
+
+```bash
+curl -X POST \
+  http://localhost:8080/api/v1/query/demo/execute \
+  -H 'Content-Type: application/json' \
+  -d '{"query":".topo | graph-call cypher(`MATCH (src)-[r]->(dest) RETURN src, r AS relation, dest LIMIT 20`)"}'
+```
+
+搜索 runbook knowledge：
+
+```bash
+curl -X POST \
+  http://localhost:8080/api/v1/query/demo/execute \
+  -H 'Content-Type: application/json' \
+  -d '{"query":".runbook_set with(domain='\''devops'\'', type='\''knowledge'\'', query='\''checkout latency'\'', mode='\''hyper'\'', topk=5) | project title,content,__score__"}'
+```
+
+列出 EntitySet 方法：
+
+```bash
+curl -X POST \
+  http://localhost:8080/api/v1/query/demo/execute \
+  -H 'Content-Type: application/json' \
+  -d '{"query":".entity_set with(domain='\''devops'\'', name='\''devops.service'\'') | entity-call __list_method__()"}'
+```
+
+生成 metric 查询计划：
+
+```bash
+curl -X POST \
+  'http://localhost:8080/api/v1/query/demo/execute?format=agent' \
+  -H 'Content-Type: application/json' \
+  -d "{\"query\":\".entity_set with(domain='devops', name='devops.service', ids=['10000000000000000000000000000101']) | entity-call get_metrics('devops', 'devops.metric.service', 'request_count', step='30s')\"}"
+```
+
+生成 log 查询计划并展开 spec：
+
+```bash
+curl -X POST \
+  'http://localhost:8080/api/v1/query/demo/execute?format=agent&include=spec' \
+  -H 'Content-Type: application/json' \
+  -d "{\"query\":\".entity_set with(domain='devops', name='devops.service', ids=['10000000000000000000000000000101']) | entity-call get_logs('devops', 'devops.log.service', query='level = \\\"ERROR\\\"')\"}"
+```
+
 查看 AgentGateway：
 
 ```bash
@@ -151,6 +204,15 @@ curl -X POST http://localhost:8080/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"workspace":"demo"}}'
 ```
 
+通过 HTTP+SSE MCP compatibility 连接：
+
+```bash
+curl -N http://localhost:8080/sse
+curl -X POST 'http://localhost:8080/messages?session=<session-id>' \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{"workspace":"demo"}}'
+```
+
 ## 打包部署
 
 构建可运行 jar：
@@ -163,6 +225,22 @@ mvn package -pl apps/umodel-server -am
 
 ```bash
 java -jar apps/umodel-server/target/umodel-server-0.1.0-SNAPSHOT.jar
+```
+
+构建并运行 MCP stdio app：
+
+```bash
+mvn package -pl apps/umodel-mcp-stdio -am
+java -jar apps/umodel-mcp-stdio/target/umodel-mcp-stdio-0.1.0-SNAPSHOT.jar \
+  --workspace=demo \
+  --graphstore=memory \
+  --quickstart
+```
+
+stdio app 使用逐行 JSON-RPC，请向 stdin 写入单行请求：
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"workspace":"demo"}}
 ```
 
 生产环境推荐显式传入配置：
@@ -263,7 +341,7 @@ curl -X POST http://localhost:8080/mcp \
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
 | `UMODEL_PORT` | `8080` | HTTP 监听端口。 |
-| `GRAPHSTORE` | `memory` | GraphStore provider。当前支持 `memory` 和 `file.memory`。 |
+| `GRAPHSTORE` | `memory` | GraphStore provider。当前支持 `memory`、`file.memory` 和 `local.ladybug` compatibility stub。 |
 | `UMODEL_DATA_ROOT` | `data` | 数据根目录。 |
 | `UMODEL_AGENT_WRITE_ENABLED` | `false` | 是否启用 AgentGateway 和 MCP 的写工具。 |
 

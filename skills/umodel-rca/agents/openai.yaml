@@ -1,0 +1,4 @@
+interface:
+  display_name: "UModel Java RCA"
+  short_description: "Diagnose incidents with UModel Java."
+  default_prompt: "Use $umodel-rca to investigate an incident through the UModel Java backend object graph."

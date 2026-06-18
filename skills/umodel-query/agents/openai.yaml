@@ -1,0 +1,4 @@
+interface:
+  display_name: "UModel Java Query"
+  short_description: "Query UModel Java backend data."
+  default_prompt: "Use $umodel-query to read model metadata, entities, topology, runbooks, and telemetry plans from the Java backend."

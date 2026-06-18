@@ -66,6 +66,14 @@ public class AgentGatewayService {
                                 "query_spl_execute",
                                 new AgentQueryAction("POST", "/api/v1/query/" + workspace + "/execute",
                                         new QueryRequest(".entity with(domain='devops', name='devops.service') | limit 20", Map.of(), 20, null, null, null))
+                        ),
+                        new AgentNextAction(
+                                "plan-service-metrics",
+                                "Plan service metric query",
+                                "Return a downstream Prometheus query plan through EntitySet methods.",
+                                "query_spl_execute",
+                                new AgentQueryAction("POST", "/api/v1/query/" + workspace + "/execute",
+                                        new QueryRequest(".entity_set with(domain='devops', name='devops.service', ids=['10000000000000000000000000000101']) | entity-call get_metrics('devops', 'devops.metric.service', 'request_count', step='30s')", Map.of(), 20, null, null, "agent"))
                         )
                 )
         );
@@ -93,8 +101,9 @@ public class AgentGatewayService {
                     "workspace", workspace,
                     "read_model", Map.of(
                             "tool", "query_spl_execute",
-                            "sources", List.of(".umodel", ".entity", ".topo")
+                            "sources", List.of(".umodel", ".entity_set", ".entity", ".topo", ".runbook_set")
                     ),
+                    "mcp_transports", List.of("streamable-http", "http+sse", "stdio-compatible wrapper"),
                     "resource_policy", "Resources expose metadata and templates only."
             ));
         }
@@ -103,21 +112,54 @@ public class AgentGatewayService {
                     "workspace", workspace,
                     "templates", List.of(
                             Map.of("id", "list-umodel", "query", ".umodel with(kind='entity_set') | limit 20"),
+                            Map.of("id", "entity-set-methods", "query", ".entity_set with(domain='devops', name='devops.service') | entity-call __list_method__()"),
+                            Map.of("id", "entity-set-data-sets", "query", ".entity_set with(domain='devops', name='devops.service') | entity-call list_data_set(['metric_set', 'log_set', 'event_set'], true)"),
+                            Map.of("id", "entity-set-logs", "query", ".entity_set with(domain='devops', name='devops.service', ids=['10000000000000000000000000000101']) | entity-call get_logs('devops', 'devops.log.service', query='level = \"ERROR\"')"),
+                            Map.of("id", "entity-set-metrics", "query", ".entity_set with(domain='devops', name='devops.service', ids=['10000000000000000000000000000101']) | entity-call get_metrics('devops', 'devops.metric.service', 'request_count', step='30s')"),
                             Map.of("id", "find-entity", "query", ".entity with(domain='devops', name='devops.service', query=$query) | limit 20"),
-                            Map.of("id", "topology", "query", ".topo | graph-call getDirectRelations([]) | limit 20")
+                            Map.of("id", "runbook-search", "query", ".runbook_set with(domain='devops', type='knowledge', query=$query, mode='hyper', topk=5)"),
+                            Map.of("id", "topology", "query", ".topo | graph-call getDirectRelations([]) | limit 20"),
+                            Map.of("id", "topology-cypher", "query", ".topo | graph-call cypher(`MATCH (src)-[r]->(dest) RETURN src, r AS relation, dest LIMIT 20`)")
                     )
             ));
         }
         if (uri.endsWith("/schema-index")) {
             return new AgentResourceReadResult(uri, "text/toon", Map.of(
                     "workspace", workspace,
-                    "sources", List.of(".umodel", ".entity", ".topo")
+                    "sources", List.of(".umodel", ".entity_set", ".entity", ".topo", ".runbook_set"),
+                    "entity_set_methods", List.of("__list_method__", "list_data_set", "get_logs", "get_metrics"),
+                    "search_modes", Map.of(
+                            "keyword", "memory keyword search",
+                            "vector", "accepted as memory keyword fallback",
+                            "hyper", "accepted as memory keyword fallback",
+                            "hybrid", "accepted as memory keyword fallback"
+                    ),
+                    "graph_calls", List.of("getDirectRelations", "getNeighborNodes", "cypher")
             ));
         }
         if (uri.endsWith("/tool-capability-metadata")) {
             return new AgentResourceReadResult(uri, "text/toon", Map.of(
                     "workspace", workspace,
                     "tools", tools()
+            ));
+        }
+        if (uri.endsWith("/skills")) {
+            return new AgentResourceReadResult(uri, "text/toon", Map.of(
+                    "workspace", workspace,
+                    "skills_path", "skills/",
+                    "skills", List.of(
+                            Map.of(
+                                    "name", "umodel-query",
+                                    "path", "skills/umodel-query/SKILL.md",
+                                    "purpose", "Read model metadata, entities, topology, runbooks, and telemetry plans from the Java backend."
+                            ),
+                            Map.of(
+                                    "name", "umodel-rca",
+                                    "path", "skills/umodel-rca/SKILL.md",
+                                    "purpose", "Run model-guided incident investigation using Java backend query surfaces."
+                            )
+                    ),
+                    "install_hint", "Copy skills/umodel-query and skills/umodel-rca into the agent skills directory such as .agents/skills/."
             ));
         }
         throw new UModelException(ErrorCodes.NOT_FOUND, "agent resource not found");
@@ -165,7 +207,8 @@ public class AgentGatewayService {
                 new AgentResource("overview", base + "/overview", "overview", "Workspace API and capability overview.", "text/toon", true),
                 new AgentResource("schema-index", base + "/schema-index", "schema-index", "Model and query source metadata.", "text/toon", true),
                 new AgentResource("query-templates", base + "/query-templates", "query-templates", "Safe query templates.", "text/toon", true),
-                new AgentResource("tool-capability-metadata", base + "/tool-capability-metadata", "tool-metadata", "Tool capability metadata.", "text/toon", true)
+                new AgentResource("tool-capability-metadata", base + "/tool-capability-metadata", "tool-metadata", "Tool capability metadata.", "text/toon", true),
+                new AgentResource("skills", base + "/skills", "skills", "Bundled Java backend skill package metadata.", "text/toon", true)
         );
     }
 
@@ -182,7 +225,9 @@ public class AgentGatewayService {
                 asInteger(limit),
                 asInteger(timeoutMs),
                 args.get("time_range"),
-                args.get("format") == null ? null : args.get("format").toString()
+                args.get("format") == null ? null : args.get("format").toString(),
+                args.get("mode") == null ? null : args.get("mode").toString(),
+                asBoolean(args, "include_spec", "includeSpec")
         );
     }
 

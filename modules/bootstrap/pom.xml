@@ -42,6 +42,11 @@
         </dependency>
         <dependency>
             <groupId>com.alibaba.umodel</groupId>
+            <artifactId>umodel-graphstore-ladybug</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.umodel</groupId>
             <artifactId>umodel-graphstore-memory</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -75,4 +80,3 @@
         </dependency>
     </dependencies>
 </project>
-

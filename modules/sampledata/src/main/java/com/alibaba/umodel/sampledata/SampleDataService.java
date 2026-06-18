@@ -35,8 +35,10 @@ public class SampleDataService {
                 new UModelElement(null, "entity_set", "devops", "devops.service", Map.of(
                         "display_name", "Service",
                         "fields", Map.of(
+                                "id", Map.of("type", "string"),
                                 "name", Map.of("type", "string"),
-                                "display_name", Map.of("type", "string")
+                                "display_name", Map.of("type", "string"),
+                                "environment", Map.of("type", "string")
                         )
                 ), Map.of()),
                 new UModelElement(null, "entity_set", "k8s", "k8s.workload", Map.of(
@@ -50,6 +52,88 @@ public class SampleDataService {
                         "source", "devops.service",
                         "target", "k8s.workload",
                         "relation", "runs_on"
+                ), Map.of()),
+                new UModelElement(null, "metric_set", "devops", "devops.metric.service", Map.of(
+                        "display_name", "Service metrics",
+                        "fields", Map.of(
+                                "service_id", Map.of("type", "string"),
+                                "environment", Map.of("type", "string")
+                        ),
+                        "metrics", List.of(
+                                Map.of(
+                                        "name", "request_count",
+                                        "unit", "count",
+                                        "query_mode", "range",
+                                        "generator", "sum(rate(request_count{service_id=\"$service_id\"}[5m]))"
+                                ),
+                                Map.of(
+                                        "name", "latency_p99_ms",
+                                        "unit", "ms",
+                                        "query_mode", "range",
+                                        "generator", "histogram_quantile(0.99, sum(rate(request_duration_bucket{service_id=\"$service_id\"}[5m])) by (le))"
+                                )
+                        )
+                ), Map.of()),
+                new UModelElement(null, "log_set", "devops", "devops.log.service", Map.of(
+                        "display_name", "Service logs",
+                        "fields", Map.of(
+                                "service_id", Map.of("type", "string"),
+                                "severity", Map.of("type", "string"),
+                                "message", Map.of("type", "string")
+                        ),
+                        "index", "devops-service-logs-*"
+                ), Map.of()),
+                new UModelElement(null, "prometheus", "devops", "devops.prometheus.core", Map.of(
+                        "endpoint", "http://localhost:9090",
+                        "default_step", "30s"
+                ), Map.of()),
+                new UModelElement(null, "elasticsearch", "devops", "devops.elasticsearch.logs", Map.of(
+                        "endpoint", "http://localhost:9200",
+                        "index", "devops-service-logs-*"
+                ), Map.of()),
+                new UModelElement(null, "data_link", "devops", "devops.service_related_to_devops.metric.service", Map.of(
+                        "src", Map.of("domain", "devops", "kind", "entity_set", "name", "devops.service"),
+                        "dest", Map.of("domain", "devops", "kind", "metric_set", "name", "devops.metric.service"),
+                        "fields_mapping", Map.of("id", "service_id", "environment", "environment")
+                ), Map.of()),
+                new UModelElement(null, "data_link", "devops", "devops.service_related_to_devops.log.service", Map.of(
+                        "src", Map.of("domain", "devops", "kind", "entity_set", "name", "devops.service"),
+                        "dest", Map.of("domain", "devops", "kind", "log_set", "name", "devops.log.service"),
+                        "fields_mapping", Map.of("id", "service_id", "environment", "environment")
+                ), Map.of()),
+                new UModelElement(null, "storage_link", "devops", "devops.metric.service_to_prometheus", Map.of(
+                        "src", Map.of("domain", "devops", "kind", "metric_set", "name", "devops.metric.service"),
+                        "dest", Map.of("domain", "devops", "kind", "prometheus", "name", "devops.prometheus.core"),
+                        "fields_mapping", Map.of("service_id", "service_id", "environment", "environment")
+                ), Map.of()),
+                new UModelElement(null, "storage_link", "devops", "devops.log.service_to_elasticsearch", Map.of(
+                        "src", Map.of("domain", "devops", "kind", "log_set", "name", "devops.log.service"),
+                        "dest", Map.of("domain", "devops", "kind", "elasticsearch", "name", "devops.elasticsearch.logs"),
+                        "fields_mapping", Map.of("service_id", "svc_id", "severity", "severity")
+                ), Map.of()),
+                new UModelElement(null, "runbook_set", "devops", "devops.service.ops", Map.of(
+                        "display_name", "Service operations runbook",
+                        "knowledge", List.of(
+                                Map.of(
+                                        "name", "checkout-latency",
+                                        "title", "Checkout latency investigation",
+                                        "summary", "Use service metrics, error logs, and runs_on topology to separate application latency from workload placement issues.",
+                                        "signals", List.of("latency_p99_ms", "request_count", "ERROR logs"),
+                                        "actions", List.of("Check get_metrics latency_p99_ms", "Check get_logs ERROR", "Traverse k8s workload with getNeighborNodes")
+                                ),
+                                Map.of(
+                                        "name", "retry-or-load-spike",
+                                        "title", "Retry or traffic spike",
+                                        "summary", "A request_count increase with ERROR logs can indicate retry amplification or upstream traffic change.",
+                                        "actions", List.of("Compare request_count against baseline", "Look for timeout messages", "Confirm topology direction")
+                                )
+                        ),
+                        "automations", List.of(
+                                Map.of(
+                                        "name", "collect_checkout_context",
+                                        "description", "Collect checkout service metrics, logs, and direct topology neighbors."
+                                )
+                        )
                 ), Map.of())
         );
         UModelImportResult umodel = umodelService.importElements(
@@ -66,8 +150,10 @@ public class SampleDataService {
                         "__method__", "Create",
                         "__first_observed_time__", now,
                         "__last_observed_time__", now,
+                        "id", "10000000000000000000000000000101",
                         "name", "checkout",
-                        "display_name", "Checkout Service"
+                        "display_name", "Checkout Service",
+                        "environment", "prod"
                 ),
                 Map.of(
                         "__domain__", "k8s",
@@ -124,4 +210,3 @@ public class SampleDataService {
                 || "quickstart-multidomain".equals(normalized);
     }
 }
-
