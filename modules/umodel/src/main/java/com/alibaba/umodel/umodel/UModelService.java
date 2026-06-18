@@ -96,6 +96,8 @@ public class UModelService {
                 Object metrics = spec.get("metrics");
                 if (!(metrics instanceof List<?> list) || list.isEmpty()) {
                     errors.add(new ErrorDetail("elements[" + i + "].spec.metrics", "metric_set spec.metrics must be a non-empty array"));
+                } else {
+                    validateMetrics(errors, i, list);
                 }
             }
             if ("log_set".equals(element.kind())) {
@@ -133,10 +135,13 @@ public class UModelService {
                     if (!elementExists(index, dest)) {
                         errors.add(new ErrorDetail("elements[" + i + "].spec.dest", "link destination does not resolve: " + dest));
                     }
+                    validateLinkEndpoints(errors, i, element.kind(), src, dest);
                 }
                 if (("data_link".equals(element.kind()) || "storage_link".equals(element.kind()))
                         && !(spec.get("fields_mapping") instanceof Map<?, ?>)) {
                     errors.add(new ErrorDetail("elements[" + i + "].spec.fields_mapping", element.kind() + " requires fields_mapping object"));
+                } else if (spec.get("fields_mapping") instanceof Map<?, ?> fieldsMapping) {
+                    validateFieldsMapping(errors, i, element.kind(), fieldsMapping);
                 }
             }
         }
@@ -311,6 +316,92 @@ public class UModelService {
                 }
             }
         }
+        if (fields instanceof List<?> list) {
+            for (int fieldIndex = 0; fieldIndex < list.size(); fieldIndex++) {
+                Map<String, Object> field = asMap(list.get(fieldIndex));
+                if (field.isEmpty()) {
+                    errors.add(new ErrorDetail(
+                            "elements[" + index + "].spec.fields[" + fieldIndex + "]",
+                            "field must be an object"
+                    ));
+                    continue;
+                }
+                if (stringValue(field.get("name")) == null || stringValue(field.get("name")).isBlank()) {
+                    errors.add(new ErrorDetail(
+                            "elements[" + index + "].spec.fields[" + fieldIndex + "].name",
+                            "field name is required"
+                    ));
+                }
+                if (stringValue(field.get("type")) == null || stringValue(field.get("type")).isBlank()) {
+                    errors.add(new ErrorDetail(
+                            "elements[" + index + "].spec.fields[" + fieldIndex + "].type",
+                            "field type is required"
+                    ));
+                }
+            }
+        }
+    }
+
+    private static void validateMetrics(List<ErrorDetail> errors, int index, List<?> metrics) {
+        for (int metricIndex = 0; metricIndex < metrics.size(); metricIndex++) {
+            Map<String, Object> metric = asMap(metrics.get(metricIndex));
+            if (metric.isEmpty()) {
+                errors.add(new ErrorDetail(
+                        "elements[" + index + "].spec.metrics[" + metricIndex + "]",
+                        "metric must be an object"
+                ));
+                continue;
+            }
+            if (stringValue(metric.get("name")) == null || stringValue(metric.get("name")).isBlank()) {
+                errors.add(new ErrorDetail(
+                        "elements[" + index + "].spec.metrics[" + metricIndex + "].name",
+                        "metric name is required"
+                ));
+            }
+        }
+    }
+
+    private static void validateFieldsMapping(List<ErrorDetail> errors, int index, String kind, Map<?, ?> fieldsMapping) {
+        if (fieldsMapping.isEmpty()) {
+            errors.add(new ErrorDetail("elements[" + index + "].spec.fields_mapping", kind + " fields_mapping must not be empty"));
+            return;
+        }
+        for (Map.Entry<?, ?> entry : fieldsMapping.entrySet()) {
+            if (stringValue(entry.getKey()) == null || stringValue(entry.getKey()).isBlank()
+                    || stringValue(entry.getValue()) == null || stringValue(entry.getValue()).isBlank()) {
+                errors.add(new ErrorDetail(
+                        "elements[" + index + "].spec.fields_mapping",
+                        kind + " fields_mapping keys and values must be non-empty strings"
+                ));
+                return;
+            }
+        }
+    }
+
+    private static void validateLinkEndpoints(List<ErrorDetail> errors, int index, String kind, Ref src, Ref dest) {
+        if ("data_link".equals(kind)) {
+            if (hasText(src.kind()) && !isEntityOrDataSetKind(src.kind())) {
+                errors.add(new ErrorDetail("elements[" + index + "].spec.src.kind", "data_link source must be entity_set or data set kind"));
+            }
+            if (hasText(dest.kind()) && !DATA_SET_KINDS.contains(dest.kind())) {
+                errors.add(new ErrorDetail("elements[" + index + "].spec.dest.kind", "data_link destination must be a data set kind"));
+            }
+        }
+        if ("storage_link".equals(kind)) {
+            if (hasText(src.kind()) && !DATA_SET_KINDS.contains(src.kind())) {
+                errors.add(new ErrorDetail("elements[" + index + "].spec.src.kind", "storage_link source must be a data set kind"));
+            }
+            if (hasText(dest.kind()) && !STORAGE_KINDS.contains(dest.kind())) {
+                errors.add(new ErrorDetail("elements[" + index + "].spec.dest.kind", "storage_link destination must be a storage kind"));
+            }
+        }
+        if ("runbook_link".equals(kind) && hasText(dest.kind()) && !"runbook_set".equals(dest.kind())) {
+            errors.add(new ErrorDetail("elements[" + index + "].spec.dest.kind", "runbook_link destination must be runbook_set"));
+        }
+    }
+
+    private static boolean isEntityOrDataSetKind(String kind) {
+        return "entity_set".equals(kind) || DATA_SET_KINDS.contains(kind);
     }
 
     private static boolean hasAnyRunbookSection(Map<String, Object> spec) {
@@ -365,6 +456,10 @@ public class UModelService {
 
     private static String stringValue(Object value) {
         return value == null ? null : Objects.toString(value, null);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static String requireWorkspace(String workspace) {

@@ -118,7 +118,8 @@ Initial parser requirements:
 
 - Schema validation is expanded for core Java model pack shapes, including
   EntitySet, MetricSet, LogSet, RunbookSet, storage endpoints, link endpoints,
-  and `fields_mapping`.
+  `fields_mapping`, list-style field declarations, metric item names, and
+  DataLink/StorageLink endpoint kind constraints.
 - Query and topology graph calls are expanded with multi-hop
   `getNeighborNodes`, direct relation filtering, and a controlled read-only
   `cypher(...)` fallback for relation rows.

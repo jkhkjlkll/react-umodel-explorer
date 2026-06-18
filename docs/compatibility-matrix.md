@@ -6,7 +6,7 @@ The Java backend is currently a subset-compatible implementation track.
 |---|---|---|
 | Service index and health | Subset complete | `/` and `/healthz` are implemented. |
 | Workspace CRUD | Subset complete | In-memory metadata, OpenAPI-shaped fields. |
-| UModel validate | Expanded partial | Checks required `kind`, `domain`, `name`, EntitySet fields, MetricSet metrics, LogSet index, RunbookSet content, storage endpoints, link endpoints, and `fields_mapping`. |
+| UModel validate | Expanded partial | Checks required `kind`, `domain`, `name`, EntitySet fields, MetricSet metrics, LogSet index, RunbookSet content, storage endpoints, link endpoints, `fields_mapping`, list-style field `name/type`, metric item names, and DataLink/StorageLink endpoint kind constraints. |
 | UModel import | Subset complete | Supports inline elements, built-in sample data, and path-based YAML/JSON file or directory import. |
 | UModel put elements | Subset complete | Writes to GraphStore. |
 | UModel delete elements | Subset complete | Deletes elements by stable id from GraphStore. |
@@ -26,7 +26,7 @@ The Java backend is currently a subset-compatible implementation track.
 | GraphStore `file.memory` | Subset complete | Persists UModel/entity/relation snapshots to `graphstore-file-memory.json`. |
 | GraphStore `local.ladybug` | Compatibility stub | Provider can be selected and reports unavailable with stable provider error until a Ladybug Java runtime adapter is added. |
 | Search/vector/hybrid | Memory fallback | `keyword`, `vector`, `hyper`, and `hybrid` are accepted for `.runbook_set` and semantic entity search, using memory keyword fallback. |
-| Full schema validation | Expanded partial | Covers core Java sample and link dependency checks; full generated schema parity is still pending. |
+| Full schema validation | Expanded partial | Covers core Java sample, field/metric shape checks, link dependency checks, and DataLink/StorageLink endpoint kind checks; full generated schema parity is still pending. |
 
 ## Full 1:1 Parity Blockers
 
