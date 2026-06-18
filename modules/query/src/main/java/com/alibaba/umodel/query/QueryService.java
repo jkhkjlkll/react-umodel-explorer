@@ -79,6 +79,7 @@ public class QueryService {
                 ".entity_set with(domain='devops', name='devops.service', ids=['10000000000000000000000000000101']) | entity-call get_logs('devops', 'devops.log.service', query='level = \"ERROR\"')",
                 ".entity_set with(domain='devops', name='devops.service', ids=['10000000000000000000000000000101']) | entity-call get_metrics('devops', 'devops.metric.service', 'request_count', step='30s')",
                 ".runbook_set with(domain='devops', type='knowledge', query='checkout', mode='hyper', topk=5)",
+                ".runbook_set with(domain='devops', type='skills', query='rca', topk=5)",
                 ".topo | graph-call getNeighborNodes('full', 2, [(:\"devops@devops.service\" {__entity_id__: '10000000000000000000000000000101'})]) | limit 20",
                 ".topo | graph-call getDirectRelations([(:\"devops@devops.service\" {__entity_id__: '10000000000000000000000000000101'})]) | limit 20",
                 ".topo | graph-call cypher(`MATCH (src)-[r]->(dest) RETURN src, r AS relation, dest LIMIT 20`)"
@@ -222,7 +223,7 @@ public class QueryService {
             Map<String, Object> spec = safeMap(element.spec());
             List<Map<String, Object>> chunks = runbookChunks(element, spec);
             for (Map<String, Object> chunk : chunks) {
-                if (!type.isBlank() && !type.equals(stringValue(chunk.get("type")))) {
+                if (!type.isBlank() && !runbookTypeMatches(type, stringValue(chunk.get("type")))) {
                     continue;
                 }
                 double score = searchScore(query, chunk);
@@ -230,7 +231,8 @@ public class QueryService {
                     continue;
                 }
                 Map<String, Object> row = new LinkedHashMap<>();
-                row.put("type", element.domain() + ".runbook_set");
+                row.put("type", chunk.get("type"));
+                row.put("source", element.domain() + ".runbook_set");
                 row.put("domain", element.domain());
                 row.put("kind", element.kind());
                 row.put("name", element.name());
@@ -1295,9 +1297,12 @@ public class QueryService {
     private static List<Map<String, Object>> runbookChunks(UModelElement element, Map<String, Object> spec) {
         List<Map<String, Object>> rows = new ArrayList<>();
         addRunbookItems(rows, element, "knowledge", spec.get("knowledge"));
-        addRunbookItems(rows, element, "automation", spec.get("automations"));
-        addRunbookItems(rows, element, "automation", spec.get("automation"));
-        addRunbookItems(rows, element, "step", spec.get("steps"));
+        addRunbookItems(rows, element, "observations", spec.get("observations"));
+        addRunbookItems(rows, element, "actions", spec.get("actions"));
+        addRunbookItems(rows, element, "automations", spec.get("automations"));
+        addRunbookItems(rows, element, "automations", spec.get("automation"));
+        addRunbookItems(rows, element, "skills", spec.get("skills"));
+        addRunbookItems(rows, element, "steps", spec.get("steps"));
         if (rows.isEmpty()) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("type", "runbook");
@@ -1335,6 +1340,27 @@ public class QueryService {
         ));
         row.put("content", item instanceof String text ? text : json(item));
         return row;
+    }
+
+    private static boolean runbookTypeMatches(String requested, String actual) {
+        if (requested == null || requested.isBlank()) {
+            return true;
+        }
+        String normalizedRequested = normalizeRunbookType(requested);
+        String normalizedActual = normalizeRunbookType(actual);
+        return normalizedRequested.equals(normalizedActual);
+    }
+
+    private static String normalizeRunbookType(String value) {
+        String type = stringValue(value).toLowerCase(Locale.ROOT);
+        return switch (type) {
+            case "observation" -> "observations";
+            case "action" -> "actions";
+            case "automation" -> "automations";
+            case "skill" -> "skills";
+            case "step" -> "steps";
+            default -> type;
+        };
     }
 
     private static double searchScore(String query, Map<String, Object> row) {

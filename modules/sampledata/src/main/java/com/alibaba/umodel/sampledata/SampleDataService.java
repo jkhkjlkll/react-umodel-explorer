@@ -128,10 +128,34 @@ public class SampleDataService {
                                         "actions", List.of("Compare request_count against baseline", "Look for timeout messages", "Confirm topology direction")
                                 )
                         ),
+                        "observations", List.of(
+                                Map.of(
+                                        "name", "checkout-error-signature",
+                                        "description", "ERROR logs plus rising latency_p99_ms indicate a service-side symptom that should be correlated with topology."
+                                )
+                        ),
+                        "actions", List.of(
+                                Map.of(
+                                        "name", "inspect_checkout_neighbors",
+                                        "action_type", "mcp",
+                                        "description", "Use query_spl_execute to inspect direct and multi-hop topology neighbors before recommending remediation."
+                                )
+                        ),
                         "automations", List.of(
                                 Map.of(
                                         "name", "collect_checkout_context",
                                         "description", "Collect checkout service metrics, logs, and direct topology neighbors."
+                                )
+                        ),
+                        "skills", List.of(
+                                Map.of(
+                                        "name", "umodel-rca",
+                                        "display_name", Map.of("en_us", "UModel Java RCA", "zh_cn", "UModel Java 根因分析"),
+                                        "description", Map.of(
+                                                "en_us", "Investigate incidents through Java backend entity, topology, telemetry plan, and runbook queries.",
+                                                "zh_cn", "通过 Java 后端实体、拓扑、遥测计划和 Runbook 查询排查故障。"
+                                        ),
+                                        "compatibility", "Java backend HTTP/MCP query surfaces"
                                 )
                         )
                 ), Map.of())

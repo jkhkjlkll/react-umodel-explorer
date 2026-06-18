@@ -2,6 +2,7 @@ package com.alibaba.umodel.server;
 
 import com.alibaba.umodel.agentgateway.AgentGatewayService;
 import com.alibaba.umodel.contract.ErrorCodes;
+import com.alibaba.umodel.contract.McpProtocol;
 import com.alibaba.umodel.contract.UModelException;
 import com.alibaba.umodel.contract.UModelModels.AgentResourceReadRequest;
 import com.alibaba.umodel.contract.UModelModels.AgentResourceReadResult;
@@ -29,8 +30,6 @@ import com.alibaba.umodel.query.QueryService;
 import com.alibaba.umodel.sampledata.SampleDataService;
 import com.alibaba.umodel.umodel.UModelService;
 import com.alibaba.umodel.workspace.WorkspaceService;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -69,7 +68,6 @@ public class UModelApiController {
     private final QueryService queryService;
     private final AgentGatewayService agentGatewayService;
     private final SampleDataService sampleDataService;
-    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
     private final Map<String, SseEmitter> sseSessions = new ConcurrentHashMap<>();
 
     public UModelApiController(
@@ -228,7 +226,10 @@ public class UModelApiController {
     @PostMapping("/mcp")
     public Object mcp(@RequestBody Object request) {
         if (request instanceof List<?> batch) {
-            return batch.stream().map(item -> mcpRequest(asMap(item))).toList();
+            return batch.stream()
+                    .map(item -> mcpRequest(asMap(item)))
+                    .filter(Objects::nonNull)
+                    .toList();
         }
         return mcpRequest(asMap(request));
     }
@@ -357,30 +358,32 @@ public class UModelApiController {
         return matrix;
     }
 
-    private Map<String, Object> mcpRequest(Map<String, Object> request) {
+    private Object mcpRequest(Map<String, Object> request) {
         Object id = request.get("id");
         try {
             String method = Objects.toString(request.get("method"), "");
             Map<String, Object> params = asMap(request.get("params"));
             String workspace = workspace(params);
             return switch (method) {
-                case "initialize" -> jsonRpcResult(id, Map.of(
-                        "protocolVersion", Objects.toString(params.get("protocolVersion"), "2025-06-18"),
-                        "serverInfo", Map.of("name", "umodel-server-java", "version", "0.1.0-SNAPSHOT"),
-                        "capabilities", Map.of(
-                                "tools", Map.of(),
-                                "resources", Map.of()
-                        )
+                case "initialize" -> jsonRpcResult(id, McpProtocol.initializeResult(
+                        "umodel-server-java",
+                        "UModel Java MCP Server",
+                        "0.1.0-SNAPSHOT",
+                        workspace,
+                        agentGatewayService.discover(workspace),
+                        List.of("streamable-http", "http+sse"),
+                        Objects.toString(params.get("protocolVersion"), "")
                 ));
-                case "notifications/initialized", "ping", "logging/setLevel" -> jsonRpcResult(id, Map.of());
-                case "tools/list" -> jsonRpcResult(id, Map.of("tools", agentGatewayService.tools()));
+                case "notifications/initialized", "notifications/cancelled" -> null;
+                case "ping", "logging/setLevel" -> jsonRpcResult(id, Map.of());
+                case "tools/list" -> jsonRpcResult(id, Map.of("tools", McpProtocol.tools(agentGatewayService.tools())));
                 case "tools/call" -> jsonRpcResult(id, mcpToolResult(workspace, params));
-                case "resources/list" -> jsonRpcResult(id, Map.of("resources", agentGatewayService.discover(workspace).resources()));
-                case "resources/templates/list" -> jsonRpcResult(id, Map.of("resourceTemplates", resourceTemplates(workspace)));
+                case "resources/list" -> jsonRpcResult(id, Map.of("resources", McpProtocol.resources(agentGatewayService.discover(workspace).resources())));
+                case "resources/templates/list" -> jsonRpcResult(id, Map.of("resourceTemplates", McpProtocol.resourceTemplates(workspace)));
                 case "resources/read" -> jsonRpcResult(id, mcpResourceResult(workspace, params));
-                case "prompts/list" -> jsonRpcResult(id, Map.of("prompts", prompts()));
-                case "prompts/get" -> jsonRpcResult(id, prompt(workspace, params));
-                case "completion/complete" -> jsonRpcResult(id, completion(workspace, params));
+                case "prompts/list" -> jsonRpcResult(id, Map.of("prompts", McpProtocol.prompts()));
+                case "prompts/get" -> jsonRpcResult(id, McpProtocol.prompt(workspace, params));
+                case "completion/complete" -> jsonRpcResult(id, McpProtocol.completion(workspace, params));
                 case "discovery", "umodel/discovery" -> jsonRpcResult(id, agentGatewayService.discover(workspace));
                 default -> jsonRpcError(id, -32601, "method not found: " + method);
             };
@@ -392,23 +395,19 @@ public class UModelApiController {
     }
 
     private Map<String, Object> mcpToolResult(String workspace, Map<String, Object> params) {
-        AgentToolCallResult result = agentGatewayService.executeTool(
-                workspace,
-                new AgentToolCallRequest(
-                        Objects.toString(params.get("name"), ""),
-                        asMap(params.get("arguments"))
-                )
-        );
-        Map<String, Object> textContent = new LinkedHashMap<>();
-        textContent.put("type", "text");
-        textContent.put("mimeType", "application/json");
-        textContent.put("text", json(result.output()));
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("content", List.of(textContent));
-        out.put("structuredContent", result.output());
-        out.put("isError", !result.ok());
-        return out;
+        String name = Objects.toString(params.get("name"), "");
+        if (name.isBlank()) {
+            throw new UModelException(ErrorCodes.INVALID_ARGUMENT, "name param is required");
+        }
+        try {
+            AgentToolCallResult result = agentGatewayService.executeTool(
+                    workspace,
+                    new AgentToolCallRequest(name, asMap(params.get("arguments")))
+            );
+            return McpProtocol.toolResult(result);
+        } catch (UModelException e) {
+            return McpProtocol.toolErrorResult(name, e.code(), e.getMessage());
+        }
     }
 
     private Map<String, Object> mcpResourceResult(String workspace, Map<String, Object> params) {
@@ -416,14 +415,7 @@ public class UModelApiController {
                 workspace,
                 new AgentResourceReadRequest(Objects.toString(params.get("uri"), ""))
         );
-        Map<String, Object> content = new LinkedHashMap<>();
-        content.put("uri", result.uri());
-        content.put("mimeType", result.mimeType());
-        content.put("text", json(result.content()));
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("contents", List.of(content));
-        return out;
+        return McpProtocol.resourceResult(result);
     }
 
     private static Map<String, Object> jsonRpcResult(Object id, Object result) {
@@ -443,79 +435,6 @@ public class UModelApiController {
                 "message", message == null ? "MCP request failed" : message
         ));
         return response;
-    }
-
-    private static List<Map<String, Object>> resourceTemplates(String workspace) {
-        return List.of(
-                Map.of(
-                        "name", "workspace-resource",
-                        "uriTemplate", "umodel://workspace/" + workspace + "/{resource}",
-                        "description", "Read a UModel workspace metadata resource.",
-                        "mimeType", "text/toon"
-                )
-        );
-    }
-
-    private static List<Map<String, Object>> prompts() {
-        return List.of(
-                Map.of(
-                        "name", "query",
-                        "title", "Use UModel Query Service",
-                        "description", "Run or refine a UModel SPL query.",
-                        "arguments", List.of(Map.of("name", "query", "required", false))
-                ),
-                Map.of(
-                        "name", "context",
-                        "title", "Review UModel Object Graph Context",
-                        "description", "Inspect model metadata before querying runtime rows.",
-                        "arguments", List.of(Map.of("name", "focus", "required", false))
-                )
-        );
-    }
-
-    private static Map<String, Object> prompt(String workspace, Map<String, Object> params) {
-        String name = Objects.toString(params.get("name"), "query");
-        Map<String, Object> arguments = asMap(params.get("arguments"));
-        String text = switch (name) {
-            case "context" -> "Workspace: " + workspace + "\nFocus: "
-                    + Objects.toString(arguments.getOrDefault("focus", "object graph"), "object graph")
-                    + "\nUse resources for metadata, then query tools for runtime rows.";
-            default -> "Workspace: " + workspace + "\nRun or refine this UModel SPL through query_spl_execute or query_spl_explain:\n"
-                    + Objects.toString(arguments.getOrDefault("query", ".umodel | limit 20"), ".umodel | limit 20");
-        };
-        return Map.of(
-                "description", name,
-                "messages", List.of(Map.of(
-                        "role", "user",
-                        "content", Map.of("type", "text", "text", text)
-                ))
-        );
-    }
-
-    private static Map<String, Object> completion(String workspace, Map<String, Object> params) {
-        String value = Objects.toString(params.get("argument"), "");
-        List<String> values = List.of(
-                ".umodel | limit 20",
-                ".umodel with(kind='entity_set') | project domain,name",
-                ".entity with(domain='devops', name='devops.service', query='checkout') | limit 20",
-                ".entity_set with(domain='devops', name='devops.service') | entity-call __list_method__()",
-                ".topo | graph-call getDirectRelations([]) | limit 20",
-                ".runbook_set with(domain='devops', type='knowledge', query='checkout', mode='hyper', topk=5)"
-        ).stream().filter(item -> value.isBlank() || item.contains(value)).toList();
-        return Map.of("completion", Map.of(
-                "values", values,
-                "total", values.size(),
-                "hasMore", false,
-                "workspace", workspace
-        ));
-    }
-
-    private String json(Object value) {
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
-            throw new UModelException(ErrorCodes.INVALID_ARGUMENT, "failed to encode MCP content");
-        }
     }
 
     private static int mcpErrorCode(String code) {

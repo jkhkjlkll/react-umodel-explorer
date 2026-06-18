@@ -105,8 +105,11 @@ public class UModelService {
                 }
             }
             if ("runbook_set".equals(element.kind())) {
-                if (!spec.containsKey("knowledge") && !spec.containsKey("automations") && !spec.containsKey("steps")) {
-                    errors.add(new ErrorDetail("elements[" + i + "].spec", "runbook_set requires knowledge, automations, or steps"));
+                if (!hasAnyRunbookSection(spec)) {
+                    errors.add(new ErrorDetail(
+                            "elements[" + i + "].spec",
+                            "runbook_set requires knowledge, observations, actions, automations, skills, or steps"
+                    ));
                 }
             }
             if (STORAGE_KINDS.contains(element.kind())) {
@@ -308,6 +311,22 @@ public class UModelService {
                 }
             }
         }
+    }
+
+    private static boolean hasAnyRunbookSection(Map<String, Object> spec) {
+        for (String key : List.of("knowledge", "observations", "actions", "automations", "automation", "skills", "steps")) {
+            Object value = spec.get(key);
+            if (value instanceof List<?> list && !list.isEmpty()) {
+                return true;
+            }
+            if (value instanceof Map<?, ?> map && !map.isEmpty()) {
+                return true;
+            }
+            if (value instanceof String text && !text.isBlank()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Ref refFromSpec(Map<String, Object> spec, String mapKey, String compactKey) {

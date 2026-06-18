@@ -98,7 +98,8 @@
               "overview",
               "schema-index",
               "query-templates",
-              "tool-capability-metadata"
+              "tool-capability-metadata",
+              "skills"
             ]
           },
           "kind": {
@@ -107,7 +108,8 @@
               "overview",
               "schema-index",
               "query-templates",
-              "tool-metadata"
+              "tool-metadata",
+              "skills"
             ]
           },
           "uri_template": {
@@ -116,7 +118,8 @@
               "umodel://workspace/{workspace}/overview",
               "umodel://workspace/{workspace}/schema-index",
               "umodel://workspace/{workspace}/query-templates",
-              "umodel://workspace/{workspace}/tool-capability-metadata"
+              "umodel://workspace/{workspace}/tool-capability-metadata",
+              "umodel://workspace/{workspace}/skills"
             ]
           },
           "read_only": {

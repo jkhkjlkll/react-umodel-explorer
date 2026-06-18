@@ -33,7 +33,8 @@ explicitly asks to write.
 2. Discover: list EntitySet methods and datasets.
 3. Characterize: fetch `get_metrics` and `get_logs` plans.
 4. Traverse: inspect direct relations and neighbors with `.topo`.
-5. Retrieve runbook context with `.runbook_set`.
+5. Retrieve runbook context with `.runbook_set`, including `knowledge`,
+   `observations`, `actions`, `automations`, and `skills` sections when useful.
 6. Correlate: line up entity state, relation direction, telemetry plans, and
    runbook knowledge.
 7. Conclude: state root cause, evidence chain, confidence, and a reversible
@@ -104,3 +105,7 @@ Recommended action: <read-only or confirmation-required action>
 Never fabricate metric values from a plan. If the user needs actual values, run
 the returned Prometheus or Elasticsearch plan against the configured telemetry
 backend.
+
+Runbook `actions`, `automations`, and `skills` are RCA context by default. Do not
+execute remediation or write-capable tools unless the user explicitly confirms
+that action.

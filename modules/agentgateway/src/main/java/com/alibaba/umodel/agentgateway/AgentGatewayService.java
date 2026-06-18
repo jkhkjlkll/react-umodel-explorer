@@ -118,6 +118,8 @@ public class AgentGatewayService {
                             Map.of("id", "entity-set-metrics", "query", ".entity_set with(domain='devops', name='devops.service', ids=['10000000000000000000000000000101']) | entity-call get_metrics('devops', 'devops.metric.service', 'request_count', step='30s')"),
                             Map.of("id", "find-entity", "query", ".entity with(domain='devops', name='devops.service', query=$query) | limit 20"),
                             Map.of("id", "runbook-search", "query", ".runbook_set with(domain='devops', type='knowledge', query=$query, mode='hyper', topk=5)"),
+                            Map.of("id", "runbook-actions", "query", ".runbook_set with(domain='devops', type='actions', query=$query, topk=5)"),
+                            Map.of("id", "runbook-skills", "query", ".runbook_set with(domain='devops', type='skills', query=$query, topk=5)"),
                             Map.of("id", "topology", "query", ".topo | graph-call getDirectRelations([]) | limit 20"),
                             Map.of("id", "topology-cypher", "query", ".topo | graph-call cypher(`MATCH (src)-[r]->(dest) RETURN src, r AS relation, dest LIMIT 20`)")
                     )
@@ -127,6 +129,7 @@ public class AgentGatewayService {
             return new AgentResourceReadResult(uri, "text/toon", Map.of(
                     "workspace", workspace,
                     "sources", List.of(".umodel", ".entity_set", ".entity", ".topo", ".runbook_set"),
+                    "runbook_sections", List.of("knowledge", "observations", "actions", "automations", "skills", "steps"),
                     "entity_set_methods", List.of("__list_method__", "list_data_set", "get_logs", "get_metrics"),
                     "search_modes", Map.of(
                             "keyword", "memory keyword search",

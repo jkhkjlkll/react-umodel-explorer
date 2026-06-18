@@ -15,6 +15,9 @@ description: >-
 Use the Java backend as the read path for UModel's object graph semantic layer.
 The Java service exposes the same public query sources through Spring Boot:
 `.umodel`, `.entity`, `.entity_set`, `.topo`, and `.runbook_set`.
+This is an HTTP/MCP-first Java adaptation of the upstream CLI-first UModel
+skills, with the same agent-facing read model where the Java backend supports
+the public behavior.
 
 ## Setup
 
@@ -71,6 +74,9 @@ Load only the reference needed for the task:
   the user asks for actual telemetry values.
 - `mode='vector'`, `mode='hyper'`, and `mode='hybrid'` are accepted by the Java
   backend as memory keyword fallback unless a real search provider is added.
+- `.runbook_set` searches `knowledge`, `observations`, `actions`,
+  `automations`, `skills`, and Java-compatible `steps`; singular filters such as
+  `type='skill'` are accepted as aliases for plural section names.
 - `local.ladybug` is an external-provider boundary in this Java subproject; do
   not claim the Java backend has a real Ladybug implementation unless one is
   added.

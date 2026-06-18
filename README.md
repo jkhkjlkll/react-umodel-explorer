@@ -16,14 +16,14 @@ UModel Java Backend 是 UModel 后端的 JDK 21 实现线。项目以公共契�
 - EntityStore entity/relation write，以及按 id expire。
 - 内置 `multi-domain-quickstart` 子集数据，包含 EntitySet、MetricSet、LogSet、RunbookSet、DataLink、StorageLink、runtime entity 和 topology relation。
 - Query Service 子集：`.umodel`、`.entity_set`、`.entity`、`.topo`、`.runbook_set`、`with(...)`、`where` 简单等值条件、`project`、`sort`、`limit`、`entity-call`、`getDirectRelations(...)`、`getNeighborNodes(...)`、只读受控 `cypher(...)`。
-- `.runbook_set` 可搜索 UModel 中的 runbook knowledge/automation/steps；`keyword`、`vector`、`hyper`、`hybrid` 当前都走内存 keyword fallback。
+- `.runbook_set` 可搜索 UModel 中的 runbook `knowledge`、`observations`、`actions`、`automations`、`skills`、`steps`；`keyword`、`vector`、`hyper`、`hybrid` 当前都走内存 keyword fallback。
 - EntitySet method plan：`__list_method__`、`list_data_set`、`get_logs`、`get_metrics`，其中 `get_logs` / `get_metrics` 返回下游存储查询计划。
 - Agent query format：`POST /api/v1/query/{workspace}/execute?format=agent` 对计划类查询返回 v1.1 顶层 JSON plan；`&include=spec` 展开 storage/link 详情。
 - AgentGateway REST：discover、resource read、query tools、validate tool、skill metadata、可选写工具。
-- MCP streamable HTTP JSON-RPC 子集：`/mcp` 支持 initialize、ping、tools/list、tools/call、resources/list、resources/read、resource templates、prompts、completion、discovery。
+- MCP streamable HTTP JSON-RPC 子集：`/mcp` 支持 initialize、ping、tools/list、tools/call、resources/list、resources/read、resource templates、prompts、completion、discovery；tool/resource 文本块使用 TOON，`structuredContent` 保留 `{name, ok, output}` JSON。
 - MCP HTTP+SSE compatibility：`GET /sse` 建立会话，`POST /messages?session=...` 发送 JSON-RPC。
 - MCP stdio app：`apps/umodel-mcp-stdio` 提供 line-delimited JSON-RPC。
-- `skills/umodel-query` 和 `skills/umodel-rca` 提供 Java backend 查询与 RCA 工作流。
+- `skills/umodel-query` 和 `skills/umodel-rca` 提供 Java backend 查询与 RCA 工作流；`skills/` 位于项目根目录是为了保持上游 agent skill 包布局，`modules/` 只放 Maven 服务模块。
 - `local.ladybug` 已作为 GraphStore provider stub 暴露 health/capability/error 边界；真正 Ladybug Java runtime adapter 仍需单独接入。
 
 ## 目录结构
@@ -154,13 +154,13 @@ curl -X POST \
   -d '{"query":".topo | graph-call cypher(`MATCH (src)-[r]->(dest) RETURN src, r AS relation, dest LIMIT 20`)"}'
 ```
 
-搜索 runbook knowledge：
+搜索 runbook context：
 
 ```bash
 curl -X POST \
   http://localhost:8080/api/v1/query/demo/execute \
   -H 'Content-Type: application/json' \
-  -d '{"query":".runbook_set with(domain='\''devops'\'', type='\''knowledge'\'', query='\''checkout latency'\'', mode='\''hyper'\'', topk=5) | project title,content,__score__"}'
+  -d '{"query":".runbook_set with(domain='\''devops'\'', type='\''knowledge'\'', query='\''checkout latency'\'', mode='\''hyper'\'', topk=5) | project type,source,title,content,__score__"}'
 ```
 
 列出 EntitySet 方法：

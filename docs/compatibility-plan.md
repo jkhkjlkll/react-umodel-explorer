@@ -58,6 +58,7 @@ Supported SPL subset:
 .topo | graph-call getDirectRelations(...) | limit 20
 .topo | graph-call getNeighborNodes(...) | limit 20
 .runbook_set with(domain='apm', type='knowledge', query='slow request', mode='hyper', topk=5)
+.runbook_set with(domain='apm', type='skills', query='rca', topk=5)
 ```
 
 Initial parser requirements:
@@ -90,6 +91,15 @@ Initial parser requirements:
 
 - `/mcp` also covers resource templates, prompts, completion, and
   `umodel/discovery`.
+- MCP tool/resource text payloads use TOON. Tool `structuredContent` mirrors
+  `{name, ok, output}`; resource templates expose `overview`, `schema-index`,
+  `query-templates`, `tool-capability-metadata`, and the Java `skills`
+  resource.
+- Prompt parity includes upstream `umodel_query_context` and
+  `umodel_object_graph_review`; existing Java `query` and `context` prompt names
+  remain aliases.
+- Completion supports MCP `ref` and `argument.value` payloads, with legacy
+  simple-string completion kept for existing Java clients.
 - `/sse` and `/messages` provide HTTP+SSE compatibility for MCP clients that
   still use the legacy transport split.
 - `apps/umodel-mcp-stdio` provides a line-delimited JSON-RPC stdio wrapper
@@ -112,7 +122,10 @@ Initial parser requirements:
 - Query and topology graph calls are expanded with multi-hop
   `getNeighborNodes`, direct relation filtering, and a controlled read-only
   `cypher(...)` fallback for relation rows.
-- `.runbook_set` executes against in-memory UModel `runbook_set` definitions.
+- `.runbook_set` executes against in-memory UModel `runbook_set` definitions and
+  indexes upstream-aligned sections: `knowledge`, `observations`, `actions`,
+  `automations`, and `skills`; Java also accepts `steps` for backward
+  compatibility with earlier sample data.
 - `keyword`, `vector`, `hyper`, and `hybrid` search modes are accepted as memory
   keyword fallback until a real search provider is configured.
 - MCP stdio and HTTP+SSE transports are present.
