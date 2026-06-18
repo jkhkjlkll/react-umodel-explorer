@@ -1,18 +1,16 @@
-# `.runbook_set` — search operational runbook context
+# `.runbook_set` — 搜索运维 Runbook 上下文
 
-`.runbook_set` searches operational context stored in UModel `runbook_set`
-definitions. The Java backend indexes upstream-aligned runbook sections plus a
-Java-compatible `steps` section:
+`.runbook_set` 搜索 UModel `runbook_set` 定义中的 operational context。Java 后端索引
+与上游对齐的 runbook sections，并额外兼容 Java 的 `steps` section：
 
-- `knowledge`: documented patterns, symptoms, known mechanisms, troubleshooting
-  notes.
-- `observations`: evidence snippets or condition descriptions.
-- `actions`: candidate investigation or remediation actions.
-- `automations`: automation metadata or executable workflow hints.
-- `skills`: agent skill hints, skill names, and workflow descriptions.
-- `steps`: Java-compatible legacy step entries.
+- `knowledge`：已知模式、症状、机制和排障说明。
+- `observations`：证据片段或条件描述。
+- `actions`：候选调查或 remediation 动作。
+- `automations`：自动化元数据或可执行 workflow hints。
+- `skills`：agent skill hints、skill 名称和 workflow 描述。
+- `steps`：Java 兼容的 legacy step entries。
 
-## Basic Search
+## 基础搜索
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -20,7 +18,7 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".runbook_set with(domain='\''devops'\'', type='\''knowledge'\'', query='\''checkout latency'\'', mode='\''hyper'\'', topk=5) | project type,source,title,content,__score__"}'
 ```
 
-MCP equivalent:
+MCP 等价调用：
 
 ```json
 {
@@ -37,19 +35,18 @@ MCP equivalent:
 }
 ```
 
-## Filters
+## 过滤条件
 
-- `domain='devops'`: restricts search to a domain.
-- `type='knowledge'`: restricts search to a section.
-- `query='...'`: keyword query over chunk values.
-- `mode='keyword' | 'vector' | 'hyper' | 'hybrid'`: accepted search mode.
-- `topk=5`: sets result limit when `limit` is not supplied.
+- `domain='devops'`：限制搜索 domain。
+- `type='knowledge'`：限制搜索 section。
+- `query='...'`：对 chunk values 做 keyword query。
+- `mode='keyword' | 'vector' | 'hyper' | 'hybrid'`：接受的 search mode。
+- `topk=5`：没有显式 `limit` 时设置结果限制。
 
-The Java backend currently uses memory keyword scoring for every search mode.
-`vector`, `hyper`, and `hybrid` are accepted to preserve agent-facing query
-shape until a real search provider is configured.
+Java 后端当前所有搜索模式都使用内存 keyword scoring。接受 `vector`、`hyper` 和
+`hybrid` 是为了保留 agent-facing query shape，直到接入真实 search provider。
 
-Singular aliases are accepted:
+接受单数别名：
 
 ```text
 type='observation' -> observations
@@ -59,9 +56,9 @@ type='skill'       -> skills
 type='step'        -> steps
 ```
 
-## Returned Rows
+## 返回行
 
-Rows include:
+行内容包括：
 
 ```jsonc
 {
@@ -78,12 +75,12 @@ Rows include:
 }
 ```
 
-`type` is the matched section, not the model kind. `source` identifies the
-runbook model source. Use `section` to cite specific context in RCA output.
+`type` 是命中的 section，不是模型 kind。`source` 标识 runbook model source。RCA 输出中
+引用具体上下文时使用 `section`。
 
-## Search By Section
+## 按 Section 搜索
 
-Search documented knowledge:
+搜索已知知识：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -91,7 +88,7 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".runbook_set with(domain='\''devops'\'', type='\''knowledge'\'', query='\''latency'\'', topk=5) | project section,title,content,__score__"}'
 ```
 
-Search observations:
+搜索 observations：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -99,7 +96,7 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".runbook_set with(domain='\''devops'\'', type='\''observations'\'', query='\''ERROR latency'\'', topk=5) | project section,title,content,__score__"}'
 ```
 
-Search action hints:
+搜索 action hints：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -107,7 +104,7 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".runbook_set with(domain='\''devops'\'', type='\''actions'\'', query='\''neighbors'\'', topk=5) | project section,title,content,__score__"}'
 ```
 
-Search skill hints:
+搜索 skill hints：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -115,27 +112,25 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".runbook_set with(domain='\''devops'\'', type='\''skills'\'', query='\''rca'\'', topk=5) | project section,title,content,__score__"}'
 ```
 
-## RCA Usage
+## RCA 用法
 
-Use runbook rows as context, not as proof by themselves:
+把 runbook rows 当作 context，不要把它们本身当作证据：
 
-- `knowledge` and `observations` help frame hypotheses and evidence.
-- `actions` and `automations` suggest next steps, but remediation still needs
-  explicit user confirmation.
-- `skills` tells an agent which workflow may apply, for example `umodel-rca`.
+- `knowledge` 和 `observations` 用于构建假设和理解证据。
+- `actions` 和 `automations` 提供下一步建议，但 remediation 仍需要用户明确确认。
+- `skills` 告诉 agent 哪个 workflow 可能适用，例如 `umodel-rca`。
 
-Good RCA flow:
+推荐 RCA 流程：
 
-1. Find the symptomatic entity with `.entity`.
-2. Fetch metric/log plans with `.entity_set | entity-call`.
-3. Traverse related entities with `.topo`.
-4. Search `.runbook_set` for matching knowledge and actions.
-5. Cite the runbook `section` only when it matches the observed evidence.
+1. 用 `.entity` 找到有症状的实体。
+2. 用 `.entity_set | entity-call` 获取 metric/log plans。
+3. 用 `.topo` 遍历相关实体。
+4. 用 `.runbook_set` 搜索匹配的 knowledge 和 actions。
+5. 只有当 runbook `section` 与观测证据匹配时，才在结论里引用它。
 
-## Full Spec Fallback
+## 完整 Spec 兜底
 
-If a runbook contains none of the known sections, Java falls back to one chunk
-with:
+如果 runbook 不包含任何已知 section，Java 会退化为一个 chunk：
 
 ```text
 type=runbook
@@ -143,15 +138,13 @@ section=spec
 content=<full spec JSON>
 ```
 
-That keeps legacy or custom runbook shapes discoverable, but sectioned runbooks
-are preferred for parity with upstream agent workflows.
+这能让 legacy 或 custom runbook shape 仍可发现，但为了与上游 agent workflow 对齐，优先使用
+sectioned runbook。
 
-## Pitfalls
+## 常见坑
 
-- Do not execute `actions` or `automations` automatically. Treat them as
-  candidate next steps unless the user explicitly asks to run a write-capable
-  tool.
-- Do not claim vector/hybrid ranking exists yet in Java; these modes currently
-  use memory keyword fallback.
-- Keep runtime evidence separate from runbook guidance. A runbook can suggest a
-  mechanism, but metrics, logs, and topology must support the conclusion.
+- 不要自动执行 `actions` 或 `automations`。除非用户明确要求运行 write-capable tool，
+  否则它们只是候选下一步。
+- 不要声称 Java 已有真实 vector/hybrid ranking；当前这些模式使用内存 keyword fallback。
+- 区分运行时证据和 runbook guidance。Runbook 可以提示机制，但 metrics、logs 和 topology
+  必须支撑结论。

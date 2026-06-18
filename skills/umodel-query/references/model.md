@@ -1,8 +1,7 @@
-# `.umodel` — model catalog
+# `.umodel` — 模型目录
 
-`.umodel` is the map of the object graph: entity types, datasets, storage
-bindings, links, and runbooks. Read it before assuming domains, names, fields,
-or telemetry mappings.
+`.umodel` 是对象图的地图：实体类型、数据集、storage binding、links 和 runbooks。
+在假设 domain、name、fields 或 telemetry mapping 之前，先读它。
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -10,7 +9,7 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".umodel with(kind='\''entity_set'\'') | project domain,name,kind | sort name | limit 20"}'
 ```
 
-MCP equivalent:
+MCP 等价调用：
 
 ```json
 {
@@ -27,21 +26,21 @@ MCP equivalent:
 }
 ```
 
-## Useful Kinds
+## 常用 Kind
 
-- `entity_set`: runtime object types read by `.entity`, and method owners for
-  `.entity_set | entity-call`.
-- `metric_set`, `log_set`, `event_set`, `trace_set`, `profile_set`: telemetry or
-  event datasets.
-- `data_link`: maps EntitySet fields to dataset fields.
-- `storage_link`: maps dataset fields to storage labels or fields.
-- Storage kinds such as `prometheus`, `aliyun_prometheus`, `elasticsearch`, and
-  `sls_logstore`: endpoint/config metadata for executable plans.
-- `entity_set_link`: model-level relationship definition between entity types.
-- `runbook_set`: operational knowledge, observations, actions, automations, and
-  skills searched by `.runbook_set`.
+- `entity_set`：`.entity` 读取的运行时对象类型，也是 `.entity_set | entity-call`
+  的方法所属对象。
+- `metric_set`、`log_set`、`event_set`、`trace_set`、`profile_set`：telemetry 或 event
+  数据集。
+- `data_link`：把 EntitySet 字段映射到 dataset 字段。
+- `storage_link`：把 dataset 字段映射到 storage labels 或 fields。
+- `prometheus`、`aliyun_prometheus`、`elasticsearch`、`sls_logstore` 等 storage kind：
+  可执行计划使用的 endpoint/config metadata。
+- `entity_set_link`：实体类型之间的模型级关系定义。
+- `runbook_set`：由 `.runbook_set` 搜索的 operational knowledge、observations、
+  actions、automations 和 skills。
 
-The Java quickstart includes:
+Java quickstart 包含：
 
 - `devops/devops.service`
 - `k8s/k8s.workload`
@@ -49,9 +48,9 @@ The Java quickstart includes:
 - `devops/devops.log.service`
 - `devops/devops.service.ops`
 
-## Returned Format
+## 返回格式
 
-Rows contain model element metadata:
+行内容是模型元素元数据：
 
 ```jsonc
 {
@@ -64,12 +63,12 @@ Rows contain model element metadata:
 }
 ```
 
-REST wraps those rows into `data.header` and `data.data`; MCP also exposes the
-same logical result in `structuredContent.output.rows`.
+REST 会把这些行包装成 `data.header` 和 `data.data`；MCP 也会在
+`structuredContent.output.rows` 中暴露同一逻辑结果。
 
-## Fetch One Element In Full
+## 获取单个元素完整定义
 
-Fetch a runbook:
+读取 runbook：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -77,7 +76,7 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".umodel with(kind='\''runbook_set'\'', domain='\''devops'\'', name='\''devops.service.ops'\'')"}'
 ```
 
-Fetch storage links:
+读取 storage links：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -85,7 +84,7 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".umodel with(kind='\''storage_link'\'') | project domain,name,spec"}'
 ```
 
-Fetch data links:
+读取 data links：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -93,39 +92,38 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".umodel with(kind='\''data_link'\'') | project domain,name,spec"}'
 ```
 
-Use `include=spec` when asking for agent plan endpoints; for plain `.umodel`
-queries, the `spec` column is already available unless you project it out.
+请求 agent plan endpoint 时使用 `include=spec`；普通 `.umodel` 查询里，除非被
+`project` 排除，否则 `spec` 列本来就可用。
 
-## How `.umodel` Connects Other Surfaces
+## `.umodel` 如何连接其他查询面
 
-The same `domain` + `name` from an `entity_set` row is what you pass to:
+`entity_set` 行里的 `domain` + `name` 正是这些查询要传入的值：
 
 ```text
 .entity with(domain='devops', name='devops.service')
 .entity_set with(domain='devops', name='devops.service') | entity-call ...
 ```
 
-The `domain` + `name` from `metric_set` or `log_set` rows are not enough by
-themselves. To know which dataset applies to a specific entity type, call:
+`metric_set` 或 `log_set` 行里的 `domain` + `name` 还不够。要知道某个具体实体类型适用
+哪个 dataset，请调用：
 
 ```text
 .entity_set with(domain='devops', name='devops.service') | entity-call list_data_set(['metric_set','log_set'], true)
 ```
 
-That returns the scoped dataset plus `data_link` and `storage_link` details.
-This avoids accidentally using a metric/log dataset that exists in the workspace
-but is unrelated to the target entity.
+这样返回的是 scoped dataset，以及 `data_link` 和 `storage_link` detail，避免误用
+workspace 中存在但与目标实体无关的 metric/log dataset。
 
-## Model-Guided Telemetry Planning
+## 模型驱动的遥测计划
 
-Telemetry plans are assembled from four model elements:
+Telemetry plan 由四类模型元素组装：
 
-1. The source `entity_set`, such as `devops.service`.
-2. The related `metric_set` or `log_set`.
-3. The `data_link` mapping entity fields to dataset fields.
-4. The `storage_link` mapping dataset fields to storage labels/fields.
+1. 源 `entity_set`，例如 `devops.service`。
+2. 关联的 `metric_set` 或 `log_set`。
+3. 把 entity fields 映射到 dataset fields 的 `data_link`。
+4. 把 dataset fields 映射到 storage labels/fields 的 `storage_link`。
 
-Inspect those elements when a generated plan looks surprising:
+当生成的计划看起来不符合预期时，检查这些元素：
 
 ```bash
 curl -X POST 'http://localhost:8080/api/v1/query/demo/execute?format=agent&include=spec' \
@@ -133,15 +131,12 @@ curl -X POST 'http://localhost:8080/api/v1/query/demo/execute?format=agent&inclu
   -d "{\"query\":\".entity_set with(domain='devops', name='devops.service', ids=['10000000000000000000000000000101']) | entity-call get_metrics('devops', 'devops.metric.service', 'request_count', step='30s')\"}"
 ```
 
-The `data_source` block in the response points back to the exact model elements
-used to build the query plan.
+响应中的 `data_source` block 会指回用于构造查询计划的具体模型元素。
 
-## Pitfalls
+## 常见坑
 
-- `.umodel with(kind='metric_set')` is a catalog query, not an entity-scoped
-  dataset lookup. Use `list_data_set` for scoped telemetry.
-- `project domain,name` removes `spec`; only project it away when you do not need
-  full definitions.
-- Links are model definitions, not runtime topology rows. Use `.topo` for
-  runtime relations.
-- AgentGateway resources are metadata-only; use Query Service for rows.
+- `.umodel with(kind='metric_set')` 是目录查询，不是 entity-scoped dataset lookup。
+  scoped telemetry 请使用 `list_data_set`。
+- `project domain,name` 会去掉 `spec`；只有在确实不需要完整定义时才把它 project 掉。
+- links 是模型定义，不是运行时拓扑行。运行时关系使用 `.topo`。
+- AgentGateway resources 只放元数据；行数据通过 Query Service 读取。

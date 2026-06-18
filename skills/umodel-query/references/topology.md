@@ -1,22 +1,21 @@
-# `.topo` — relationships and topology
+# `.topo` — 关系和拓扑
 
-`.topo` reads runtime relation rows from the graph store. Use it to inspect
-dependencies, service-to-workload placement, neighbors, and controlled read-only
-Cypher-style graph queries.
+`.topo` 从 graph store 读取运行时 relation rows。用它检查依赖、service-to-workload
+部署关系、邻居，以及受控只读 Cypher 风格查询。
 
-Graph calls use node literals like:
+Graph call 使用这样的 node literal：
 
 ```text
 (:"<domain>@<entity_set>" {__entity_id__: '<id>'})
 ```
 
-For the Java quickstart checkout service:
+Java quickstart 的 checkout service：
 
 ```text
 (:"devops@devops.service" {__entity_id__: '10000000000000000000000000000101'})
 ```
 
-## Direct Relations
+## 直接关系
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -24,9 +23,8 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".topo | graph-call getDirectRelations([(:\"devops@devops.service\" {__entity_id__: '\''10000000000000000000000000000101'\''})]) | limit 20"}'
 ```
 
-`getDirectRelations([...])` returns relations directly connected to the supplied
-node or nodes. Passing an empty list returns stored direct relations up to the
-query limit:
+`getDirectRelations([...])` 返回与传入节点直接相连的关系。传空列表会按 query limit
+返回已存储的直接关系：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -34,7 +32,7 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".topo | graph-call getDirectRelations([]) | limit 20"}'
 ```
 
-## Neighbor Traversal
+## 邻居遍历
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -42,14 +40,14 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".topo | graph-call getNeighborNodes('\''full'\'', 2, [(:\"devops@devops.service\" {__entity_id__: '\''10000000000000000000000000000101'\''})]) | limit 20"}'
 ```
 
-Arguments:
+参数：
 
-- `scope`: Java currently accepts the call and treats the memory graph as the
-  available scope. Use `'full'` for parity with upstream examples.
-- `hops`: number of hops to traverse.
-- `start nodes`: node literal array.
+- `scope`：Java 当前接受该参数，并以 memory graph 中可用的关系作为范围。为保持上游
+  示例兼容，使用 `'full'`。
+- `hops`：遍历 hop 数。
+- `start nodes`：node literal 数组。
 
-Use a `where` pipe to filter graph-call output:
+过滤 graph-call 输出时使用 `where` pipe：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -57,13 +55,11 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".topo | graph-call getNeighborNodes('\''full'\'', 2, [(:\"devops@devops.service\" {__entity_id__: '\''10000000000000000000000000000101'\''})]) | where __relation_type__='\''runs_on'\'' | limit 20"}'
 ```
 
-Do not put runtime relation filters inside the initial `.topo with(...)` clause
-after a graph-call; use `where`.
+graph-call 后的运行时关系过滤不要放在开头的 `.topo with(...)`，请使用 `where`。
 
-## Controlled Read-Only Cypher
+## 受控只读 Cypher
 
-The Java memory provider supports a controlled read-only MATCH/RETURN subset over
-stored relation rows:
+Java memory provider 支持对已存储 relation rows 的受控只读 MATCH/RETURN 子集：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -71,12 +67,11 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".topo | graph-call cypher(`MATCH (src)-[r]->(dest) RETURN src, r AS relation, dest LIMIT 20`)"}'
 ```
 
-Mutating clauses are rejected. Treat this as a compatibility fallback, not a full
-provider-backed Cypher engine.
+mutating clauses 会被拒绝。把它视作兼容 fallback，不是完整 provider-backed Cypher engine。
 
-## Returned Format
+## 返回格式
 
-Rows describe directed runtime edges. Common fields include:
+行表示有方向的运行时 edge。常见字段：
 
 ```jsonc
 {
@@ -90,30 +85,28 @@ Rows describe directed runtime edges. Common fields include:
 }
 ```
 
-Read direction as:
+方向读取为：
 
 ```text
 __src_entity_id__ --__relation_type__--> __dest_entity_id__
 ```
 
-For RCA:
+RCA 时：
 
-- Rows where your entity is `__dest_entity_id__` are incoming/upstream
-  dependencies.
-- Rows where your entity is `__src_entity_id__` are outgoing/downstream
-  dependencies.
+- 目标实体位于 `__dest_entity_id__` 的行，是 incoming/upstream dependencies。
+- 目标实体位于 `__src_entity_id__` 的行，是 outgoing/downstream dependencies。
 
-Resolve endpoint ids back to entity details with `.entity ... ids=[...]`.
+用 `.entity ... ids=[...]` 把端点 id 解析回实体详情。
 
-## Java Quickstart Example
+## Java 快速开始示例
 
-The sample relation is:
+样例关系是：
 
 ```text
 Checkout Service --runs_on--> checkout workload
 ```
 
-Read it:
+读取它：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -121,7 +114,7 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".topo | graph-call getDirectRelations([(:\"devops@devops.service\" {__entity_id__: '\''10000000000000000000000000000101'\''})]) | project __src_entity_id__,__relation_type__,__dest_entity_id__"}'
 ```
 
-Then resolve the workload:
+再解析 workload：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -129,11 +122,10 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".entity with(domain='\''k8s'\'', name='\''k8s.workload'\'', ids=['\''10000000000000000000000000000201'\'']) | project namespace,name"}'
 ```
 
-## Pitfalls
+## 常见坑
 
-- Use `__entity_id__`, not display name, in graph node literals.
-- Direction matters. Do not call a relation a dependency until you inspect
-  source and destination fields.
-- `cypher(...)` is read-only and limited in the Java memory provider.
-- Runtime topology is not the same as model `entity_set_link`; use `.umodel` for
-  model links and `.topo` for runtime relation rows.
+- graph node literal 使用 `__entity_id__`，不要用 display name。
+- 方向很重要。先检查 source/destination 字段，再判断依赖关系。
+- Java memory provider 中 `cypher(...)` 是只读且有限的。
+- 运行时 topology 不等于模型 `entity_set_link`；模型 link 用 `.umodel`，运行时 relation rows
+  用 `.topo`。

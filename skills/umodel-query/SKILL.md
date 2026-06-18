@@ -1,34 +1,34 @@
 ---
 name: umodel-query
 description: >-
-  Query a UModel Java 21 + Spring Boot backend through HTTP REST or MCP. Use
-  when Codex needs to read UModel model metadata, runtime entities, topology,
-  runbooks, EntitySet methods, metric query plans, or log query plans from the
-  `umodel-java` subproject. Triggers: UModel Java, umodel-java, .umodel,
-  .entity, .entity_set, .topo, .runbook_set, query_spl_execute, get_metrics,
-  get_logs, Java backend topology, Java backend skills, 查询 Java 版 UModel,
-  查实体, 查拓扑, 查指标, 查日志, 查 runbook.
+  通过 HTTP REST 或 MCP 查询 UModel Java 21 + Spring Boot 后端。适用于 Codex
+  需要从 `umodel-java` 子项目读取 UModel 模型元数据、运行时实体、拓扑、Runbook、
+  EntitySet 方法、metric 查询计划或 log 查询计划的场景。触发词：UModel Java,
+  umodel-java, .umodel, .entity, .entity_set, .topo, .runbook_set,
+  query_spl_execute, get_metrics, get_logs, Java backend topology,
+  Java backend skills, 查询 Java 版 UModel, 查实体, 查拓扑, 查指标, 查日志,
+  查 runbook.
 ---
 
-# UModel Java Query
+# UModel Java 查询
 
-Use the Java backend as the read path for UModel's object graph semantic layer.
-The Java service exposes the same public query sources through Spring Boot:
-`.umodel`, `.entity`, `.entity_set`, `.topo`, and `.runbook_set`.
-This is an HTTP/MCP-first Java adaptation of the upstream CLI-first UModel
-skills, with the same agent-facing read model where the Java backend supports
-the public behavior.
+把 Java 后端作为 UModel 对象图语义层的读取入口。Java 服务通过 Spring Boot
+暴露相同的公共查询源：`.umodel`、`.entity`、`.entity_set`、`.topo` 和
+`.runbook_set`。
 
-## Setup
+这是上游 CLI-first UModel skills 的 HTTP/MCP-first Java 适配版本；在 Java
+后端已经支持的公共行为上，保持相同的 agent-facing read model。
 
-Start the Java backend from the `umodel-java` directory:
+## 启动
+
+在 `umodel-java` 目录启动 Java 后端：
 
 ```bash
 mvn spring-boot:run -pl apps/umodel-server -am
 curl -X POST http://localhost:8080/api/v1/samples/demo/multi-domain-quickstart:import
 ```
 
-Use REST first when no MCP client is configured:
+没有 MCP client 时，优先使用 REST：
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/demo/execute \
@@ -36,7 +36,7 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
   -d '{"query":".umodel with(kind='\''entity_set'\'') | project domain,name,kind | limit 20"}'
 ```
 
-Use MCP when available:
+有 MCP client 时，使用 MCP：
 
 ```json
 {
@@ -51,32 +51,30 @@ Use MCP when available:
 }
 ```
 
-POST that JSON to `http://localhost:8080/mcp`. The Java service also exposes
-HTTP+SSE compatibility at `GET /sse` and `POST /messages`.
+把这段 JSON POST 到 `http://localhost:8080/mcp`。Java 服务也提供
+HTTP+SSE 兼容入口：`GET /sse` 和 `POST /messages`。
 
-## Query Surfaces
+## 查询面
 
-Load only the reference needed for the task:
+只加载当前任务需要的 reference：
 
-- Read model definitions and dataset catalogs: `references/model.md`.
-- Read runtime entities: `references/entity.md`.
-- Traverse topology and controlled Cypher: `references/topology.md`.
-- Discover and call EntitySet methods: `references/entity-set.md`.
-- Read metric/log executable plans: `references/metrics-logs.md`.
-- Search runbooks: `references/runbook.md`.
+- 读取模型定义和数据集目录：`references/model.md`。
+- 读取运行时实体：`references/entity.md`。
+- 遍历拓扑和受控 Cypher：`references/topology.md`。
+- 发现和调用 EntitySet 方法：`references/entity-set.md`。
+- 读取 metric/log 可执行计划：`references/metrics-logs.md`。
+- 搜索 runbook：`references/runbook.md`。
 
-## Rules
+## 规则
 
-- Stay read-only unless the user explicitly asks to write.
-- Use Query Service for runtime rows; AgentGateway resources are metadata-only.
-- For metric/log values, `get_metrics` and `get_logs` return executable plans,
-  not backend data rows. Run those plans against Prometheus or Elasticsearch if
-  the user asks for actual telemetry values.
-- `mode='vector'`, `mode='hyper'`, and `mode='hybrid'` are accepted by the Java
-  backend as memory keyword fallback unless a real search provider is added.
-- `.runbook_set` searches `knowledge`, `observations`, `actions`,
-  `automations`, `skills`, and Java-compatible `steps`; singular filters such as
-  `type='skill'` are accepted as aliases for plural section names.
-- `local.ladybug` is an external-provider boundary in this Java subproject; do
-  not claim the Java backend has a real Ladybug implementation unless one is
-  added.
+- 除非用户明确要求写入，否则保持只读。
+- 运行时行数据必须通过 Query Service 读取；AgentGateway resources 只放元数据。
+- 对 metric/log 值，`get_metrics` 和 `get_logs` 返回可执行计划，不直接返回后端数据行。
+  如果用户要求真实 telemetry 值，再拿计划去查询 Prometheus 或 Elasticsearch。
+- Java 后端接受 `mode='vector'`、`mode='hyper'`、`mode='hybrid'`，但在接入真实搜索
+  provider 前，这些模式都走内存 keyword fallback。
+- `.runbook_set` 搜索 `knowledge`、`observations`、`actions`、`automations`、
+  `skills` 和 Java 兼容的 `steps`；`type='skill'` 这类单数过滤会被视为复数
+  section 名称的别名。
+- `local.ladybug` 在此 Java 子项目里只是外部 provider 边界；除非真正接入
+  Ladybug Java runtime adapter，否则不要声称 Java 后端已经有真实 Ladybug 实现。
