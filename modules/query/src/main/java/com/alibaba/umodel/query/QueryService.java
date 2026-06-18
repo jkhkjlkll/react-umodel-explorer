@@ -9,8 +9,19 @@ import com.alibaba.umodel.contract.UModelModels.QueryPage;
 import com.alibaba.umodel.contract.UModelModels.QueryPlan;
 import com.alibaba.umodel.contract.UModelModels.QueryRequest;
 import com.alibaba.umodel.contract.UModelModels.QueryResult;
+import com.alibaba.umodel.contract.UModelModels.SearchCapabilities;
+import com.alibaba.umodel.contract.UModelModels.SearchRequest;
+import com.alibaba.umodel.contract.UModelModels.SearchResult;
+import com.alibaba.umodel.contract.UModelModels.SearchRow;
+import com.alibaba.umodel.contract.UModelModels.TelemetryDataRequest;
+import com.alibaba.umodel.contract.UModelModels.TelemetryDataResult;
 import com.alibaba.umodel.contract.UModelModels.UModelElement;
 import com.alibaba.umodel.graphstore.GraphStore;
+import com.alibaba.umodel.search.MemorySearchService;
+import com.alibaba.umodel.search.SearchIndexing;
+import com.alibaba.umodel.search.SearchService;
+import com.alibaba.umodel.query.telemetry.TelemetryService;
+import com.alibaba.umodel.query.telemetry.UnavailableTelemetryService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -43,19 +54,34 @@ public class QueryService {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final GraphStore graphStore;
+    private final SearchService searchService;
+    private final TelemetryService telemetryService;
 
     public QueryService(GraphStore graphStore) {
+        this(graphStore, new MemorySearchService());
+    }
+
+    public QueryService(GraphStore graphStore, SearchService searchService) {
+        this(graphStore, searchService, new UnavailableTelemetryService());
+    }
+
+    public QueryService(GraphStore graphStore, SearchService searchService, TelemetryService telemetryService) {
         this.graphStore = graphStore;
+        this.searchService = searchService == null ? new MemorySearchService() : searchService;
+        this.telemetryService = telemetryService == null ? new UnavailableTelemetryService() : telemetryService;
     }
 
     public QueryResult execute(String workspace, QueryRequest request) {
         QueryPlan plan = plan(workspace, request);
+        if ("data".equals(plan.mode()) && !telemetryEntityCall(plan)) {
+            throw new UModelException(ErrorCodes.INVALID_ARGUMENT, "mode=data is only supported for .entity_set get_logs/get_metrics");
+        }
         QueryResult result = switch (plan.source()) {
             case ".umodel" -> executeUModel(plan);
             case ".entity_set" -> executeEntitySet(plan);
-            case ".entity" -> graphStore.queryEntities(plan);
+            case ".entity" -> semanticEntitySearch(plan) ? executeSearch(plan) : graphStore.queryEntities(plan);
             case ".topo" -> graphStore.queryTopo(plan);
-            case ".runbook_set" -> executeRunbookSet(plan);
+            case ".runbook_set" -> executeSearch(plan);
             default -> throw new UModelException(ErrorCodes.INVALID_ARGUMENT, "unsupported query source");
         };
         if (isAgentPlanResult(result)) {
@@ -250,6 +276,166 @@ public class QueryService {
         return new QueryResult(rows, columns(rows), page(plan.limit()), null);
     }
 
+    private QueryResult executeSearch(QueryPlan plan) {
+        backfillSearchIndex(plan);
+        SearchRequest request = buildSearchRequest(plan);
+        SearchResult searchResult = switch (effectiveSearchMode(plan)) {
+            case "vector" -> searchService.vector(plan.workspace(), request);
+            case "hyper", "hybrid" -> searchService.hybrid(plan.workspace(), request);
+            default -> searchService.keyword(plan.workspace(), request);
+        };
+        QueryResult result = searchResultToQueryResult(searchResult, plan.source(), plan.limit());
+        List<Map<String, Object>> rows = sortAndLimit(result.rows(), plan.sortField(), plan.limit());
+        return new QueryResult(rows, columns(rows), page(plan.limit()), null);
+    }
+
+    private void backfillSearchIndex(QueryPlan plan) {
+        if (searchService == null) {
+            return;
+        }
+        searchService.openWorkspace(plan.workspace());
+        List<UModelElement> elements = graphStore.getUModelSnapshot(plan.workspace()).elements();
+        searchService.index(plan.workspace(), SearchIndexing.uModelChunks(elements));
+        if (".entity".equals(plan.source())) {
+            QueryResult entities = graphStore.queryEntities(searchBackfillEntityPlan(plan));
+            searchService.index(plan.workspace(), SearchIndexing.entityChunks(entities.rows()));
+        }
+    }
+
+    private static SearchRequest buildSearchRequest(QueryPlan plan) {
+        Map<String, Object> remainingFilters = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : plan.filters().entrySet()) {
+            if (!List.of("domain", "name", "names", "kind", "kinds", "query", "origin", "embedding_model", "topk", "hybrid_k", "mode").contains(entry.getKey())) {
+                remainingFilters.put(entry.getKey(), entry.getValue());
+            }
+        }
+        if (plan.filters().get("type") != null) {
+            remainingFilters.put("type", plan.filters().get("type"));
+        }
+        int topK = plan.topK() == null || plan.topK() <= 0 ? plan.limit() : plan.topK();
+        return new SearchRequest(
+                plan.workspace(),
+                plan.source(),
+                stringValue(plan.filters().get("domain")),
+                stringList(firstNonNull(plan.filters().get("kinds"), plan.filters().get("kind"))),
+                stringList(firstNonNull(plan.filters().get("names"), plan.filters().get("name"))),
+                stringValue(plan.filters().get("query")),
+                stringValue(plan.filters().get("embedding_model")),
+                topK <= 0 ? null : topK,
+                stringValue(plan.filters().get("origin")),
+                remainingFilters,
+                intValue(plan.filters().get("hybrid_k")) <= 0 ? null : intValue(plan.filters().get("hybrid_k")),
+                searchWeights(plan.filters().get("weights"))
+        );
+    }
+
+    private static QueryPlan searchBackfillEntityPlan(QueryPlan plan) {
+        Map<String, Object> filters = new LinkedHashMap<>(plan.filters());
+        filters.remove("query");
+        filters.remove("mode");
+        filters.remove("topk");
+        filters.remove("hybrid_k");
+        return new QueryPlan(
+                plan.workspace(),
+                ".entity",
+                plan.query(),
+                filters,
+                List.of(),
+                null,
+                0,
+                null,
+                null,
+                plan.format(),
+                plan.includeSpec(),
+                "plan",
+                null
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Double> searchWeights(Object value) {
+        if (!(value instanceof Map<?, ?> map)) {
+            return Map.of();
+        }
+        Map<String, Double> out = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            Object weight = entry.getValue();
+            if (weight instanceof Number number) {
+                out.put(stringValue(entry.getKey()), number.doubleValue());
+            } else {
+                try {
+                    out.put(stringValue(entry.getKey()), Double.parseDouble(stringValue(weight)));
+                } catch (NumberFormatException ignored) {
+                    // Ignore malformed optional search weights.
+                }
+            }
+        }
+        return out;
+    }
+
+    private static QueryResult searchResultToQueryResult(SearchResult result, String source, int limit) {
+        if (".entity".equals(source)) {
+            return entitySearchResultToQueryResult(result, limit);
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (SearchRow row : result == null || result.rows() == null ? List.<SearchRow>of() : result.rows()) {
+            Map<String, Object> out = new LinkedHashMap<>(row.asMap());
+            Map<String, Object> chunk = mapValue(row.spec() == null ? null : row.spec().get("__chunk__"));
+            if (!chunk.isEmpty()) {
+                out.put("section", chunk.get("section"));
+                out.put("title", chunk.get("title"));
+                out.put("content", chunk.get("content"));
+            }
+            Object type = out.get("__type__");
+            if (type != null) {
+                out.put("type", type);
+            }
+            out.putIfAbsent("source", row.domain() + ".runbook_set");
+            out.putIfAbsent("domain", row.domain());
+            rows.add(out);
+        }
+        return new QueryResult(rows, columns(rows), page(limit), null);
+    }
+
+    private static QueryResult entitySearchResultToQueryResult(SearchResult result, int limit) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        Set<String> extraColumns = new LinkedHashSet<>();
+        List<String> baseColumns = List.of(
+                "__category__",
+                "__domain__",
+                "__entity_type__",
+                "__entity_id__",
+                "__method__",
+                "__first_observed_time__",
+                "__last_observed_time__",
+                "__keep_alive_seconds__",
+                "__deleted__"
+        );
+        for (SearchRow searchRow : result == null || result.rows() == null ? List.<SearchRow>of() : result.rows()) {
+            Map<String, Object> row = new LinkedHashMap<>(safeMap(searchRow.spec()));
+            row.putIfAbsent("__domain__", searchRow.domain());
+            row.putIfAbsent("__entity_type__", searchRow.kind());
+            row.putIfAbsent("__deleted__", false);
+            row.put("__score__", searchRow.score());
+            row.put("__provider__", searchRow.provider());
+            row.put("__embedding_model__", searchRow.embedModel());
+            for (String key : row.keySet()) {
+                if (!baseColumns.contains(key) && !List.of("__score__", "__provider__", "__embedding_model__").contains(key)) {
+                    extraColumns.add(key);
+                }
+            }
+            rows.add(row);
+        }
+        List<String> columns = new ArrayList<>(baseColumns);
+        List<String> sortedExtras = new ArrayList<>(extraColumns);
+        sortedExtras.sort(String::compareTo);
+        columns.addAll(sortedExtras);
+        columns.add("__score__");
+        columns.add("__provider__");
+        columns.add("__embedding_model__");
+        return new QueryResult(rows, columns, page(limit), null);
+    }
+
     private QueryResult executeEntitySet(QueryPlan plan) {
         EntityCallPlan call = plan.entityCall();
         return switch (call.name()) {
@@ -324,6 +510,17 @@ public class QueryService {
     }
 
     private QueryResult planResponse(QueryPlan plan, Map<String, Object> queryPlan) {
+        if ("data".equals(plan.mode())) {
+            TelemetryDataResult data = telemetryService.execute(new TelemetryDataRequest(
+                    plan.workspace(),
+                    stringValue(queryPlan.get("operation")),
+                    queryPlan,
+                    plan.limit() <= 0 ? null : plan.limit()
+            ));
+            List<Map<String, Object>> rows = data.rows() == null ? List.of() : data.rows();
+            List<String> columns = data.columns() == null || data.columns().isEmpty() ? columns(rows) : data.columns();
+            return new QueryResult(rows, columns, page(plan.limit()), null);
+        }
         if (FORMAT_AGENT.equals(plan.format())) {
             return new QueryResult(
                     List.of(Map.of(AGENT_PLAN_RESULT_COLUMN, queryPlan)),
@@ -359,8 +556,8 @@ public class QueryService {
                 plan.source(),
                 graphStore.capabilities().provider(),
                 graphStore.health().provider(),
-                List.of(),
-                List.of(),
+                pushdownOperators(plan),
+                fallbackOperators(plan),
                 operators,
                 null,
                 plan.filters(),
@@ -369,7 +566,9 @@ public class QueryService {
                 false,
                 searchMode(plan),
                 searchProvider(plan),
-                ".runbook_set".equals(plan.source()) || semanticEntitySearch(plan) ? "memory-keyword-fallback" : null,
+                searchEmbedModel(plan),
+                cypherDialect(plan),
+                cypherEngine(plan),
                 plan.entityCall()
         );
     }
@@ -393,7 +592,7 @@ public class QueryService {
             return normalized;
         }
         if ("data".equalsIgnoreCase(mode)) {
-            throw new UModelException(ErrorCodes.NOT_IMPLEMENTED, "mode=data requires a telemetry data provider; Java backend currently returns executable plans");
+            return "data";
         }
         throw new UModelException(ErrorCodes.NOT_IMPLEMENTED, "unsupported query mode: " + mode);
     }
@@ -1661,11 +1860,69 @@ public class QueryService {
         return null;
     }
 
-    private static String searchProvider(QueryPlan plan) {
+    private String searchProvider(QueryPlan plan) {
         if (".runbook_set".equals(plan.source()) || semanticEntitySearch(plan)) {
-            return "memory";
+            return searchService.health().provider();
         }
         return null;
+    }
+
+    private String searchEmbedModel(QueryPlan plan) {
+        if (!".runbook_set".equals(plan.source()) && !semanticEntitySearch(plan)) {
+            return null;
+        }
+        SearchCapabilities capabilities = searchService.capabilities();
+        return firstNonEmpty(capabilities.embedderType(), "memory-token-overlap");
+    }
+
+    private static String effectiveSearchMode(QueryPlan plan) {
+        String mode = searchMode(plan);
+        return mode == null || mode.isBlank() || "plan".equals(mode) ? "keyword" : mode;
+    }
+
+    private static boolean telemetryEntityCall(QueryPlan plan) {
+        return ".entity_set".equals(plan.source())
+                && plan.entityCall() != null
+                && List.of("get_logs", "get_metrics").contains(plan.entityCall().name());
+    }
+
+    private static List<String> pushdownOperators(QueryPlan plan) {
+        List<String> pushdown = new ArrayList<>();
+        if (".runbook_set".equals(plan.source()) || semanticEntitySearch(plan)) {
+            pushdown.add("search:" + effectiveSearchMode(plan));
+        }
+        if (isCypherCall(plan)) {
+            pushdown.add("graph_call:cypher");
+            pushdown.add("controlled_cypher");
+        }
+        if ("data".equals(plan.mode()) && telemetryEntityCall(plan)) {
+            pushdown.add("telemetry:" + plan.entityCall().name());
+        }
+        return pushdown;
+    }
+
+    private static List<String> fallbackOperators(QueryPlan plan) {
+        List<String> fallback = new ArrayList<>();
+        if (".runbook_set".equals(plan.source()) || semanticEntitySearch(plan)) {
+            String mode = effectiveSearchMode(plan);
+            if (List.of("vector", "hyper", "hybrid").contains(mode)) {
+                fallback.add("memory_vector_token_overlap");
+            }
+        }
+        return fallback;
+    }
+
+    private static String cypherDialect(QueryPlan plan) {
+        return isCypherCall(plan) ? "ladybug-compatible-readonly" : null;
+    }
+
+    private static String cypherEngine(QueryPlan plan) {
+        return isCypherCall(plan) ? "java-memory-controlled-cypher" : null;
+    }
+
+    private static boolean isCypherCall(QueryPlan plan) {
+        return plan.graphCall() != null
+                && plan.graphCall().trim().toLowerCase(Locale.ROOT).startsWith("cypher(");
     }
 
     private static boolean semanticEntitySearch(QueryPlan plan) {
@@ -1809,6 +2066,10 @@ public class QueryService {
             }
         }
         return "";
+    }
+
+    private static Object firstNonNull(Object first, Object second) {
+        return first == null ? second : first;
     }
 
     private static String stringValue(Object value) {

@@ -9,6 +9,8 @@ import com.alibaba.umodel.contract.UModelModels.RelationWriteBatch;
 import com.alibaba.umodel.contract.UModelModels.ValidationResult;
 import com.alibaba.umodel.contract.UModelModels.WriteResult;
 import com.alibaba.umodel.graphstore.GraphStore;
+import com.alibaba.umodel.search.SearchIndexing;
+import com.alibaba.umodel.search.SearchService;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -40,9 +42,15 @@ public class EntityStoreService {
     );
 
     private final GraphStore graphStore;
+    private final SearchService searchService;
 
     public EntityStoreService(GraphStore graphStore) {
+        this(graphStore, null);
+    }
+
+    public EntityStoreService(GraphStore graphStore, SearchService searchService) {
         this.graphStore = graphStore;
+        this.searchService = searchService;
     }
 
     public WriteResult writeEntities(String workspace, EntityWriteBatch batch) {
@@ -59,12 +67,17 @@ public class EntityStoreService {
                 );
             }
         }
-        return graphStore.writeEntities(new EntityWriteBatch(
+        WriteResult result = graphStore.writeEntities(new EntityWriteBatch(
                 targetWorkspace,
                 batch == null ? null : batch.idempotencyKey(),
                 batch != null && batch.partialSuccess(),
                 entities
         ));
+        if (searchService != null && result.accepted() > 0) {
+            searchService.deleteByDocId(targetWorkspace, SearchIndexing.entityDocIds(entities));
+            searchService.index(targetWorkspace, SearchIndexing.entityChunks(entities));
+        }
+        return result;
     }
 
     public WriteResult writeRelations(String workspace, RelationWriteBatch batch) {
@@ -94,7 +107,11 @@ public class EntityStoreService {
         List<Map<String, Object>> payloads = request == null || request.ids() == null
                 ? List.of()
                 : request.ids().stream().map(id -> expireEntityPayload(id, now)).toList();
-        return graphStore.writeEntities(new EntityWriteBatch(workspace, null, true, payloads));
+        WriteResult result = graphStore.writeEntities(new EntityWriteBatch(workspace, null, true, payloads));
+        if (searchService != null && result.accepted() > 0) {
+            searchService.deleteByDocId(workspace, SearchIndexing.entityDocIds(payloads));
+        }
+        return result;
     }
 
     public WriteResult expireRelations(String workspace, ExpireRequest request) {

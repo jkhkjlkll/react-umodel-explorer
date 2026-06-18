@@ -132,11 +132,12 @@ public class AgentGatewayService {
                     "runbook_sections", List.of("knowledge", "observations", "actions", "automations", "skills", "steps"),
                     "entity_set_methods", List.of("__list_method__", "list_data_set", "get_logs", "get_metrics"),
                     "search_modes", Map.of(
-                            "keyword", "memory keyword search",
-                            "vector", "accepted as memory keyword fallback",
-                            "hyper", "accepted as memory keyword fallback",
-                            "hybrid", "accepted as memory keyword fallback"
+                            "keyword", "SearchService keyword axis",
+                            "vector", "SearchService vector axis; memory provider uses deterministic token overlap",
+                            "hyper", "SearchService hybrid RRF fusion",
+                            "hybrid", "SearchService hybrid RRF fusion"
                     ),
+                    "telemetry_mode_data", "get_logs/get_metrics execute through a configured TelemetryService; default provider is unavailable",
                     "graph_calls", List.of("getDirectRelations", "getNeighborNodes", "cypher")
             ));
         }

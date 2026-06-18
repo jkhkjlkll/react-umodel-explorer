@@ -145,6 +145,7 @@ sectioned runbook。
 
 - 不要自动执行 `actions` 或 `automations`。除非用户明确要求运行 write-capable tool，
   否则它们只是候选下一步。
-- 不要声称 Java 已有真实 vector/hybrid ranking；当前这些模式使用内存 keyword fallback。
+- 不要声称默认 Java 后端已有生产级 ANN vector/hybrid ranking；当前默认 provider
+  使用内存 token overlap 和 hybrid RRF。
 - 区分运行时证据和 runbook guidance。Runbook 可以提示机制，但 metrics、logs 和 topology
   必须支撑结论。

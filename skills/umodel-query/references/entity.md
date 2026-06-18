@@ -34,9 +34,9 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
 - `domain=` 和 `name=` 标识 EntitySet。用 `.umodel with(kind='entity_set')` 发现可用值。
   Java quickstart 中可用 `domain='devops', name='devops.service'` 或
   `domain='k8s', name='k8s.workload'`。
-- `query='...'` 会对已存储实体字段做内存 keyword 搜索。Java 后端接受
-  `mode='keyword'`、`mode='vector'`、`mode='hyper'` 和 `mode='hybrid'`，但在接入真实
-  search provider 前都使用同一套内存 keyword fallback。
+- `query='...'` 会通过 SearchService 搜索已存储实体字段。Java 后端接受
+  `mode='keyword'`、`mode='vector'`、`mode='hyper'` 和 `mode='hybrid'`；默认内存
+  provider 使用 token overlap 和 hybrid RRF，不等同生产 ANN provider。
 - `topk=N` 或 `limit N` 限制返回行数。`topk` 适合放在 `with(...)` 中，`limit` 是常规
   pipe operator。
 - `ids=['<entity-id>', ...]` 按稳定 `__entity_id__` 读取指定运行时实体。
@@ -131,6 +131,6 @@ curl -X POST http://localhost:8080/api/v1/query/demo/execute \
 
 - 不要猜 `domain` 和 `name`；先用 `.umodel with(kind='entity_set')` 查询。
 - 不要用 display name 作为 graph handle；用 `__entity_id__`。
-- 不要假设 Java 后端已经是真实 vector search；当前 vector/hyper/hybrid 都是内存
-  keyword fallback。
+- 不要假设默认 Java 后端已经是真实 ANN vector search；当前 vector/hyper/hybrid
+  通过 SearchService 执行，默认内存 provider 使用 token overlap 和 hybrid RRF。
 - 运行时数据读取必须走 Query Service。AgentGateway resources 只提供元数据，不是数据 API。

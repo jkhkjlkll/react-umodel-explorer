@@ -10,6 +10,8 @@ import com.alibaba.umodel.contract.UModelModels.UModelImportResult;
 import com.alibaba.umodel.contract.UModelModels.ValidationResult;
 import com.alibaba.umodel.contract.UModelModels.WriteResult;
 import com.alibaba.umodel.graphstore.GraphStore;
+import com.alibaba.umodel.search.SearchIndexing;
+import com.alibaba.umodel.search.SearchService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
@@ -59,11 +61,17 @@ public class UModelService {
     }
 
     private final GraphStore graphStore;
+    private final SearchService searchService;
     private final ObjectMapper jsonMapper = new ObjectMapper();
     private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
 
     public UModelService(GraphStore graphStore) {
+        this(graphStore, null);
+    }
+
+    public UModelService(GraphStore graphStore, SearchService searchService) {
         this.graphStore = graphStore;
+        this.searchService = searchService;
     }
 
     public ValidationResult validate(String workspace, List<UModelElement> elements) {
@@ -160,12 +168,17 @@ public class UModelService {
                     Map.of("field", first.field(), "reason", first.reason())
             );
         }
-        return graphStore.putUModelElements(new UModelElementBatch(
+        WriteResult result = graphStore.putUModelElements(new UModelElementBatch(
                 targetWorkspace,
                 elements,
                 batch != null && batch.partialSuccess(),
                 batch == null ? null : batch.idempotencyKey()
         ));
+        if (searchService != null && result.accepted() > 0) {
+            searchService.deleteByDocId(targetWorkspace, SearchIndexing.uModelDocIds(elements));
+            searchService.index(targetWorkspace, SearchIndexing.uModelChunks(elements));
+        }
+        return result;
     }
 
     public UModelImportResult importElements(String workspace, UModelImportRequest request) {
@@ -180,7 +193,11 @@ public class UModelService {
     public WriteResult deleteElements(String workspace, List<String> ids) {
         String targetWorkspace = requireWorkspace(workspace);
         List<String> safeIds = ids == null ? List.of() : ids;
-        return graphStore.deleteUModelElements(targetWorkspace, safeIds);
+        WriteResult result = graphStore.deleteUModelElements(targetWorkspace, safeIds);
+        if (searchService != null && result.accepted() > 0) {
+            searchService.deleteByDocId(targetWorkspace, safeIds);
+        }
+        return result;
     }
 
     private List<UModelElement> importPath(String rawPath) {

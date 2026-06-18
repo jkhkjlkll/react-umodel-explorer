@@ -11,8 +11,8 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>umodel-entitystore</artifactId>
-    <name>UModel EntityStore</name>
+    <artifactId>umodel-search</artifactId>
+    <name>UModel Search</name>
 
     <dependencies>
         <dependency>
@@ -21,14 +21,13 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.alibaba.umodel</groupId>
-            <artifactId>umodel-graphstore-api</artifactId>
-            <version>${project.version}</version>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.alibaba.umodel</groupId>
-            <artifactId>umodel-search</artifactId>
-            <version>${project.version}</version>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

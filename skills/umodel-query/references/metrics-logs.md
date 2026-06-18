@@ -213,8 +213,8 @@ Java MCP response 包含：
   Elasticsearch。
 - auth、tenant、TLS 设置从环境传入。不要把 secret 写进查询或文档。
 - telemetry 调用保持只读。
-- 如果用户想要 PaaS-style `mode='data'`，说明当前 Java 后端返回 plan；`mode=data`
-  需要 telemetry data provider。
+- 如果用户想要 PaaS-style `mode='data'`，确认服务已配置 telemetry data provider；
+  Java 默认 provider 未配置时会返回稳定的 provider unavailable。
 
 ## 排查
 

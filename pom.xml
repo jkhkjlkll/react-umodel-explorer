@@ -26,6 +26,7 @@
         <module>modules/graphstore-file</module>
         <module>modules/graphstore-ladybug</module>
         <module>modules/workspace</module>
+        <module>modules/search</module>
         <module>modules/umodel</module>
         <module>modules/entitystore</module>
         <module>modules/query</module>

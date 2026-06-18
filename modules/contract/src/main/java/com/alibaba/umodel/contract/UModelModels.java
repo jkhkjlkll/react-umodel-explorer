@@ -323,6 +323,8 @@ public final class UModelModels {
             String searchMode,
             String searchProvider,
             String embedModel,
+            String cypherDialect,
+            String cypherEngine,
             EntityCallPlan entityCall
     ) {
         public QueryExplain(
@@ -356,9 +358,143 @@ public final class UModelModels {
                     searchMode,
                     searchProvider,
                     embedModel,
+                    null,
+                    null,
                     null
             );
         }
+    }
+
+    public record SearchRequest(
+            String workspace,
+            String source,
+            String domain,
+            List<String> kinds,
+            List<String> names,
+            String query,
+            String embedModel,
+            Integer topK,
+            String origin,
+            Map<String, Object> filters,
+            Integer hybridK,
+            Map<String, Double> weights
+    ) {
+    }
+
+    public record SearchResult(
+            List<SearchRow> rows
+    ) {
+    }
+
+    public record SearchRow(
+            @JsonProperty("__type__")
+            String type,
+            @JsonProperty("__domain__")
+            String domain,
+            String kind,
+            String name,
+            Map<String, Object> metadata,
+            Map<String, Object> spec,
+            @JsonProperty("__score__")
+            double score,
+            @JsonProperty("__provider__")
+            String provider,
+            @JsonProperty("__embedding_model__")
+            String embedModel
+    ) {
+        public Map<String, Object> asMap() {
+            Map<String, Object> out = new java.util.LinkedHashMap<>();
+            out.put("__score__", score);
+            if (type != null && !type.isBlank()) {
+                out.put("__type__", type);
+            }
+            if (domain != null && !domain.isBlank()) {
+                out.put("__domain__", domain);
+            }
+            if (kind != null && !kind.isBlank()) {
+                out.put("kind", kind);
+            }
+            if (name != null && !name.isBlank()) {
+                out.put("name", name);
+            }
+            if (metadata != null && !metadata.isEmpty()) {
+                out.put("metadata", metadata);
+            }
+            if (spec != null && !spec.isEmpty()) {
+                out.put("spec", spec);
+            }
+            if (provider != null && !provider.isBlank()) {
+                out.put("__provider__", provider);
+            }
+            if (embedModel != null && !embedModel.isBlank()) {
+                out.put("__embedding_model__", embedModel);
+            }
+            return out;
+        }
+    }
+
+    public record SearchCapabilities(
+            boolean vectorSearch,
+            boolean hybridSearch,
+            boolean filteredVectorSearch,
+            boolean rrf,
+            boolean chunkChasing,
+            String embedderType,
+            Integer maxDim
+    ) {
+    }
+
+    public record SearchHealth(
+            String provider,
+            String status,
+            String message
+    ) {
+    }
+
+    public record TelemetryDataRequest(
+            String workspace,
+            String operation,
+            Map<String, Object> plan,
+            Integer limit
+    ) {
+    }
+
+    public record TelemetryDataResult(
+            List<Map<String, Object>> rows,
+            List<String> columns,
+            Map<String, Object> metadata
+    ) {
+    }
+
+    public record TelemetryCapabilities(
+            String provider,
+            boolean metrics,
+            boolean logs,
+            boolean events,
+            boolean traces
+    ) {
+    }
+
+    public record TelemetryHealth(
+            String provider,
+            String status,
+            String message
+    ) {
+    }
+
+    public record CompatibilityGate(
+            String name,
+            String status,
+            String scope,
+            String evidence
+    ) {
+    }
+
+    public record CompatibilityReport(
+            String implementation,
+            String status,
+            List<CompatibilityGate> gates
+    ) {
     }
 
     public record EntityCallParam(

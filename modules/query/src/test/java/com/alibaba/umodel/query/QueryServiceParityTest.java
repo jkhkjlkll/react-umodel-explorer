@@ -4,9 +4,14 @@ import com.alibaba.umodel.contract.ErrorCodes;
 import com.alibaba.umodel.contract.UModelException;
 import com.alibaba.umodel.contract.UModelModels.QueryRequest;
 import com.alibaba.umodel.contract.UModelModels.QueryResult;
+import com.alibaba.umodel.contract.UModelModels.TelemetryCapabilities;
+import com.alibaba.umodel.contract.UModelModels.TelemetryDataRequest;
+import com.alibaba.umodel.contract.UModelModels.TelemetryDataResult;
+import com.alibaba.umodel.contract.UModelModels.TelemetryHealth;
 import com.alibaba.umodel.contract.UModelModels.UModelElement;
 import com.alibaba.umodel.contract.UModelModels.UModelElementBatch;
 import com.alibaba.umodel.graphstore.memory.MemoryGraphStore;
+import com.alibaba.umodel.query.telemetry.TelemetryService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -87,11 +92,34 @@ class QueryServiceParityTest {
         assertFalse(result.rows().isEmpty());
         assertEquals("skills", result.rows().get(0).get("type"));
         assertEquals("devops.runbook_set", result.rows().get(0).get("source"));
-        assertEquals("memory-keyword-fallback", result.explain().embedModel());
+        assertEquals("memory", result.explain().searchProvider());
+        assertEquals("memory-token-overlap", result.explain().embedModel());
     }
 
     @Test
-    void dataModeDocumentsTelemetryExecutionGap() {
+    void dataModeExecutesTelemetryProviderWhenConfigured() {
+        MemoryGraphStore graphStore = graphStoreWithFixture();
+        QueryService service = new QueryService(graphStore, null, new FakeTelemetryService());
+
+        QueryResult result = service.execute(WORKSPACE, new QueryRequest(
+                ".entity_set with(domain='devops', name='devops.service', ids=['svc-1']) | entity-call get_metrics('devops', 'devops.metric.service', 'request_count')",
+                Map.of(),
+                20,
+                null,
+                null,
+                null,
+                "data",
+                null
+        ));
+
+        assertTrue(result.columns().contains("operation"));
+        assertTrue(result.columns().contains("workspace"));
+        assertEquals("get_metrics", result.rows().get(0).get("operation"));
+        assertEquals(WORKSPACE, result.rows().get(0).get("workspace"));
+    }
+
+    @Test
+    void dataModeRejectsSourcesWithoutTelemetryMeaning() {
         UModelException error = assertThrows(UModelException.class, () -> serviceWithFixture().execute(WORKSPACE, new QueryRequest(
                 ".umodel | limit 1",
                 Map.of(),
@@ -103,14 +131,18 @@ class QueryServiceParityTest {
                 null
         )));
 
-        assertEquals(ErrorCodes.NOT_IMPLEMENTED, error.code());
+        assertEquals(ErrorCodes.INVALID_ARGUMENT, error.code());
         assertTrue(error.getMessage().contains("mode=data"));
     }
 
     private static QueryService serviceWithFixture() {
+        return new QueryService(graphStoreWithFixture());
+    }
+
+    private static MemoryGraphStore graphStoreWithFixture() {
         MemoryGraphStore graphStore = new MemoryGraphStore();
         graphStore.putUModelElements(new UModelElementBatch(WORKSPACE, fixtureElements(), false, "query-parity-fixture"));
-        return new QueryService(graphStore);
+        return graphStore;
     }
 
     private static List<UModelElement> fixtureElements() {
@@ -200,5 +232,26 @@ class QueryServiceParityTest {
 
     private static String stringValue(Object value) {
         return String.valueOf(value);
+    }
+
+    private static final class FakeTelemetryService implements TelemetryService {
+        @Override
+        public TelemetryDataResult execute(TelemetryDataRequest request) {
+            return new TelemetryDataResult(
+                    List.of(Map.<String, Object>of("operation", request.operation(), "workspace", request.workspace())),
+                    List.of("operation", "workspace"),
+                    Map.<String, Object>of("provider", "fake")
+            );
+        }
+
+        @Override
+        public TelemetryCapabilities capabilities() {
+            return new TelemetryCapabilities("fake", true, true, false, false);
+        }
+
+        @Override
+        public TelemetryHealth health() {
+            return new TelemetryHealth("fake", "ok", "test telemetry provider");
+        }
     }
 }

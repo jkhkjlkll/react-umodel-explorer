@@ -136,21 +136,30 @@ Initial parser requirements:
   upstream: `README.md`, `README.zh-CN.md`, `QUICKSTART.md`,
   `QUICKSTART.zh-CN.md`, `umodel-query`, and `umodel-rca`. The Markdown content
   is Chinese and Java HTTP/MCP-oriented.
-- `modules/query` has initial Java-side parity tests for telemetry plan fields,
-  `.runbook_set` skill search, and the explicit `mode=data` unsupported boundary.
-- `keyword`, `vector`, `hyper`, and `hybrid` search modes are accepted as memory
-  keyword fallback until a real search provider is configured.
+- `modules/search` provides the Java `SearchService` boundary: keyword, vector,
+  hybrid/RRF, health, capabilities, indexing, and delete hooks. The bundled
+  memory provider uses keyword scoring plus deterministic token overlap for the
+  vector axis; UModel and entity writes update the search index.
+- `modules/query` has Java-side parity tests for telemetry plan fields,
+  SearchService-backed `.runbook_set` skill search, and configured
+  `mode=data` execution.
+- `mode=data` for `get_logs` and `get_metrics` routes through `TelemetryService`.
+  `umodel.telemetry.provider=http` enables HTTP execution for
+  Prometheus/Elasticsearch-style plans; the default provider reports stable
+  `ProviderUnavailable` until explicitly configured.
 - MCP stdio and HTTP+SSE transports are present.
 - `local.ladybug` is present as a compatibility stub with stable health and
   provider-unavailable errors.
 
 ### M8: Remaining Full-Parity Gates
 
-- Replace memory keyword fallback with a real vector/hybrid search provider.
+- Add production external ANN/embedding providers and conformance fixtures for
+  vector/hybrid search ranking beyond the bundled memory provider.
 - Replace `local.ladybug` stub with a Java Ladybug runtime adapter.
 - Expand controlled Cypher fallback into full provider-backed Cypher parity or
   port the upstream read-only Cypher engine semantics to Java.
-- Add `mode=data` telemetry execution provider parity for real metric/log rows.
+- Add PaaS-compatible `mode=data` endpoint conformance fixtures and production
+  credential/configuration examples.
 - Replace handwritten schema checks with generated schema validation parity.
 - Add SDK and CLI compatibility gates.
 - Expand the initial Java Query tests into shared fixture-based Go/Java parity
@@ -160,7 +169,7 @@ Initial parser requirements:
 
 - Real `local.ladybug` execution without a Ladybug Java adapter.
 - Full Cypher engine compatibility beyond controlled read-only relation rows.
-- Real vector and hybrid search ranking beyond memory keyword fallback.
+- Production-grade vector and hybrid ranking beyond the bundled memory provider.
 - Generated SDK regeneration.
 
 ## Design Constraints

@@ -69,10 +69,11 @@ HTTP+SSE 兼容入口：`GET /sse` 和 `POST /messages`。
 
 - 除非用户明确要求写入，否则保持只读。
 - 运行时行数据必须通过 Query Service 读取；AgentGateway resources 只放元数据。
-- 对 metric/log 值，`get_metrics` 和 `get_logs` 返回可执行计划，不直接返回后端数据行。
-  如果用户要求真实 telemetry 值，再拿计划去查询 Prometheus 或 Elasticsearch。
-- Java 后端接受 `mode='vector'`、`mode='hyper'`、`mode='hybrid'`，但在接入真实搜索
-  provider 前，这些模式都走内存 keyword fallback。
+- 对 metric/log 值，默认 `get_metrics` 和 `get_logs` 返回可执行计划；配置
+  `umodel.telemetry.provider=http` 后，`mode='data'` 可通过 TelemetryService 执行
+  Prometheus/Elasticsearch 风格计划。
+- Java 后端接受 `mode='vector'`、`mode='hyper'`、`mode='hybrid'`，这些模式走
+  SearchService；默认内存 provider 使用 token overlap 和 hybrid RRF，不等同生产 ANN。
 - `.runbook_set` 搜索 `knowledge`、`observations`、`actions`、`automations`、
   `skills` 和 Java 兼容的 `steps`；`type='skill'` 这类单数过滤会被视为复数
   section 名称的别名。

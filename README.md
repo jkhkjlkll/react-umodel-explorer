@@ -16,7 +16,7 @@ UModel Java Backend 是 UModel 后端的 JDK 21 实现线。项目以公共契�
 - EntityStore entity/relation write，以及按 id expire。
 - 内置 `multi-domain-quickstart` 子集数据，包含 EntitySet、MetricSet、LogSet、RunbookSet、DataLink、StorageLink、runtime entity 和 topology relation。
 - Query Service 子集：`.umodel`、`.entity_set`、`.entity`、`.topo`、`.runbook_set`、`with(...)`、`where` 简单等值条件、`project`、`sort`、`limit`、`entity-call`、`getDirectRelations(...)`、`getNeighborNodes(...)`、只读受控 `cypher(...)`。
-- `.runbook_set` 可搜索 UModel 中的 runbook `knowledge`、`observations`、`actions`、`automations`、`skills`、`steps`；`keyword`、`vector`、`hyper`、`hybrid` 当前都走内存 keyword fallback。
+- `.runbook_set` 可搜索 UModel 中的 runbook `knowledge`、`observations`、`actions`、`automations`、`skills`、`steps`；`keyword`、`vector`、`hyper`、`hybrid` 通过 SearchService 执行，默认内存 provider 使用 keyword/token-overlap 和 hybrid RRF。
 - EntitySet method plan：`__list_method__`、`list_data_set`、`get_logs`、`get_metrics`，其中 `get_logs` / `get_metrics` 返回下游存储查询计划；Prometheus plan 包含渲染后的 `queries[].promql`、`label_matchers`、`raw_filters`、tenant/external label 元数据，Elasticsearch plan 包含 DSL-style `body`。
 - Agent query format：`POST /api/v1/query/{workspace}/execute?format=agent` 对计划类查询返回 v1.1 顶层 JSON plan；`&include=spec` 展开 storage/link 详情。
 - AgentGateway REST：discover、resource read、query tools、validate tool、skill metadata、可选写工具。

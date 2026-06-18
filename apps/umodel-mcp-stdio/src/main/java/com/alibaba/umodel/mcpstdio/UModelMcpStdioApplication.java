@@ -16,6 +16,8 @@ import com.alibaba.umodel.graphstore.ladybug.LadybugGraphStore;
 import com.alibaba.umodel.graphstore.memory.MemoryGraphStore;
 import com.alibaba.umodel.query.QueryService;
 import com.alibaba.umodel.sampledata.SampleDataService;
+import com.alibaba.umodel.search.MemorySearchService;
+import com.alibaba.umodel.search.SearchService;
 import com.alibaba.umodel.umodel.UModelService;
 import com.alibaba.umodel.workspace.WorkspaceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,9 +44,10 @@ public class UModelMcpStdioApplication {
         this.workspace = workspace;
         this.graphStore = graphStore;
         this.workspaceService = new WorkspaceService();
-        UModelService uModelService = new UModelService(graphStore);
-        EntityStoreService entityStoreService = new EntityStoreService(graphStore);
-        QueryService queryService = new QueryService(graphStore);
+        SearchService searchService = new MemorySearchService();
+        UModelService uModelService = new UModelService(graphStore, searchService);
+        EntityStoreService entityStoreService = new EntityStoreService(graphStore, searchService);
+        QueryService queryService = new QueryService(graphStore, searchService);
         this.agentGatewayService = new AgentGatewayService(queryService, uModelService, entityStoreService, writeEnabled);
         this.sampleDataService = new SampleDataService(uModelService, entityStoreService);
     }

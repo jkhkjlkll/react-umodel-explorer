@@ -174,10 +174,11 @@ Runbook：
 - Agent 看不到工具：先确认 `curl http://localhost:8080/healthz` 正常，再调用 `/mcp`
   的 `tools/list`。
 - 查询为空：确认已经调用 sample import，并且 workspace 是 `demo`。
-- 指标/日志没有真实数值：开源 Java 后端返回可执行查询计划，真实数值需要你把计划发到
-  Prometheus/Elasticsearch；`mode=data` 需要遥测数据 provider。
-- `vector` / `hyper` / `hybrid` 结果不像真实向量检索：当前 Java 后端接受这些 mode，
-  但仍使用内存 keyword fallback。
+- 指标/日志没有真实数值：默认 Java 后端返回可执行查询计划；配置
+  `umodel.telemetry.provider=http` 后，`mode=data` 可通过 TelemetryService 执行
+  Prometheus/Elasticsearch 风格计划。
+- `vector` / `hyper` / `hybrid` 结果不像生产向量库：默认内存 SearchService 使用
+  token overlap 和 hybrid RRF，不等同外部 ANN provider。
 
 ## 下一步
 
