@@ -1189,7 +1189,7 @@ public class QueryService {
     private static Map<String, Object> metricItem(Map<String, Object> metric) {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("name", metric.get("name"));
-        for (String key : List.of("unit", "data_format", "type", "query_mode", "aggregator", "display_type", "golden_metric")) {
+        for (String key : List.of("unit", "data_format", "type", "query_mode", "generator", "aggregator", "display_type", "golden_metric")) {
             if (metric.containsKey(key)) {
                 item.put(key, metric.get(key));
             }
