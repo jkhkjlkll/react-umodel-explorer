@@ -1545,6 +1545,42 @@
   cursor: pointer;
 }
 
+.ume-node-menu-trigger {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 14;
+  width: 34px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+  color: #7b8190;
+  font-family: var(--ume-font-sans);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 1.5px;
+  opacity: 0;
+  pointer-events: auto;
+  transform: translateY(-2px);
+  transition: opacity var(--ume-transition-fast), color var(--ume-transition-fast), transform var(--ume-transition-fast);
+}
+
+.ume-v2 .v2-node-card:hover .ume-node-menu-trigger,
+.ume-node-menu-trigger:focus {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ume-node-menu-trigger:hover {
+  border-color: #d7dce5;
+  color: #3f4654;
+}
+
 .ume-v2 .v2-node-card-body {
   box-shadow: var(--ume-shadow-card);
   transition: box-shadow var(--ume-transition-normal);
@@ -1633,6 +1669,10 @@
   background: #fff;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04);
   overflow: hidden;
+}
+
+.ume-node-action-menu {
+  min-width: 176px;
 }
 
 .ume-node-menu button {
@@ -2696,6 +2736,31 @@ body.ume-resizing-detail .ume-detail-panel {
   opacity: 1;
 }
 
+.ume-opentopox-container .topo-edge-label {
+  display: block;
+  fill: #667085;
+  stroke: rgba(255, 255, 255, 0.94);
+  stroke-width: 3.6px;
+  font-family: var(--ume-font-sans);
+  font-size: 10px;
+  font-weight: 650;
+  paint-order: stroke;
+  pointer-events: none;
+}
+
+.ume-opentopox-wrap[data-zoom="mini"] .topo-edge-label {
+  font-size: 8px;
+  opacity: 0.68;
+}
+
+.ume-opentopox-wrap[data-focus-active="true"] .topo-edge:not(.is-multi-selected) .topo-edge-label {
+  opacity: 0.08;
+}
+
+.ume-opentopox-wrap[data-focus-active="true"] .topo-edge.is-multi-selected .topo-edge-label {
+  opacity: 1;
+}
+
 .ume-edge-label {
   display: none;
   color: #8d8f96;
@@ -2872,15 +2937,151 @@ body.ume-resizing-detail .ume-detail-panel {
   color: #9ca3af;
 }
 
-.ume-form-section pre {
-  max-height: 220px;
-  overflow: auto;
-  padding: 12px;
-  border-radius: 4px;
-  background: #f8fafc;
-  color: #475569;
-  font-family: var(--ume-font-mono);
+.ume-spec-group {
+  display: grid;
+  gap: 8px;
+}
+
+.ume-spec-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #3b414d;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.ume-spec-group-title em {
+  min-width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #7b8496;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.ume-spec-card-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ume-spec-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #dde2ea;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.ume-spec-card-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.ume-spec-card-main strong {
+  overflow: hidden;
+  color: #2f343d;
+  font-size: 14px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ume-spec-card-main code,
+.ume-spec-value {
+  overflow: hidden;
+  color: #9ca3af;
+  font-family: var(--ume-font-sans);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ume-spec-card-main p {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: #7b8496;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ume-spec-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.ume-spec-badges span {
+  min-width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: #ffd28a;
+  color: #a15a00;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ume-spec-badges span.kind {
+  max-width: 88px;
+  overflow: hidden;
+  background: #ede7ff;
+  color: #7c4dff;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ume-spec-value {
+  max-width: 128px;
+  padding: 5px 7px;
+  border: 1px solid #edf0f5;
+  border-radius: 4px;
+  background: #fafbfc;
+  color: #596274;
+}
+
+.ume-spec-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  grid-column: 1 / -1;
+}
+
+.ume-spec-card-actions button {
+  height: 28px;
+  min-width: 28px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 8px;
+  border: 1px solid #d8dde6;
+  border-radius: 4px;
+  background: #fff;
+  color: #596274;
+  font-family: var(--ume-font-sans);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.ume-spec-card-actions button.primary {
+  min-width: 74px;
+  border-color: #0f7cff;
+  background: #0f7cff;
+  color: #fff;
 }
 
 .ume-dialog header div {

@@ -1204,7 +1204,8 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
   const description = descriptionForElement(element)
   const fields = asUnknownArray(spec.fields)
   const metrics = asUnknownArray(spec.metrics)
-  const schemaItems = fields.length > 0 ? fields : metrics
+  const dimensions = asUnknownArray(spec.dimensions)
+  const specRows = specDetailRows(spec, fields, metrics, dimensions)
   return (
     <div className="ume-form-detail">
       <label className="ume-form-field required">
@@ -1244,25 +1245,146 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
         <header>› 更多配置</header>
       </section>
 
-      <section className="ume-form-section open">
-        <header>⌄ Schema 信息 (Schema)</header>
-        <div className="ume-schema-list">
-          {schemaItems.slice(0, 8).map((item, index) => (
-            <div key={index} className="ume-schema-row">
-              <strong>{schemaItemName(item) || `field_${index + 1}`}</strong>
-              <span>{schemaItemType(item) || 'string'}</span>
-            </div>
-          ))}
-          {schemaItems.length === 0 && <div className="ume-schema-empty">暂无 Schema 字段</div>}
-        </div>
+      <section className="ume-form-section">
+        <header>› Schema 信息 (Schema)</header>
       </section>
 
       <section className="ume-form-section open">
         <header>⌄ 属性信息 (Spec)</header>
-        <pre>{stringify(spec)}</pre>
+        {specRows.map((group) => (
+          <div key={group.title} className="ume-spec-group">
+            <div className="ume-spec-group-title">
+              <span>{group.title}</span>
+              <em>{group.rows.length}</em>
+            </div>
+            <div className="ume-spec-card-list">
+              {group.rows.map((row, index) => (
+                <SpecCard key={`${group.title}-${row.name}-${index}`} row={row} />
+              ))}
+            </div>
+          </div>
+        ))}
+        {specRows.length === 0 && <div className="ume-schema-empty">暂无属性信息</div>}
       </section>
     </div>
   )
+}
+
+interface SpecRow {
+  name: string
+  key: string
+  type: string
+  description?: string
+  flags: string[]
+  value?: unknown
+}
+
+function SpecCard({ row }: { row: SpecRow }) {
+  return (
+    <article className="ume-spec-card">
+      <div className="ume-spec-card-main">
+        <strong>{row.name}</strong>
+        <code>{row.key}</code>
+        {row.description && <p>{row.description}</p>}
+      </div>
+      <div className="ume-spec-badges">
+        {row.type && <span className="kind">{row.type}</span>}
+        {row.flags.map((flag) => <span key={flag}>{flag}</span>)}
+      </div>
+      {row.value !== undefined && (
+        <code className="ume-spec-value">{formatSpecValue(row.value)}</code>
+      )}
+      <div className="ume-spec-card-actions" aria-hidden>
+        <button type="button">⌃</button>
+        <button type="button">⌄</button>
+        <button className="primary" type="button">编辑</button>
+        <button type="button">⌫</button>
+      </div>
+    </article>
+  )
+}
+
+function specDetailRows(
+  spec: Record<string, unknown>,
+  fields: unknown[],
+  metrics: unknown[],
+  dimensions: unknown[],
+) {
+  const groups: Array<{ title: string; rows: SpecRow[] }> = []
+  if (fields.length > 0) {
+    groups.push({ title: 'Fields', rows: fields.map((item, index) => schemaSpecRow(item, `field_${index + 1}`, spec)) })
+  }
+  if (metrics.length > 0) {
+    groups.push({ title: 'Metrics', rows: metrics.map((item, index) => schemaSpecRow(item, `metric_${index + 1}`, spec)) })
+  }
+  if (dimensions.length > 0) {
+    groups.push({ title: 'Dimensions', rows: dimensions.map((item, index) => schemaSpecRow(item, `dimension_${index + 1}`, spec)) })
+  }
+  const reserved = new Set(['description', 'display_name', 'fields', 'metrics', 'dimensions'])
+  const extraRows = Object.entries(spec)
+    .filter(([key]) => !reserved.has(key))
+    .map(([key, value]) => ({
+      name: specPropertyLabel(key),
+      key,
+      type: Array.isArray(value) ? 'array' : typeof value,
+      flags: [],
+      value,
+    }))
+  if (extraRows.length > 0) groups.push({ title: 'More', rows: extraRows })
+  return groups
+}
+
+function schemaSpecRow(value: unknown, fallbackName: string, spec: Record<string, unknown>): SpecRow {
+  if (typeof value === 'string') {
+    return {
+      name: specPropertyLabel(value),
+      key: value,
+      type: 'string',
+      flags: fieldFlags(value, spec),
+    }
+  }
+  if (!isObject(value)) {
+    return {
+      name: fallbackName,
+      key: fallbackName,
+      type: typeof value,
+      flags: [],
+      value,
+    }
+  }
+  const key = optionalString(value.name) || fallbackName
+  return {
+    name: localizedText(value.display_name, 'zh_cn') || specPropertyLabel(key),
+    key,
+    type: optionalString(value.type) || optionalString(value.value_type) || 'string',
+    description: localizedText(value.short_description, 'zh_cn') || localizedText(value.description, 'zh_cn') || optionalString(value.description),
+    flags: fieldFlags(key, spec, value),
+  }
+}
+
+function fieldFlags(name: string, spec: Record<string, unknown>, item?: Record<string, unknown>) {
+  const flags: string[] = []
+  const primaryKeys = asUnknownArray(spec.primary_key_fields).map(String)
+  if (primaryKeys.includes(name)) flags.push('P')
+  if (item && item.nullable === false) flags.push('N')
+  if (item && (item.filterable === true || item.indexed === true)) flags.push('F')
+  if (item && (item.optional === true || item.required === false)) flags.push('O')
+  return flags
+}
+
+function specPropertyLabel(key: string) {
+  return key
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ') || key
+}
+
+function formatSpecValue(value: unknown) {
+  if (value == null) return '-'
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) return value.map((item) => (typeof item === 'string' ? item : stringify(item))).join(', ')
+  return stringify(value)
 }
 
 function localizedText(value: unknown, locale: 'zh_cn' | 'en_us') {

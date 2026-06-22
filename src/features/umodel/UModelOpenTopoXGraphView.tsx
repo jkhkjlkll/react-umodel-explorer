@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import ReactDOM from 'react-dom'
 import { OpenTopoXGraph, type OpenTopoXGraphHandle } from 'opentopox/react'
 import { registerNodeShape } from 'opentopox'
 import type { TopologyGraphData } from 'opentopox'
 import 'opentopox/style.css'
 import type { UModelElement } from '../../api/types'
+import { useI18n, type TFunction } from '../../i18n'
 import { UMODEL_NODE_HEIGHT, UMODEL_NODE_WIDTH, type GraphModel, type UModelEdgeData, type UModelNodeData } from './graphModel'
-import { colorForKind, elementKey, type BackgroundStyle, type ZoomLevel } from './model'
+import { colorForKind, elementKey, isLinkElement, labelForKind, type BackgroundStyle, type ZoomLevel } from './model'
 
 registerNodeShape('umodelNode', (node: { data?: Record<string, unknown> }) => renderUModelNode(node.data || {}))
 
@@ -30,7 +32,9 @@ export function OpenTopoXGraphView({
   onZoomLevelChange: (level: ZoomLevel) => void
   onSelect: (element: UModelElement | null) => void
 }) {
+  const { t } = useI18n()
   const graphRef = useRef<OpenTopoXGraphHandle | null>(null)
+  const [nodeMenu, setNodeMenu] = useState<{ data: UModelNodeData; left: number; top: number } | null>(null)
   const focusKey = focusIds.join('\u001f')
   const data = useMemo(() => toOpenTopoXData(graph), [graph])
   const applyNeighborhoodSelection = useCallback((id: string | null) => {
@@ -43,10 +47,59 @@ export function OpenTopoXGraphView({
     }
     graphApi.setSelection?.(selection, { emit: false })
   }, [graph])
+  const closeNodeMenu = useCallback(() => setNodeMenu(null), [])
+  const handleGraphPointerDownCapture = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null
+    if (!target?.closest('.ume-node-menu-trigger, .ume-node-action-menu')) return
+    event.preventDefault()
+    event.stopPropagation()
+  }, [])
+  const handleGraphClickCapture = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null
+    const trigger = target?.closest<HTMLElement>('.ume-node-menu-trigger')
+    if (!trigger) return
+    event.preventDefault()
+    event.stopPropagation()
+    const nodeElement = trigger.closest<HTMLElement>('.topo-node[data-node-id]')
+    const nodeId = nodeElement?.dataset.nodeId
+    const node = nodeId ? graph.nodes.find((item) => item.id === nodeId) : null
+    const nodeData = node?.data as UModelNodeData | undefined
+    if (!node || !nodeData?.element || !nodeData.actions) return
+    const rect = trigger.getBoundingClientRect()
+    setNodeMenu({
+      data: nodeData,
+      left: Math.min(Math.max(8, rect.right - 184), window.innerWidth - 192),
+      top: Math.min(rect.bottom + 7, window.innerHeight - 220),
+    })
+    applyNeighborhoodSelection(node.id)
+    onSelect(nodeData.element)
+  }, [applyNeighborhoodSelection, graph.nodes, onSelect])
 
   useEffect(() => {
     applyNeighborhoodSelection(selectedId)
   }, [applyNeighborhoodSelection, selectedId])
+
+  useEffect(() => {
+    if (!nodeMenu) return
+    const close = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('.ume-node-action-menu, .ume-node-menu-trigger')) return
+      setNodeMenu(null)
+    }
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setNodeMenu(null)
+    }
+    window.addEventListener('click', close)
+    window.addEventListener('resize', closeNodeMenu)
+    window.addEventListener('scroll', closeNodeMenu, true)
+    window.addEventListener('keydown', handleKeydown)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('resize', closeNodeMenu)
+      window.removeEventListener('scroll', closeNodeMenu, true)
+      window.removeEventListener('keydown', handleKeydown)
+    }
+  }, [closeNodeMenu, nodeMenu])
 
   useEffect(() => {
     if (layouting || data.nodes.length === 0) return
@@ -78,6 +131,8 @@ export function OpenTopoXGraphView({
       data-zoom={forceFullMode ? 'full' : zoomLevel}
       data-background={backgroundStyle}
       data-focus-active={selectedId ? 'true' : 'false'}
+      onClickCapture={handleGraphClickCapture}
+      onPointerDownCapture={handleGraphPointerDownCapture}
     >
       <OpenTopoXGraph
         ref={graphRef}
@@ -86,7 +141,7 @@ export function OpenTopoXGraphView({
           animate: false,
           autoPerformanceMode: false,
           canvasEdges: false,
-          edgeLabelsVisible: false,
+          edgeLabelsVisible: true,
           edgeRouting: 'flow',
           enableSelection: true,
           fitViewPadding: 0.2,
@@ -114,19 +169,83 @@ export function OpenTopoXGraphView({
           if (next !== zoomLevel) onZoomLevelChange(next)
         }}
         onNodeClick={(node) => {
+          setNodeMenu(null)
           applyNeighborhoodSelection(node.id)
           onSelect((node.data as { element?: UModelElement }).element || null)
         }}
         onEdgeClick={(edge) => {
+          setNodeMenu(null)
           applyNeighborhoodSelection(edge.id)
           onSelect((edge.data as { element?: UModelElement }).element || null)
         }}
         onCanvasClick={() => {
+          setNodeMenu(null)
           applyNeighborhoodSelection(null)
           onSelect(null)
         }}
       />
       {layouting && <div className="ume-layout-badge">Arranging OpenTopoX view...</div>}
+      {nodeMenu && ReactDOM.createPortal(
+        <NodeActionMenu
+          data={nodeMenu.data}
+          left={nodeMenu.left}
+          top={nodeMenu.top}
+          onClose={closeNodeMenu}
+          t={t}
+        />,
+        document.body,
+      )}
+    </div>
+  )
+}
+
+function NodeActionMenu({
+  data,
+  left,
+  top,
+  onClose,
+  t,
+}: {
+  data: UModelNodeData
+  left: number
+  top: number
+  onClose: () => void
+  t: TFunction
+}) {
+  const element = data.element
+  const isLink = isLinkElement(element)
+  const run = (action: () => void) => {
+    action()
+    onClose()
+  }
+  return (
+    <div
+      className="ume-node-menu ume-node-action-menu"
+      style={{ left, top } as CSSProperties}
+      onClick={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      {!isLink && (
+        <button onClick={() => run(() => data.actions.onConnect(element))} type="button">
+          {t('umodelExplorer.nodeMenu.connectTo')}
+        </button>
+      )}
+      <button onClick={() => run(() => data.actions.onCopy(element))} type="button">
+        {t('umodelExplorer.nodeMenu.copyNode')}
+      </button>
+      {!isLink && (
+        <button onClick={() => run(() => data.actions.onCopyCascade(element))} type="button">
+          {t('umodelExplorer.nodeMenu.copyWithEdges')}
+        </button>
+      )}
+      <button className="danger" onClick={() => run(() => data.actions.onDelete(element, false))} type="button">
+        {isLink ? t('umodelExplorer.action.deleteLink') : t('umodelExplorer.nodeMenu.deleteNode')}
+      </button>
+      {!isLink && (
+        <button className="danger" onClick={() => run(() => data.actions.onDelete(element, true))} type="button">
+          {t('umodelExplorer.nodeMenu.deleteWithEdges')}
+        </button>
+      )}
     </div>
   )
 }
@@ -149,6 +268,7 @@ function toOpenTopoXData(graph: GraphModel): TopologyGraphData & Record<string, 
           title: data.title,
           domain: data.domain,
           kind: data.kind,
+          actions: data.actions,
           color: color.color,
           colorBg: color.bg,
           colorText: color.text,
@@ -169,6 +289,7 @@ function toOpenTopoXData(graph: GraphModel): TopologyGraphData & Record<string, 
         id: data?.element ? elementKey(data.element) : edge.id,
         source: edge.source,
         target: edge.target,
+        label: relationLabelForUModelEdge(data),
         type: 'flowEdge',
         data: {
           ...data,
@@ -186,6 +307,22 @@ function toOpenTopoXData(graph: GraphModel): TopologyGraphData & Record<string, 
       }
     }),
   }
+}
+
+function relationLabelForUModelEdge(data?: UModelEdgeData) {
+  const spec = (data?.element?.spec || {}) as Record<string, unknown>
+  const semanticType = optionalString(spec.data_link_type)
+    || optionalString(spec.entity_link_type)
+    || optionalString(spec.relation_type)
+    || optionalString(spec.link_type)
+    || optionalString(spec.type)
+  if (semanticType) return semanticType
+  if (data?.kind && data.kind !== '__temp__') return labelForKind(data.kind)
+  return data?.title || '关系'
+}
+
+function optionalString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : ''
 }
 
 function buildNeighborhoodSelection(graph: GraphModel, selectedId: string | null) {
@@ -286,6 +423,7 @@ function renderUModelNode(data: Record<string, unknown>) {
   const domain = String(data.domain || 'unknown')
   return `
     <div class="v2-node-card ume-map-node" style="--node-color: ${escapeAttr(color)}">
+      <span class="ume-node-menu-trigger" role="button" aria-label="Open node actions" title="Actions">...</span>
       <div class="v2-zoom-mini">
         <div class="v2-node-card-body ume-node-mini" style="border-color: ${escapeAttr(color)}">
           <span style="color: ${escapeAttr(color)}">${escapeHtml(title)}</span>

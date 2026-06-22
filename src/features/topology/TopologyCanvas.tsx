@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import type { TopologyExplorerData, TopologyNode } from './topologyModel'
+import { Graph, type GraphConfigInterface } from '@cosmos.gl/graph'
+import type { TopologyEdge, TopologyExplorerData, TopologyNode } from './topologyModel'
 import { drawTopologyPresetGlyph, resolveTopologyNodeIconPreset, TopologyPresetIcon } from './topologyIcons'
 
 interface Viewport {
@@ -72,7 +73,594 @@ interface SelectedRelation {
   color: string
 }
 
-export function TopologyCanvas({
+type CosmosPointKind = 'node' | 'cluster'
+
+interface CosmosPoint {
+  id: string
+  label: string
+  type: string
+  color: string
+  x: number
+  y: number
+  size: number
+  node?: TopologyNode
+  cluster?: ClusterSummary
+}
+
+interface CosmosLinkLabel {
+  id: string
+  label: string
+  color: string
+  sourceIndex: number
+  targetIndex: number
+  sourceId: string
+  targetId: string
+  count?: number
+}
+
+type CosmosRenderableEdge = Pick<TopologyEdge, 'id' | 'source' | 'target' | 'type' | 'color'> & { count?: number }
+
+interface CosmosData {
+  points: CosmosPoint[]
+  pointPositions: Float32Array
+  pointColors: Float32Array
+  pointSizes: Float32Array
+  links: Float32Array
+  linkColors: Float32Array
+  linkWidths: Float32Array
+  pointClusters: Array<number | undefined>
+  clusterPositions: Array<number | undefined>
+  linkLabels: CosmosLinkLabel[]
+  nodeIndexById: Map<string, number>
+  linkIndicesByNodeId: Map<string, number[]>
+  kind: CosmosPointKind
+}
+
+export function TopologyCanvas(props: TopologyCanvasProps) {
+  const {
+    data,
+    layoutMode,
+    selectedNode,
+    showLabels,
+    showClusterLabels,
+    allowDrag,
+    playhead,
+    onSelectNode,
+    onFocusType,
+  } = props
+  const shellRef = useRef<HTMLDivElement | null>(null)
+  const graphHostRef = useRef<HTMLDivElement | null>(null)
+  const graphRef = useRef<Graph | null>(null)
+  const cosmosDataRef = useRef<CosmosData | null>(null)
+  const handlersRef = useRef({ onFocusType, onSelectNode })
+  const [webglFailed, setWebglFailed] = useState(false)
+  const [cosmosReady, setCosmosReady] = useState(false)
+  const [overlayVersion, setOverlayVersion] = useState(0)
+  const [graphInitVersion, setGraphInitVersion] = useState(0)
+  const [size, setSize] = useState({ width: 0, height: 0 })
+  const graphReadyToMount = size.width > 0 && size.height > 0
+  handlersRef.current = { onFocusType, onSelectNode }
+  const nodeById = useMemo(() => data.nodesById || new Map(data.nodes.map((node) => [node.id, node])), [data])
+  const clusterSummaries = useMemo(() => createClusterSummaries(data), [data])
+  const cosmosData = useMemo(
+    () => buildCosmosData(data, layoutMode, clusterSummaries, Math.max(0.16, Math.min(1, playhead))),
+    [clusterSummaries, data, layoutMode, playhead],
+  )
+  const selectedRelation = useMemo<SelectedRelation | null>(() => {
+    if (!selectedNode) return null
+    const edge = data.edges.find((item) => item.source === selectedNode.id || item.target === selectedNode.id)
+    if (!edge) return null
+    const source = nodeById.get(edge.source)
+    const target = nodeById.get(edge.target)
+    if (!source || !target) return null
+    return { type: edge.type, source, target, color: edge.color }
+  }, [data.edges, nodeById, selectedNode])
+
+  useEffect(() => {
+    const host = graphHostRef.current
+    if (!host || webglFailed || !graphReadyToMount || graphRef.current) return
+    const bumpOverlay = () => setOverlayVersion((value) => value + 1)
+    let cancelled = false
+    try {
+      const graph = new Graph(host, createCosmosConfig({
+        allowDrag,
+        onOverlayChange: bumpOverlay,
+        onClickPoint: (index) => {
+          const graphData = cosmosDataRef.current
+          const point = graphData?.points[index]
+          if (!point) return
+          if (point.node) handlersRef.current.onSelectNode(point.node)
+          if (point.cluster) handlersRef.current.onFocusType(point.cluster.type)
+        },
+        onClickBackground: () => handlersRef.current.onSelectNode(null),
+      }))
+      graphRef.current = graph
+      setGraphInitVersion((value) => value + 1)
+      if (!cancelled) bumpOverlay()
+    } catch (error) {
+      recordCosmosFailure(error)
+      setWebglFailed(true)
+    }
+    return () => {
+      cancelled = true
+      graphRef.current?.destroy()
+      graphRef.current = null
+    }
+  }, [graphReadyToMount, webglFailed])
+
+  useEffect(() => {
+    const shell = shellRef.current
+    if (!shell) return
+    const update = () => {
+      const rect = shell.getBoundingClientRect()
+      setSize({ width: rect.width, height: rect.height })
+      setOverlayVersion((value) => value + 1)
+    }
+    const observer = new ResizeObserver(update)
+    observer.observe(shell)
+    update()
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const graph = graphRef.current
+    if (!graph || webglFailed) return
+    let verifyTimer: number | null = null
+    try {
+      setCosmosReady(false)
+      cosmosDataRef.current = cosmosData
+      graph.setPointPositions(cosmosData.pointPositions, true)
+      graph.setPointColors(cosmosData.pointColors)
+      graph.setPointSizes(cosmosData.pointSizes)
+      graph.setLinks(cosmosData.links)
+      graph.setLinkColors(cosmosData.linkColors)
+      graph.setLinkWidths(cosmosData.linkWidths)
+      graph.setPointClusters(cosmosData.pointClusters)
+      graph.setClusterPositions(cosmosData.clusterPositions)
+      graph.setPinnedPoints(cosmosData.points.map((_, index) => index))
+      graph.render()
+      graph.pause()
+      graph.fitView(240, layoutMode === 'cluster' ? 0.28 : 0.2)
+      setOverlayVersion((value) => value + 1)
+      verifyTimer = window.setTimeout(() => {
+        try {
+          const visiblePoints = graph.getSampledPoints().indices.length
+          if (cosmosData.points.length > 0 && visiblePoints === 0) {
+            setWebglFailed(true)
+            return
+          }
+          setCosmosReady(true)
+          setOverlayVersion((value) => value + 1)
+        } catch (error) {
+          recordCosmosFailure(error)
+          setWebglFailed(true)
+        }
+      }, 700)
+    } catch (error) {
+      recordCosmosFailure(error)
+      setWebglFailed(true)
+    }
+    return () => {
+      if (verifyTimer !== null) window.clearTimeout(verifyTimer)
+    }
+  }, [cosmosData, graphInitVersion, layoutMode, webglFailed])
+
+  useEffect(() => {
+    const graph = graphRef.current
+    if (!graph || webglFailed) return
+    graph.setConfig({ enableDrag: allowDrag })
+  }, [allowDrag, webglFailed])
+
+  useEffect(() => {
+    const graph = graphRef.current
+    const graphData = cosmosDataRef.current
+    if (!graph || !graphData || webglFailed) return
+    const selectedIndex = selectedNode ? graphData.nodeIndexById.get(selectedNode.id) : undefined
+    const neighborIndices = selectedIndex === undefined
+      ? undefined
+      : [selectedIndex, ...(graph.getAdjacentIndices(selectedIndex) || [])]
+    graph.setConfig({
+      focusedPointIndex: selectedIndex,
+      pointGreyoutOpacity: selectedIndex === undefined ? undefined : 0.14,
+      linkGreyoutOpacity: selectedIndex === undefined ? 0.1 : 0.04,
+    })
+    if (selectedIndex === undefined) graph.unselectPoints()
+    else graph.selectPointsByIndices(neighborIndices)
+    if (selectedIndex !== undefined) graph.zoomToPointByIndex(selectedIndex, 280, 2.2, true)
+    setOverlayVersion((value) => value + 1)
+  }, [selectedNode, webglFailed])
+
+  if (webglFailed) return <LegacyTopologyCanvas {...props} />
+
+  return (
+    <div className="topo-canvas-shell topo-cosmos-shell" data-cosmos-ready={cosmosReady} ref={shellRef}>
+      <div className="topo-cosmos-fallback">
+        <LegacyTopologyCanvas {...props} />
+      </div>
+      <div className="topo-cosmos-graph" ref={graphHostRef} />
+      {cosmosReady && (
+        <CosmosEdgeLabels
+          graph={graphRef.current}
+          cosmosData={cosmosData}
+          selectedNode={selectedNode}
+          version={overlayVersion}
+        />
+      )}
+      {cosmosReady && (showLabels || (layoutMode === 'cluster' && showClusterLabels)) && (
+        <CosmosLabels
+          graph={graphRef.current}
+          cosmosData={cosmosData}
+          selectedNode={selectedNode}
+          showLabels={showLabels}
+          showClusterLabels={showClusterLabels}
+          version={overlayVersion}
+        />
+      )}
+      {cosmosReady && selectedNode && (
+        <SelectedNodePopover
+          node={selectedNode}
+          relation={selectedRelation}
+          screenPoint={resolveCosmosScreenPoint(graphRef.current, selectedNode)}
+          size={{ width: size.width, height: size.height }}
+          version={overlayVersion}
+        />
+      )}
+      {cosmosReady && (
+        <MiniMap
+          data={data}
+          layoutMode={layoutMode}
+          clusterSummaries={clusterSummaries}
+          viewport={createViewportFromBounds(layoutMode === 'cluster' ? clusterBounds(clusterSummaries) : data.bounds, size)}
+          version={overlayVersion}
+        />
+      )}
+    </div>
+  )
+}
+
+function recordCosmosFailure(error: unknown) {
+  console.warn('cosmos.gl topology renderer failed, falling back to canvas', error)
+}
+
+function createCosmosConfig({
+  allowDrag,
+  onOverlayChange,
+  onClickPoint,
+  onClickBackground,
+}: {
+  allowDrag: boolean
+  onOverlayChange: () => void
+  onClickPoint: (index: number) => void
+  onClickBackground: () => void
+}): Partial<GraphConfigInterface> {
+  return {
+    attribution: '',
+    backgroundColor: '#ffffff',
+    curvedLinks: false,
+    enableDrag: allowDrag,
+    enableSimulation: true,
+    enableSimulationDuringZoom: false,
+    enableZoom: true,
+    fitViewDelay: 80,
+    fitViewDuration: 260,
+    fitViewOnInit: true,
+    fitViewPadding: 0.2,
+    hoveredPointCursor: 'pointer',
+    linkDefaultColor: [0.66, 0.71, 0.76, 0.32],
+    linkDefaultWidth: 0.7,
+    linkGreyoutOpacity: 0.08,
+    linkOpacity: 0.62,
+    linkWidthScale: 0.88,
+    pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+    pointDefaultColor: '#8aa0b8',
+    pointDefaultSize: 3,
+    pointGreyoutOpacity: 0.16,
+    pointOpacity: 0.95,
+    pointSamplingDistance: 92,
+    pointSizeScale: 1,
+    randomSeed: 20260618,
+    renderHoveredPointRing: true,
+    rescalePositions: false,
+    scaleLinksOnZoom: false,
+    scalePointsOnZoom: false,
+    showFPSMonitor: false,
+    simulationGravity: 0,
+    simulationRepulsion: 0,
+    onBackgroundClick: onClickBackground,
+    onPointClick: onClickPoint,
+    onSimulationTick: onOverlayChange,
+    onZoom: onOverlayChange,
+    onZoomEnd: onOverlayChange,
+  }
+}
+
+function buildCosmosData(
+  data: TopologyExplorerData,
+  layoutMode: 'force' | 'cluster',
+  clusterSummaries: ClusterSummary[],
+  playhead: number,
+): CosmosData {
+  const points: CosmosPoint[] = layoutMode === 'cluster'
+    ? clusterSummaries.map((cluster) => ({
+      id: cluster.type,
+      label: cluster.type,
+      type: cluster.type,
+      color: cluster.color,
+      x: cluster.x,
+      y: cluster.y,
+      size: clamp(cluster.radius * 0.18, 16, 46),
+      cluster,
+    }))
+    : data.nodes.map((node) => ({
+      id: node.id,
+      label: node.label,
+      type: node.type,
+      color: node.color,
+      x: node.x,
+      y: node.y,
+      size: clamp(2.7 + node.weight * 1.3, 3.8, 8.8),
+      node,
+    }))
+  const nodeIndexById = new Map(points.map((point, index) => [point.id, index]))
+  const clusterIndexById = new Map<string, number>()
+  const clusterPositions: Array<number | undefined> = []
+  const pointClusters = points.map((point) => {
+    const clusterId = point.node?.cluster
+    if (!clusterId) return undefined
+    let clusterIndex = clusterIndexById.get(clusterId)
+    if (clusterIndex === undefined) {
+      clusterIndex = clusterIndexById.size
+      clusterIndexById.set(clusterId, clusterIndex)
+      clusterPositions[clusterIndex * 2] = point.x
+      clusterPositions[clusterIndex * 2 + 1] = point.y
+    }
+    return clusterIndex
+  })
+  const pointPositions = new Float32Array(points.length * 2)
+  const pointColors = new Float32Array(points.length * 4)
+  const pointSizes = new Float32Array(points.length)
+  points.forEach((point, index) => {
+    pointPositions[index * 2] = point.x
+    pointPositions[index * 2 + 1] = point.y
+    writeColor(pointColors, index, point.color, point.cluster ? 0.78 : 0.94)
+    pointSizes[index] = point.size
+  })
+
+  const visibleEdges: CosmosRenderableEdge[] = layoutMode === 'cluster'
+    ? buildClusterEdges(data, clusterSummaries)
+    : data.edges.slice(0, Math.floor(data.edges.length * playhead))
+  const links: number[] = []
+  const linkColors: number[] = []
+  const linkWidths: number[] = []
+  const linkLabels: CosmosLinkLabel[] = []
+  const linkIndicesByNodeId = new Map<string, number[]>()
+  visibleEdges.forEach((edge) => {
+    const sourceIndex = nodeIndexById.get(edge.source)
+    const targetIndex = nodeIndexById.get(edge.target)
+    if (sourceIndex === undefined || targetIndex === undefined) return
+    const linkIndex = links.length / 2
+    links.push(sourceIndex, targetIndex)
+    appendColor(linkColors, edge.color, layoutMode === 'cluster' ? 0.38 : 0.3)
+    linkWidths.push(layoutMode === 'cluster' ? 1.4 : 0.58)
+    linkLabels.push({
+      id: edge.id || `${edge.source}:${edge.target}:${linkIndex}`,
+      label: relationLabel(edge.type, edge.count),
+      color: edge.color,
+      sourceIndex,
+      targetIndex,
+      sourceId: edge.source,
+      targetId: edge.target,
+      count: edge.count,
+    })
+    pushMapValue(linkIndicesByNodeId, edge.source, linkIndex)
+    pushMapValue(linkIndicesByNodeId, edge.target, linkIndex)
+  })
+
+  return {
+    points,
+    pointPositions,
+    pointColors,
+    pointSizes,
+    links: new Float32Array(links),
+    linkColors: new Float32Array(linkColors),
+    linkWidths: new Float32Array(linkWidths),
+    pointClusters,
+    clusterPositions,
+    linkLabels,
+    nodeIndexById,
+    linkIndicesByNodeId,
+    kind: layoutMode === 'cluster' ? 'cluster' : 'node',
+  }
+}
+
+function buildClusterEdges(data: TopologyExplorerData, clusters: ClusterSummary[]) {
+  const typeByNodeId = new Map<string, string>()
+  clusters.forEach((cluster) => cluster.nodeIds.forEach((id) => typeByNodeId.set(id, cluster.type)))
+  const colorByType = new Map(clusters.map((cluster) => [cluster.type, cluster.color]))
+  const edgeBuckets = new Map<string, { source: string; target: string; color: string; count: number; typeCounts: Map<string, number> }>()
+  data.edges.forEach((edge) => {
+    const source = typeByNodeId.get(edge.source)
+    const target = typeByNodeId.get(edge.target)
+    if (!source || !target || source === target) return
+    const key = source < target ? `${source}:${target}` : `${target}:${source}`
+    const current = edgeBuckets.get(key) || {
+      source,
+      target,
+      color: colorByType.get(target) || edge.color,
+      count: 0,
+      typeCounts: new Map<string, number>(),
+    }
+    current.count += 1
+    current.typeCounts.set(edge.type, (current.typeCounts.get(edge.type) || 0) + 1)
+    edgeBuckets.set(key, current)
+  })
+  return [...edgeBuckets.entries()].map(([id, edge]) => ({
+    id,
+    source: edge.source,
+    target: edge.target,
+    color: edge.color,
+    type: dominantRelationType(edge.typeCounts),
+    count: edge.count,
+  }))
+}
+
+function relationLabel(type: string, count?: number) {
+  const label = type || '关系'
+  return count && count > 1 ? `${label} · ${count}` : label
+}
+
+function dominantRelationType(typeCounts: Map<string, number>) {
+  let result = '关系'
+  let max = 0
+  for (const [type, count] of typeCounts.entries()) {
+    if (count <= max) continue
+    result = type || '关系'
+    max = count
+  }
+  return result
+}
+
+function sampleEdgeLabels(labels: CosmosLinkLabel[], limit: number) {
+  if (labels.length <= limit) return labels
+  const stride = Math.max(1, Math.ceil(labels.length / limit))
+  return labels.filter((_, index) => index % stride === 0).slice(0, limit)
+}
+
+function CosmosEdgeLabels({
+  graph,
+  cosmosData,
+  selectedNode,
+}: {
+  graph: Graph | null
+  cosmosData: CosmosData
+  selectedNode: TopologyNode | null
+  version: number
+}) {
+  if (!graph || cosmosData.linkLabels.length === 0) return null
+  const selectedIndex = selectedNode ? cosmosData.nodeIndexById.get(selectedNode.id) : undefined
+  const relatedLabels = selectedIndex === undefined
+    ? []
+    : cosmosData.linkLabels.filter((label) => label.sourceIndex === selectedIndex || label.targetIndex === selectedIndex)
+  const labels = selectedIndex === undefined
+    ? sampleEdgeLabels(cosmosData.linkLabels, cosmosData.kind === 'cluster' ? 32 : 42)
+    : relatedLabels.slice(0, 80)
+  return (
+    <div className="topo-cosmos-edge-label-layer" aria-hidden>
+      {labels.map((label) => {
+        const source = cosmosData.points[label.sourceIndex]
+        const target = cosmosData.points[label.targetIndex]
+        if (!source || !target) return null
+        const [sourceLeft, sourceTop] = graph.spaceToScreenPosition([source.x, source.y])
+        const [targetLeft, targetTop] = graph.spaceToScreenPosition([target.x, target.y])
+        const left = (sourceLeft + targetLeft) / 2
+        const top = (sourceTop + targetTop) / 2
+        const active = selectedIndex !== undefined && (label.sourceIndex === selectedIndex || label.targetIndex === selectedIndex)
+        return (
+          <span
+            key={label.id}
+            className={`topo-cosmos-edge-label ${active ? 'active' : ''}`}
+            style={{ left, top, borderColor: label.color }}
+          >
+            {label.label}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+function CosmosLabels({
+  graph,
+  cosmosData,
+  selectedNode,
+  showLabels,
+  showClusterLabels,
+}: {
+  graph: Graph | null
+  cosmosData: CosmosData
+  selectedNode: TopologyNode | null
+  showLabels: boolean
+  showClusterLabels: boolean
+  version: number
+}) {
+  if (!graph) return null
+  const selectedIndex = selectedNode ? cosmosData.nodeIndexById.get(selectedNode.id) : undefined
+  const sampled = cosmosData.kind === 'cluster'
+    ? cosmosData.points.map((_, index) => index)
+    : graph.getSampledPoints().indices.slice(0, 42)
+  const indices = selectedIndex === undefined ? sampled : Array.from(new Set([selectedIndex, ...sampled.slice(0, 24)]))
+  return (
+    <div className="topo-cosmos-label-layer" aria-hidden>
+      {indices.map((index) => {
+        const point = cosmosData.points[index]
+        if (!point) return null
+        if (cosmosData.kind === 'node' && !showLabels && index !== selectedIndex) return null
+        if (cosmosData.kind === 'cluster' && !showClusterLabels) return null
+        const [left, top] = graph.spaceToScreenPosition([point.x, point.y])
+        const active = index === selectedIndex
+        return (
+          <span
+            key={point.id}
+            className={`topo-cosmos-label ${active ? 'active' : ''} ${cosmosData.kind === 'cluster' ? 'cluster' : ''}`}
+            style={{ left, top, borderColor: point.color }}
+          >
+            {point.label}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+function resolveCosmosScreenPoint(graph: Graph | null, node: TopologyNode) {
+  if (!graph) return undefined
+  return graph.spaceToScreenPosition([node.x, node.y])
+}
+
+function createViewportFromBounds(bounds: { minX: number; minY: number; maxX: number; maxY: number }, size: { width: number; height: number }): Viewport {
+  const width = Math.max(1, size.width || 1280)
+  const height = Math.max(1, size.height || 720)
+  const zoom = Math.min((width * 0.72) / Math.max(1, bounds.maxX - bounds.minX), (height * 0.74) / Math.max(1, bounds.maxY - bounds.minY))
+  return {
+    x: width / 2 - ((bounds.minX + bounds.maxX) / 2) * zoom,
+    y: height / 2 - ((bounds.minY + bounds.maxY) / 2) * zoom,
+    zoom: clamp(zoom, minZoom, 1.2),
+  }
+}
+
+function writeColor(target: Float32Array, index: number, color: string, alpha: number) {
+  const [r, g, b] = parseHexColor(color)
+  target[index * 4] = r
+  target[index * 4 + 1] = g
+  target[index * 4 + 2] = b
+  target[index * 4 + 3] = alpha
+}
+
+function appendColor(target: number[], color: string, alpha: number) {
+  const [r, g, b] = parseHexColor(color)
+  target.push(r, g, b, alpha)
+}
+
+function parseHexColor(color: string) {
+  const normalized = color.replace('#', '').trim()
+  const hex = normalized.length === 3
+    ? normalized.split('').map((char) => `${char}${char}`).join('')
+    : normalized.padEnd(6, '0').slice(0, 6)
+  const value = Number.parseInt(hex, 16)
+  return [
+    ((value >> 16) & 255) / 255,
+    ((value >> 8) & 255) / 255,
+    (value & 255) / 255,
+  ] as const
+}
+
+function pushMapValue(map: Map<string, number[]>, key: string, value: number) {
+  const values = map.get(key)
+  if (values) values.push(value)
+  else map.set(key, [value])
+}
+
+function LegacyTopologyCanvas({
   data,
   layoutMode,
   focusedTypes,
@@ -340,16 +928,18 @@ function isPointInsideElement(clientX: number, clientY: number, element: HTMLEle
 function SelectedNodePopover({
   node,
   relation,
+  screenPoint,
   viewport,
   size,
 }: {
   node: TopologyNode
   relation: SelectedRelation | null
-  viewport: Viewport
+  screenPoint?: [number, number]
+  viewport?: Viewport
   size: { width: number; height: number }
   version: number
 }) {
-  const point = worldToScreen(node.x, node.y, viewport)
+  const point = screenPoint ? { x: screenPoint[0], y: screenPoint[1] } : viewport ? worldToScreen(node.x, node.y, viewport) : { x: size.width / 2, y: size.height / 2 }
   const left = clamp(point.x + 24, 18, Math.max(18, size.width - 456))
   const top = clamp(point.y - 18, 18, Math.max(18, size.height - 242))
   if (relation) {
@@ -589,6 +1179,9 @@ function drawForceEdges(
   if (!options.selectedNode && viewport.zoom < 2.75) return
   const stride = options.selectedNode || viewport.zoom > 4 ? 1 : 2
   const visibleWindow = Math.max(0.16, Math.min(1, options.playhead))
+  const labelBoxes: Array<{ x: number; y: number; width: number; height: number }> = []
+  const maxLabels = options.selectedNode ? 80 : 36
+  let labelCount = 0
   context.save()
   context.lineCap = 'round'
   context.lineJoin = 'round'
@@ -618,6 +1211,12 @@ function drawForceEdges(
     context.lineWidth = selectedEdge ? 1.75 : 0.62
     drawStraightEdgePath(context, from, to)
     context.stroke()
+    if (labelCount < maxLabels && (selectedEdge || viewport.zoom >= 4.8)) {
+      const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }
+      if (drawEdgeLabel(context, edge.type, mid.x, mid.y, edge.color, selectedEdge, labelBoxes)) {
+        labelCount += 1
+      }
+    }
   }
   context.restore()
 }
@@ -856,7 +1455,7 @@ function drawClusterEdges(
   options: { focusedTypeSet: Set<string>; clusterSummaries: ClusterSummary[]; playhead: number },
 ) {
   const clusterByType = new Map(options.clusterSummaries.map((cluster) => [cluster.type, cluster]))
-  const edgeCount = new Map<string, { source: ClusterSummary; target: ClusterSummary; count: number; color: string }>()
+  const edgeCount = new Map<string, { source: ClusterSummary; target: ClusterSummary; count: number; color: string; typeCounts: Map<string, number> }>()
   const visibleWindow = Math.max(0.16, Math.min(1, options.playhead))
   for (let index = 0; index < data.edges.length * visibleWindow; index += 1) {
     const edge = data.edges[index]
@@ -868,10 +1467,13 @@ function drawClusterEdges(
     const target = clusterByType.get(targetNode.type)
     if (!source || !target) continue
     const key = source.type < target.type ? `${source.type}|${target.type}` : `${target.type}|${source.type}`
-    const current = edgeCount.get(key) || { source, target, count: 0, color: target.color }
+    const current = edgeCount.get(key) || { source, target, count: 0, color: target.color, typeCounts: new Map<string, number>() }
     current.count += 1
+    current.typeCounts.set(edge.type, (current.typeCounts.get(edge.type) || 0) + 1)
     edgeCount.set(key, current)
   }
+  const labelBoxes: Array<{ x: number; y: number; width: number; height: number }> = []
+  let labelCount = 0
   for (const edge of edgeCount.values()) {
     const from = worldToScreen(edge.source.x, edge.source.y, viewport)
     const to = worldToScreen(edge.target.x, edge.target.y, viewport)
@@ -883,8 +1485,13 @@ function drawClusterEdges(
     context.moveTo(from.x, from.y)
     const midX = (from.x + to.x) / 2
     const midY = (from.y + to.y) / 2
-    context.quadraticCurveTo(midX + (to.y - from.y) * 0.05, midY - (to.x - from.x) * 0.05, to.x, to.y)
+    const controlX = midX + (to.y - from.y) * 0.05
+    const controlY = midY - (to.x - from.x) * 0.05
+    context.quadraticCurveTo(controlX, controlY, to.x, to.y)
     context.stroke()
+    if (labelCount < 30 && drawEdgeLabel(context, relationLabel(dominantRelationType(edge.typeCounts), edge.count), controlX, controlY, edge.color, false, labelBoxes)) {
+      labelCount += 1
+    }
   }
   context.globalAlpha = 1
 }
@@ -990,6 +1597,44 @@ function drawNodeLabel(context: CanvasRenderingContext2D, label: string, x: numb
   context.fillStyle = '#2f3b52'
   context.fillText(label, x, y)
   context.restore()
+}
+
+function drawEdgeLabel(
+  context: CanvasRenderingContext2D,
+  label: string,
+  x: number,
+  y: number,
+  color: string,
+  active: boolean,
+  labelBoxes: Array<{ x: number; y: number; width: number; height: number }>,
+) {
+  const text = label || '关系'
+  context.save()
+  context.font = `${active ? 11 : 10}px var(--om-cjk-font)`
+  context.textBaseline = 'middle'
+  context.textAlign = 'center'
+  const width = Math.min(context.measureText(text).width + 16, 132)
+  const height = active ? 20 : 18
+  const box = { x: x - width / 2, y: y - height / 2, width, height }
+  if (labelBoxes.some((current) => rectanglesOverlap(current, box))) {
+    context.restore()
+    return false
+  }
+  labelBoxes.push(box)
+  context.globalAlpha = active ? 0.96 : 0.82
+  roundRect(context, box.x, box.y, box.width, box.height, 4)
+  context.fillStyle = active ? '#ffffff' : 'rgba(255, 255, 255, 0.86)'
+  context.fill()
+  context.strokeStyle = color
+  context.globalAlpha = active ? 0.9 : 0.38
+  context.lineWidth = 1
+  context.stroke()
+  context.globalAlpha = active ? 1 : 0.78
+  context.fillStyle = active ? '#273244' : '#657285'
+  const clipped = text.length > 18 ? `${text.slice(0, 16)}...` : text
+  context.fillText(clipped, x, y + 0.5, width - 12)
+  context.restore()
+  return true
 }
 
 function createClusterSummaries(data: TopologyExplorerData): ClusterSummary[] {

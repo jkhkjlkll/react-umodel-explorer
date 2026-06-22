@@ -568,6 +568,125 @@
   cursor: crosshair;
 }
 
+.topo-cosmos-shell {
+  background: #fff;
+}
+
+.topo-cosmos-fallback,
+.topo-cosmos-graph {
+  position: absolute;
+  inset: 0;
+}
+
+.topo-cosmos-fallback {
+  z-index: 1;
+  opacity: 1;
+  transition: opacity 120ms ease;
+}
+
+.topo-cosmos-shell[data-cosmos-ready="true"] .topo-cosmos-fallback {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.topo-cosmos-graph {
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.topo-cosmos-shell[data-cosmos-ready="true"] .topo-cosmos-graph {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.topo-cosmos-graph canvas {
+  display: block;
+  cursor: grab;
+}
+
+.topo-cosmos-graph canvas:active {
+  cursor: grabbing;
+}
+
+.topo-cosmos-label-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.topo-cosmos-edge-label-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.topo-cosmos-edge-label {
+  position: absolute;
+  max-width: 150px;
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+  padding: 2px 7px;
+  border: 1px solid rgba(102, 112, 133, 0.28);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 3px 10px rgba(31, 45, 75, 0.08);
+  color: #667085;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topo-cosmos-edge-label.active {
+  z-index: 2;
+  background: #ffffff;
+  color: #273244;
+  box-shadow: 0 5px 16px rgba(31, 45, 75, 0.14);
+}
+
+.topo-cosmos-label {
+  position: absolute;
+  max-width: 210px;
+  transform: translate(12px, -50%);
+  overflow: hidden;
+  padding: 3px 7px;
+  border-left: 2px solid currentColor;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 4px 12px rgba(31, 45, 75, 0.1);
+  color: #384256;
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topo-cosmos-label.active {
+  z-index: 2;
+  max-width: 280px;
+  background: #fff;
+  color: #252b3a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.topo-cosmos-label.cluster {
+  max-width: 260px;
+  padding: 4px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: #252b3a;
+  font-size: 12px;
+  font-weight: 650;
+}
+
 .topo-minimap {
   position: absolute;
   right: 24px;
