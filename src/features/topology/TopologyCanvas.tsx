@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { Graph, type GraphConfigInterface } from '@cosmos.gl/graph'
 import type { TopologyEdge, TopologyExplorerData, TopologyNode } from './topologyModel'
 import { drawTopologyPresetGlyph, resolveTopologyNodeIconPreset, TopologyPresetIcon } from './topologyIcons'
@@ -559,7 +559,7 @@ function CosmosEdgeLabels({
           <span
             key={label.id}
             className={`topo-cosmos-edge-label ${active ? 'active' : ''}`}
-            style={{ left, top, borderColor: label.color }}
+            style={{ left, top, '--topo-edge-label-color': label.color } as CSSProperties}
           >
             {label.label}
           </span>
@@ -1610,27 +1610,30 @@ function drawEdgeLabel(
 ) {
   const text = label || '关系'
   context.save()
-  context.font = `${active ? 11 : 10}px var(--om-cjk-font)`
+  context.font = `${active ? '700 11px' : '650 10px'} -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif`
   context.textBaseline = 'middle'
   context.textAlign = 'center'
-  const width = Math.min(context.measureText(text).width + 16, 132)
-  const height = active ? 20 : 18
+  const width = Math.min(context.measureText(text).width + 18, 180)
+  const height = active ? 22 : 20
   const box = { x: x - width / 2, y: y - height / 2, width, height }
   if (labelBoxes.some((current) => rectanglesOverlap(current, box))) {
     context.restore()
     return false
   }
   labelBoxes.push(box)
-  context.globalAlpha = active ? 0.96 : 0.82
-  roundRect(context, box.x, box.y, box.width, box.height, 4)
-  context.fillStyle = active ? '#ffffff' : 'rgba(255, 255, 255, 0.86)'
+  context.globalAlpha = 1
+  context.shadowColor = active ? 'rgba(15, 23, 42, 0.12)' : 'rgba(15, 23, 42, 0.08)'
+  context.shadowBlur = active ? 18 : 12
+  context.shadowOffsetY = active ? 8 : 5
+  roundRect(context, box.x, box.y, box.width, box.height, 8)
+  context.fillStyle = active ? '#ffffff' : 'rgba(255, 255, 255, 0.94)'
   context.fill()
-  context.strokeStyle = color
-  context.globalAlpha = active ? 0.9 : 0.38
+  context.shadowColor = 'transparent'
+  context.strokeStyle = active ? color : 'rgba(100, 116, 139, 0.18)'
   context.lineWidth = 1
   context.stroke()
-  context.globalAlpha = active ? 1 : 0.78
-  context.fillStyle = active ? '#273244' : '#657285'
+  context.globalAlpha = 1
+  context.fillStyle = active ? '#1e293b' : '#64748b'
   const clipped = text.length > 18 ? `${text.slice(0, 16)}...` : text
   context.fillText(clipped, x, y + 0.5, width - 12)
   context.restore()
