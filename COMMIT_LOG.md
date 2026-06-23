@@ -6,13 +6,74 @@ Repository: `react-umodel-explorer`
 
 Branch when generated: `codex/opentopox-experiment`
 
-Generated at: `2026-06-22 17:20 +0800`
+Generated at: `2026-06-23 16:34 +0800`
 
 ## Summary
 
-There are 3 commits after `2026-06-18 00:00:00 +0800` on the current branch.
+There are 5 commits after `2026-06-18 00:00:00 +0800` on the current branch.
 
 ## Commits
+
+### 4c6d665 - Add topology detail panel and spec display dialog
+
+- Full hash: `4c6d665099737e0e14239e906df145bab32a31a2`
+- Author: `jkhkjlkll <jkhkjlkll@users.noreply.github.com>`
+- Date: `2026-06-23 16:33:05 +0800`
+- Full patch: `patches/0001-Add-topology-detail-panel-and-spec-display-dialog.patch`
+
+#### Changed Files
+
+| Status | File |
+| --- | --- |
+| M | `src/features/entity/EntityExplorerPage.tsx` |
+| M | `src/features/entity/entity.css` |
+| M | `src/features/umodel/UModelPage.tsx` |
+| M | `src/features/umodel/umodel.css` |
+
+#### Change Notes For AI Review
+
+- Added a right-side topology detail table in Entity Explorer when clicking topology cards, matching the Aliyun/CMS-style reference layout.
+- Suppressed the old floating entity detail panel while Entity Explorer is in topology mode.
+- Added focused zoom behavior for selected entity topology cards and updated topology zoom display.
+- Made OModel detail `Schema 信息 (Schema)` expandable/collapsible with grouped schema rows.
+- Changed OModel property card action text from `编辑` to `显示`.
+- Added a read-only OModel property display dialog styled after the reference form, including Name, Display Name, Description, Short Description, Launch Stage, Type, and Semantic Role fields.
+
+#### Diff Stat
+
+```text
+src/features/entity/EntityExplorerPage.tsx | 227 ++++++++++++++++--------
+src/features/entity/entity.css             | 165 +++++++++++++++++-
+src/features/umodel/UModelPage.tsx         | 166 +++++++++++++++++-
+src/features/umodel/umodel.css             | 271 ++++++++++++++++++++++++++++-
+4 files changed, 750 insertions(+), 79 deletions(-)
+```
+
+### 3d31cf5 - Add relation label styling patch
+
+- Full hash: `3d31cf5dbd5f39a4c2645e96d9e8493141c36b01`
+- Author: `jkhkjlkll <jkhkjlkll@users.noreply.github.com>`
+- Date: `2026-06-22 17:21:36 +0800`
+
+#### Changed Files
+
+| Status | File |
+| --- | --- |
+| M | `COMMIT_LOG.md` |
+| A | `patches/0001-Match-relation-label-styling.patch` |
+
+#### Change Notes For AI Review
+
+- Added the full patch file for `ef163ec` so ZIP-based handoff can inspect the exact relation label styling diff.
+- Updated the offline commit log with relation label styling context.
+
+#### Diff Stat
+
+```text
+COMMIT_LOG.md                                   |  62 ++++++++-
+patches/0001-Match-relation-label-styling.patch | 168 ++++++++++++++++++++++++
+2 files changed, 228 insertions(+), 2 deletions(-)
+```
 
 ### ef163ec - Match relation label styling
 

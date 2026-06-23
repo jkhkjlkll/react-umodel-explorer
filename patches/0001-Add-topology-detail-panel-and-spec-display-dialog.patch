@@ -1,0 +1,1022 @@
+From 4c6d665099737e0e14239e906df145bab32a31a2 Mon Sep 17 00:00:00 2001
+From: jkhkjlkll <jkhkjlkll@users.noreply.github.com>
+Date: Tue, 23 Jun 2026 16:33:05 +0800
+Subject: [PATCH] Add topology detail panel and spec display dialog
+
+---
+ src/features/entity/EntityExplorerPage.tsx | 227 +++++++++++------
+ src/features/entity/entity.css             | 165 ++++++++++++-
+ src/features/umodel/UModelPage.tsx         | 166 ++++++++++++-
+ src/features/umodel/umodel.css             | 271 ++++++++++++++++++++-
+ 4 files changed, 750 insertions(+), 79 deletions(-)
+
+diff --git a/src/features/entity/EntityExplorerPage.tsx b/src/features/entity/EntityExplorerPage.tsx
+index 51442e5..df18fda 100644
+--- a/src/features/entity/EntityExplorerPage.tsx
++++ b/src/features/entity/EntityExplorerPage.tsx
+@@ -305,7 +305,7 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
+         </section>
+       </main>
+ 
+-      <EntityDetail record={selected} onClose={() => setSelected(null)} />
++      <EntityDetail record={view === 'topology' ? null : selected} onClose={() => setSelected(null)} />
+     </div>
+   )
+ }
+@@ -689,12 +689,19 @@ function EntityTopologyView({
+ }) {
+   const referenceTopology = useMemo(() => createReferenceStyleTopology(data), [data])
+   const selectedId = selectedNode?.id
++  const selectedReferenceItem = selectedId
++    ? referenceTopology.nodes.find((item) => item.node.id === selectedId) || null
++    : null
+   const [zoom, setZoom] = useState(10)
+   const zoomScale = zoom / 10
++  const focusedZoomScale = selectedReferenceItem ? zoomScale * 10.5 : zoomScale
++  const zoomDisplay = Math.round(zoomScale * 98)
+   const zoomProgress = (zoom - 10) / 36
+-  const sceneX = -2550 * zoomProgress
+-  const sceneY = -425 * zoomProgress
+-  const sceneTransform = `translate(${sceneX} ${sceneY}) scale(${zoomScale})`
++  const focusCenterX = selectedReferenceItem ? selectedReferenceItem.x + selectedReferenceItem.width / 2 : 0
++  const focusCenterY = selectedReferenceItem ? selectedReferenceItem.y + selectedReferenceItem.height / 2 : 0
++  const sceneX = selectedReferenceItem ? 1239 - focusCenterX * focusedZoomScale : -2550 * zoomProgress
++  const sceneY = selectedReferenceItem ? 619 - focusCenterY * focusedZoomScale : -425 * zoomProgress
++  const sceneTransform = `translate(${sceneX} ${sceneY}) scale(${focusedZoomScale})`
+   const changeZoom = (direction: 1 | -1) => {
+     setZoom((value) => Math.max(10, Math.min(46, value + direction * 6)))
+   }
+@@ -706,81 +713,159 @@ function EntityTopologyView({
+   }
+ 
+   return (
+-    <section className="entity-topology-full" onWheel={handleWheelZoom}>
+-      <div className="entity-topology-zoom">
+-        <button className="entity-topology-zoom-action" type="button" data-zoom-action="out" aria-label="缩小拓扑" onClick={zoomOut}>−</button>
+-        <b>{zoom}%</b>
+-        <button className="entity-topology-zoom-action" type="button" data-zoom-action="in" aria-label="放大拓扑" onClick={zoomIn}>＋</button>
+-        <button className="entity-topology-zoom-action" type="button" data-zoom-action="fit" aria-label="适应画布" onClick={() => setZoom(10)}>⌖</button>
+-      </div>
+-      <svg className="entity-cms-reference-graph" viewBox="0 0 2478 1238" preserveAspectRatio="xMinYMin meet" role="img" aria-label="实体拓扑关系图">
+-        <defs>
+-          <pattern id="entity-reference-dot-grid" width="12" height="12" patternUnits="userSpaceOnUse">
+-            <circle cx="1.2" cy="1.2" r="1" fill="#e7ebf1" />
+-          </pattern>
+-          <marker id="entity-reference-arrow" markerWidth="5" markerHeight="5" refX="4.6" refY="2.5" orient="auto">
+-            <path d="M0,0 L5,2.5 L0,5 Z" fill="#c3c8d0" />
+-          </marker>
+-        </defs>
+-        <rect width="2478" height="1238" fill="#fff" />
+-        <rect width="2478" height="1238" fill="url(#entity-reference-dot-grid)" opacity="0.52" />
+-        <g className="entity-reference-scene" transform={sceneTransform}>
+-          <g className="entity-reference-links">
+-            {referenceTopology.edges.map((edge) => (
+-              <g key={edge.id}>
+-                <path d={referenceEdgePath(edge)} markerEnd="url(#entity-reference-arrow)" />
+-                {edge.showLabel && (
+-                  <text x={(edge.source.x + edge.target.x) / 2} y={(edge.source.y + edge.target.y) / 2 - 4}>
+-                    {edge.label}
+-                  </text>
+-                )}
+-              </g>
+-            ))}
+-          </g>
+-          <g className="entity-reference-nodes">
+-            {referenceTopology.nodes.map((item, index) => (
+-              <g
+-                key={item.node.id}
+-                className={selectedId === item.node.id ? 'selected' : ''}
+-                transform={`translate(${item.x} ${item.y})`}
+-                onClick={() => {
+-                  onSelectNode(item.node)
+-                  onFocusType(item.node.type)
+-                }}
+-              >
+-                <clipPath id={`entity-reference-title-clip-${index}`}>
+-                  <rect x="7.6" y="3.2" width={Math.max(12, item.width - 26)} height="6.4" />
+-                </clipPath>
+-                <clipPath id={`entity-reference-subtitle-clip-${index}`}>
+-                  <rect x="7.6" y={item.height - 6.8} width={Math.max(17, item.width - 9)} height="5.4" />
+-                </clipPath>
+-                <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx="1.8" fill={item.color} />
+-                <rect className="entity-reference-card" width={item.width} height={item.height} rx="1.8" fill="none" stroke={item.color} />
+-                <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="1.55" rx="0.78" fill={item.color} />
+-                <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(3.1 5.3) scale(0.17)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+-                <text x="7.6" y="7.45" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
+-                <text x={item.width - 2} y="7.45" className="count" textAnchor="end">已接入: {item.access}</text>
+-                <text x="7.6" y={item.height - 2.8} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
+-              </g>
+-            ))}
+-          </g>
+-        </g>
+-      </svg>
+-      <div className="entity-cms-minimap" aria-hidden="true">
+-        <svg viewBox="0 0 2478 1238">
++    <section className={selectedReferenceItem ? 'entity-topology-split has-detail' : 'entity-topology-split'}>
++      <div className="entity-topology-full" onWheel={handleWheelZoom}>
++        <div className="entity-topology-zoom">
++          <button className="entity-topology-zoom-action" type="button" data-zoom-action="out" aria-label="缩小拓扑" onClick={zoomOut}>−</button>
++          <b>{zoomDisplay}%</b>
++          <button className="entity-topology-zoom-action" type="button" data-zoom-action="in" aria-label="放大拓扑" onClick={zoomIn}>＋</button>
++          <button className="entity-topology-zoom-action" type="button" data-zoom-action="fit" aria-label="适应画布" onClick={() => setZoom(10)}>⌖</button>
++        </div>
++        <svg className="entity-cms-reference-graph" viewBox="0 0 2478 1238" preserveAspectRatio="xMinYMin meet" role="img" aria-label="实体拓扑关系图">
++          <defs>
++            <pattern id="entity-reference-dot-grid" width="12" height="12" patternUnits="userSpaceOnUse">
++              <circle cx="1.2" cy="1.2" r="1" fill="#e7ebf1" />
++            </pattern>
++            <marker id="entity-reference-arrow" markerWidth="5" markerHeight="5" refX="4.6" refY="2.5" orient="auto">
++              <path d="M0,0 L5,2.5 L0,5 Z" fill="#c3c8d0" />
++            </marker>
++          </defs>
+           <rect width="2478" height="1238" fill="#fff" />
+-          <g transform="translate(0 0)">
+-            {referenceTopology.nodes.map((item) => (
+-              <rect key={item.node.id} x={item.x} y={item.y} width="12" height="4" fill="#cfd5dd" opacity="0.75" />
+-            ))}
++          <rect width="2478" height="1238" fill="url(#entity-reference-dot-grid)" opacity="0.52" />
++          <g className="entity-reference-scene" transform={sceneTransform}>
++            <g className="entity-reference-links">
++              {referenceTopology.edges.map((edge) => (
++                <g key={edge.id}>
++                  <path d={referenceEdgePath(edge)} markerEnd="url(#entity-reference-arrow)" />
++                  {edge.showLabel && (
++                    <text x={(edge.source.x + edge.target.x) / 2} y={(edge.source.y + edge.target.y) / 2 - 4}>
++                      {edge.label}
++                    </text>
++                  )}
++                </g>
++              ))}
++            </g>
++            <g className="entity-reference-nodes">
++              {referenceTopology.nodes.map((item, index) => (
++                <g
++                  key={item.node.id}
++                  className={selectedId === item.node.id ? 'selected' : ''}
++                  transform={`translate(${item.x} ${item.y})`}
++                  onClick={() => {
++                    onSelectNode(item.node)
++                    onFocusType(item.node.type)
++                  }}
++                >
++                  <clipPath id={`entity-reference-title-clip-${index}`}>
++                    <rect x="7.6" y="3.2" width={Math.max(12, item.width - 26)} height="6.4" />
++                  </clipPath>
++                  <clipPath id={`entity-reference-subtitle-clip-${index}`}>
++                    <rect x="7.6" y={item.height - 6.8} width={Math.max(17, item.width - 9)} height="5.4" />
++                  </clipPath>
++                  <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx="1.8" fill={item.color} />
++                  <rect className="entity-reference-card" width={item.width} height={item.height} rx="1.8" fill="none" stroke={item.color} />
++                  <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="1.55" rx="0.78" fill={item.color} />
++                  <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(3.1 5.3) scale(0.17)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
++                  <text x="7.6" y="7.45" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
++                  <text x={item.width - 2} y="7.45" className="count" textAnchor="end">查询量: {item.access}</text>
++                  <text x="7.6" y={item.height - 2.8} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
++                </g>
++              ))}
++            </g>
+           </g>
+-          <rect x="430" y="80" width="1080" height="720" fill="none" stroke="#e0e5ec" strokeWidth="34" />
+         </svg>
++        <div className="entity-cms-minimap" aria-hidden="true">
++          <svg viewBox="0 0 2478 1238">
++            <rect width="2478" height="1238" fill="#fff" />
++            <g transform="translate(0 0)">
++              {referenceTopology.nodes.map((item) => (
++                <rect key={item.node.id} x={item.x} y={item.y} width="12" height="4" fill="#cfd5dd" opacity="0.75" />
++              ))}
++            </g>
++            <rect x="430" y="80" width="1080" height="720" fill="none" stroke="#e0e5ec" strokeWidth="34" />
++          </svg>
++        </div>
+       </div>
++      {selectedReferenceItem && <EntityTopologyMetricPanel item={selectedReferenceItem} />}
+     </section>
+   )
+ }
+ 
++function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
++  const rows = topologyMetricRowsFor(item)
++  const total = topologyMetricTotalFor(item)
++  return (
++    <aside className="entity-topology-detail-panel" aria-label={`${item.title}拓扑明细`}>
++      <div className="entity-topology-detail-table-wrap">
++        <table className="entity-topology-detail-table">
++          <thead>
++            <tr>
++              <th>{item.title}名称</th>
++              <th>平均请求次数 <span className="entity-topology-info">?</span><span className="entity-topology-sort" /></th>
++              <th>平均错误次数 <span className="entity-topology-info">?</span><span className="entity-topology-sort" /></th>
++              <th>平均延迟时间 <span className="entity-topology-sort" /></th>
++            </tr>
++          </thead>
++          <tbody>
++            {rows.map((row) => (
++              <tr key={row.name}>
++                <td><a href="#entity-topology-detail" onClick={(event) => event.preventDefault()}>{row.name}</a></td>
++                <td>{row.requests}</td>
++                <td>{row.errors}</td>
++                <td>{row.latency}</td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++        <div className="entity-topology-detail-footer">
++          <span>每页显示:</span>
++          <button type="button">10 <ChevronDown size={14} /></button>
++          <span>总数: {total}</span>
++          <button type="button" disabled>‹ 上一页</button>
++          <button type="button" className="active">1</button>
++          <button type="button">2</button>
++          <button type="button">下一页 ›</button>
++        </div>
++      </div>
++    </aside>
++  )
++}
++
++function topologyMetricRowsFor(item: ReferenceTopologyNode) {
++  if (item.title.includes('大模型')) {
++    return [
++      { name: 'qwen3.7-plus', requests: '', errors: '', latency: '' },
++      { name: 'wanx2.1-t2v-turbo', requests: '1', errors: '', latency: '' },
++      { name: 'qwen3-max', requests: '5', errors: '', latency: '' },
++      { name: 'ack-vercel-demo-agent', requests: '8', errors: '', latency: '' },
++      { name: 'wan2.7-image', requests: '2', errors: '', latency: '' },
++      { name: 'dashscope/qwen-plus', requests: '86', errors: '', latency: '' },
++      { name: 'auto', requests: '', errors: '', latency: '' },
++      { name: 'qwen3.6-plus', requests: '', errors: '', latency: '' },
++      { name: 'qwen3.5-flash', requests: '10', errors: '', latency: '' },
++      { name: 'cosyvoice-v1', requests: '1', errors: '', latency: '' },
++    ]
++  }
++
++  const baseName = item.subtitle.split('.').filter(Boolean).slice(-1)[0] || item.title.toLowerCase().replace(/\s+/g, '-')
++  const rows = Array.from({ length: 10 }, (_, index) => {
++    const value = index === 0 ? '' : String(((item.access + index * 7) % 96) || index)
++    return {
++      name: `${baseName}-${String(index + 1).padStart(2, '0')}`,
++      requests: value,
++      errors: index % 4 === 0 ? '0' : '',
++      latency: index % 3 === 0 ? `${18 + ((item.access + index) % 82)} ms` : '',
++    }
++  })
++  if (rows[0]) rows[0].name = item.title
++  return rows
++}
++
++function topologyMetricTotalFor(item: ReferenceTopologyNode) {
++  if (item.title.includes('大模型')) return 15
++  return Math.max(10, item.access)
++}
++
+ function EntityHealthGrid({ records, onSelect }: { records: EntityRecord[]; onSelect: (record: EntityRecord) => void }) {
+   return (
+     <div className="entity-health-grid">
+diff --git a/src/features/entity/entity.css b/src/features/entity/entity.css
+index 573e7f8..a2189a4 100644
+--- a/src/features/entity/entity.css
++++ b/src/features/entity/entity.css
+@@ -877,12 +877,27 @@
+   border-radius: 999px;
+ }
+ 
+-.entity-topology-full {
++.entity-topology-split {
+   position: relative;
+   grid-row: 1 / -1;
+   min-width: 0;
+   min-height: 0;
+   height: 100%;
++  display: grid;
++  grid-template-columns: minmax(0, 1fr);
++  overflow: hidden;
++  background: #fff;
++}
++
++.entity-topology-split.has-detail {
++  grid-template-columns: minmax(360px, 1fr) minmax(560px, 44%);
++}
++
++.entity-topology-full {
++  position: relative;
++  min-width: 0;
++  min-height: 0;
++  height: 100%;
+   overflow: hidden;
+   background: #fff;
+   overscroll-behavior: contain;
+@@ -1034,6 +1049,154 @@
+   background: #fff;
+ }
+ 
++.entity-topology-detail-panel {
++  min-width: 0;
++  min-height: 0;
++  padding: 42px 20px 22px 26px;
++  border-left: 1px solid #e7ebf2;
++  background: #fff;
++  overflow: auto;
++}
++
++.entity-topology-detail-table-wrap {
++  min-width: 0;
++  overflow: hidden;
++  border: 1px solid #dfe5ec;
++  border-radius: 8px;
++  background: #fff;
++}
++
++.entity-topology-detail-table {
++  width: 100%;
++  min-width: 0;
++  border-collapse: collapse;
++  color: #303641;
++  font-size: 13px;
++}
++
++.entity-topology-detail-table th {
++  height: 52px;
++  padding: 0 10px;
++  border-bottom: 1px solid #d8dde6;
++  background: #fafafa;
++  color: #303641;
++  text-align: left;
++  font-weight: 700;
++  white-space: nowrap;
++}
++
++.entity-topology-detail-table th:first-child {
++  width: 38%;
++}
++
++.entity-topology-detail-table th:nth-child(2),
++.entity-topology-detail-table th:nth-child(3),
++.entity-topology-detail-table th:nth-child(4) {
++  width: 20.66%;
++}
++
++.entity-topology-detail-table td {
++  height: 46px;
++  padding: 0 10px;
++  border-bottom: 1px solid #d8dde6;
++  background: #fff;
++  font-weight: 600;
++}
++
++.entity-topology-detail-table tbody tr:last-child td {
++  border-bottom: 0;
++}
++
++.entity-topology-detail-table a {
++  color: #2b6bdc;
++  font-weight: 700;
++  text-decoration: none;
++}
++
++.entity-topology-detail-table a:hover {
++  text-decoration: underline;
++}
++
++.entity-topology-info {
++  display: inline-grid;
++  place-items: center;
++  width: 15px;
++  height: 15px;
++  margin-left: 4px;
++  border: 1px solid #8d96a6;
++  border-radius: 999px;
++  color: #687386;
++  font-size: 10px;
++  line-height: 1;
++}
++
++.entity-topology-sort {
++  position: relative;
++  display: inline-block;
++  width: 8px;
++  height: 14px;
++  margin-left: 12px;
++  vertical-align: middle;
++}
++
++.entity-topology-sort::before,
++.entity-topology-sort::after {
++  content: "";
++  position: absolute;
++  left: 1px;
++  border-right: 4px solid transparent;
++  border-left: 4px solid transparent;
++}
++
++.entity-topology-sort::before {
++  top: 1px;
++  border-bottom: 5px solid #a8aeb8;
++}
++
++.entity-topology-sort::after {
++  bottom: 1px;
++  border-top: 5px solid #a8aeb8;
++}
++
++.entity-topology-detail-footer {
++  min-width: 0;
++  min-height: 74px;
++  display: flex;
++  align-items: center;
++  justify-content: flex-end;
++  gap: 8px;
++  padding: 14px 20px;
++  border-top: 1px solid #edf1f5;
++  color: #6b7280;
++  font-size: 13px;
++}
++
++.entity-topology-detail-footer button {
++  height: 34px;
++  min-width: 34px;
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  gap: 7px;
++  padding: 0 10px;
++  border: 1px solid #d8dde6;
++  border-radius: 3px;
++  background: #fff;
++  color: #4b5563;
++  cursor: pointer;
++  font-size: 13px;
++}
++
++.entity-topology-detail-footer button:disabled {
++  cursor: default;
++  opacity: 0.45;
++}
++
++.entity-topology-detail-footer button.active {
++  border-color: #1677ff;
++  color: #1677ff;
++}
++
+ .entity-health-grid {
+   min-height: 0;
+   display: grid;
+diff --git a/src/features/umodel/UModelPage.tsx b/src/features/umodel/UModelPage.tsx
+index 02bd029..e3a7a6e 100644
+--- a/src/features/umodel/UModelPage.tsx
++++ b/src/features/umodel/UModelPage.tsx
+@@ -6,6 +6,7 @@ import {
+   Box,
+   Cable,
+   Bookmark,
++  ChevronDown,
+   Crosshair,
+   Database,
+   Download,
+@@ -1206,6 +1207,9 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
+   const metrics = asUnknownArray(spec.metrics)
+   const dimensions = asUnknownArray(spec.dimensions)
+   const specRows = specDetailRows(spec, fields, metrics, dimensions)
++  const schemaGroups = schemaDetailGroups(fields, metrics, dimensions)
++  const [schemaOpen, setSchemaOpen] = useState(false)
++  const [visibleSpec, setVisibleSpec] = useState<SpecRow | null>(null)
+   return (
+     <div className="ume-form-detail">
+       <label className="ume-form-field required">
+@@ -1245,8 +1249,30 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
+         <header>› 更多配置</header>
+       </section>
+ 
+-      <section className="ume-form-section">
+-        <header>› Schema 信息 (Schema)</header>
++      <section className={schemaOpen ? 'ume-form-section open' : 'ume-form-section'}>
++        <button className="ume-form-section-header" type="button" onClick={() => setSchemaOpen((value) => !value)}>
++          <span>{schemaOpen ? '⌄' : '›'} Schema 信息 (Schema)</span>
++          <em>{schemaGroups.reduce((sum, group) => sum + group.rows.length, 0)}</em>
++        </button>
++        {schemaOpen && (
++          <div className="ume-schema-list">
++            {schemaGroups.map((group) => (
++              <div key={group.title} className="ume-schema-group">
++                <div className="ume-schema-group-title">
++                  <span>{group.title}</span>
++                  <em>{group.rows.length}</em>
++                </div>
++                {group.rows.map((row, index) => (
++                  <div key={`${group.title}-${row.name}-${index}`} className="ume-schema-row">
++                    <strong>{row.name}</strong>
++                    <span>{row.type}</span>
++                  </div>
++                ))}
++              </div>
++            ))}
++            {schemaGroups.length === 0 && <div className="ume-schema-empty">暂无 Schema 信息</div>}
++          </div>
++        )}
+       </section>
+ 
+       <section className="ume-form-section open">
+@@ -1259,13 +1285,14 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
+             </div>
+             <div className="ume-spec-card-list">
+               {group.rows.map((row, index) => (
+-                <SpecCard key={`${group.title}-${row.name}-${index}`} row={row} />
++                <SpecCard key={`${group.title}-${row.name}-${index}`} row={row} onShow={setVisibleSpec} />
+               ))}
+             </div>
+           </div>
+         ))}
+         {specRows.length === 0 && <div className="ume-schema-empty">暂无属性信息</div>}
+       </section>
++      {visibleSpec && <SpecDisplayDialog row={visibleSpec} onClose={() => setVisibleSpec(null)} />}
+     </div>
+   )
+ }
+@@ -1279,7 +1306,7 @@ interface SpecRow {
+   value?: unknown
+ }
+ 
+-function SpecCard({ row }: { row: SpecRow }) {
++function SpecCard({ row, onShow }: { row: SpecRow; onShow: (row: SpecRow) => void }) {
+   return (
+     <article className="ume-spec-card">
+       <div className="ume-spec-card-main">
+@@ -1294,16 +1321,96 @@ function SpecCard({ row }: { row: SpecRow }) {
+       {row.value !== undefined && (
+         <code className="ume-spec-value">{formatSpecValue(row.value)}</code>
+       )}
+-      <div className="ume-spec-card-actions" aria-hidden>
++      <div className="ume-spec-card-actions">
+         <button type="button">⌃</button>
+         <button type="button">⌄</button>
+-        <button className="primary" type="button">编辑</button>
++        <button className="primary" type="button" onClick={() => onShow(row)}>显示</button>
+         <button type="button">⌫</button>
+       </div>
+     </article>
+   )
+ }
+ 
++function SpecDisplayDialog({ row, onClose }: { row: SpecRow; onClose: () => void }) {
++  const detail = specDisplayDetail(row)
++  return ReactDOM.createPortal(
++    <div className="ume-dialog-backdrop ume-spec-display-backdrop" onMouseDown={(event) => {
++      if (event.target === event.currentTarget) onClose()
++    }}>
++      <section className="ume-spec-display-dialog" role="dialog" aria-modal="true" aria-label={`显示${detail.title}`}>
++        <header className="ume-spec-display-header">
++          <strong>显示{detail.title}</strong>
++          <button className="ume-spec-display-close" type="button" aria-label="关闭" onClick={onClose}>
++            <X size={20} />
++          </button>
++        </header>
++        <div className="ume-spec-display-body">
++          <label className="ume-spec-display-field required">
++            <span>Name <em>?</em> :</span>
++            <div className="ume-spec-display-input-wrap">
++              <input value={detail.name} readOnly />
++              <small>{detail.name.length}/127</small>
++            </div>
++          </label>
++          <label className="ume-spec-display-field required">
++            <span>显示名 (Display Name) <em>?</em> :</span>
++            <div className="ume-spec-display-i18n">
++              <b>中</b>
++              <input value={detail.displayZh} placeholder="请输入中文显示名" readOnly />
++              <b>EN</b>
++              <input value={detail.displayEn} placeholder="Please enter English display name" readOnly />
++            </div>
++          </label>
++          <label className="ume-spec-display-field">
++            <span>描述 (Description) <em>?</em> :</span>
++            <div className="ume-spec-display-i18n textarea">
++              <b>中</b>
++              <textarea value={detail.descriptionZh} placeholder="请输入中文描述" readOnly />
++              <b>EN</b>
++              <textarea value={detail.descriptionEn} placeholder="Please enter English description" readOnly />
++            </div>
++          </label>
++          <label className="ume-spec-display-field">
++            <span>简短描述 (Short Description) <em>?</em> :</span>
++            <div className="ume-spec-display-i18n">
++              <b>中</b>
++              <input value={detail.shortDescriptionZh} placeholder="请输入中文简短描述" readOnly />
++              <b>EN</b>
++              <input value={detail.shortDescriptionEn} placeholder="Please enter English short description" readOnly />
++            </div>
++          </label>
++          <label className="ume-spec-display-field">
++            <span>发布阶段 (Launch Stage) :</span>
++            <div className="ume-spec-display-select">
++              <input value={detail.launchStage} placeholder="请选择" readOnly />
++              <ChevronDown size={18} />
++            </div>
++          </label>
++          <label className="ume-spec-display-field required">
++            <span>字段类型 (Type) <em>?</em> :</span>
++            <div className="ume-spec-display-select">
++              <input value={detail.type} readOnly />
++              <ChevronDown size={18} />
++            </div>
++          </label>
++          <label className="ume-spec-display-field">
++            <span>语义角色 (Semantic Role) :</span>
++            <div className="ume-spec-display-select">
++              <input value={detail.semanticRole} placeholder="请选择" readOnly />
++              <ChevronDown size={18} />
++            </div>
++          </label>
++        </div>
++        <footer className="ume-spec-display-footer">
++          <button type="button" onClick={onClose}>取消</button>
++          <button className="primary" type="button" onClick={onClose}>确定</button>
++        </footer>
++      </section>
++    </div>,
++    document.body,
++  )
++}
++
+ function specDetailRows(
+   spec: Record<string, unknown>,
+   fields: unknown[],
+@@ -1334,6 +1441,27 @@ function specDetailRows(
+   return groups
+ }
+ 
++function schemaDetailGroups(fields: unknown[], metrics: unknown[], dimensions: unknown[]) {
++  const groups: Array<{ title: string; rows: Array<{ name: string; type: string }> }> = []
++  if (fields.length > 0) {
++    groups.push({ title: 'Fields', rows: fields.map((item, index) => schemaPreviewRow(item, `field_${index + 1}`)) })
++  }
++  if (metrics.length > 0) {
++    groups.push({ title: 'Metrics', rows: metrics.map((item, index) => schemaPreviewRow(item, `metric_${index + 1}`)) })
++  }
++  if (dimensions.length > 0) {
++    groups.push({ title: 'Dimensions', rows: dimensions.map((item, index) => schemaPreviewRow(item, `dimension_${index + 1}`)) })
++  }
++  return groups
++}
++
++function schemaPreviewRow(value: unknown, fallbackName: string) {
++  return {
++    name: schemaItemName(value) || fallbackName,
++    type: schemaItemType(value) || (typeof value === 'string' ? 'string' : typeof value),
++  }
++}
++
+ function schemaSpecRow(value: unknown, fallbackName: string, spec: Record<string, unknown>): SpecRow {
+   if (typeof value === 'string') {
+     return {
+@@ -1341,6 +1469,7 @@ function schemaSpecRow(value: unknown, fallbackName: string, spec: Record<string
+       key: value,
+       type: 'string',
+       flags: fieldFlags(value, spec),
++      value,
+     }
+   }
+   if (!isObject(value)) {
+@@ -1359,6 +1488,7 @@ function schemaSpecRow(value: unknown, fallbackName: string, spec: Record<string
+     type: optionalString(value.type) || optionalString(value.value_type) || 'string',
+     description: localizedText(value.short_description, 'zh_cn') || localizedText(value.description, 'zh_cn') || optionalString(value.description),
+     flags: fieldFlags(key, spec, value),
++    value,
+   }
+ }
+ 
+@@ -1387,6 +1517,30 @@ function formatSpecValue(value: unknown) {
+   return stringify(value)
+ }
+ 
++function specDisplayDetail(row: SpecRow) {
++  const raw = isObject(row.value) ? row.value : {}
++  const displayZh = localizedText(raw.display_name, 'zh_cn') || row.name
++  const displayEn = localizedText(raw.display_name, 'en_us') || optionalString(raw.display_name_en) || row.key
++  const descriptionZh = localizedText(raw.description, 'zh_cn') || row.description || ''
++  const descriptionEn = localizedText(raw.description, 'en_us') || optionalString(raw.description_en) || ''
++  const shortDescriptionZh = localizedText(raw.short_description, 'zh_cn') || row.description || ''
++  const shortDescriptionEn = localizedText(raw.short_description, 'en_us') || optionalString(raw.short_description_en) || ''
++  const title = row.flags.includes('P') ? 'Keys' : row.name
++  return {
++    title,
++    name: optionalString(raw.name) || row.key,
++    displayZh,
++    displayEn,
++    descriptionZh,
++    descriptionEn,
++    shortDescriptionZh,
++    shortDescriptionEn,
++    launchStage: optionalString(raw.launch_stage) || optionalString(raw.launchStage) || '',
++    type: row.type || optionalString(raw.type) || 'string',
++    semanticRole: optionalString(raw.semantic_role) || optionalString(raw.semanticRole) || '',
++  }
++}
++
+ function localizedText(value: unknown, locale: 'zh_cn' | 'en_us') {
+   if (typeof value === 'string') return value
+   if (isObject(value)) return optionalString(value[locale]) || ''
+diff --git a/src/features/umodel/umodel.css b/src/features/umodel/umodel.css
+index e6a295e..6b35069 100644
+--- a/src/features/umodel/umodel.css
++++ b/src/features/umodel/umodel.css
+@@ -2919,13 +2919,42 @@ body.ume-resizing-detail .ume-detail-panel {
+   font-weight: 750;
+ }
+ 
++.ume-form-section-header {
++  width: 100%;
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 12px;
++  padding: 12px 16px;
++  border: 0;
++  background: #eef3f9;
++  color: #2f343d;
++  cursor: pointer;
++  font-family: var(--ume-font-sans);
++  font-size: 15px;
++  font-weight: 750;
++  text-align: left;
++}
++
++.ume-form-section-header em {
++  min-width: 22px;
++  height: 20px;
++  display: inline-grid;
++  place-items: center;
++  border-radius: 999px;
++  background: #fff;
++  color: #7b8496;
++  font-size: 11px;
++  font-style: normal;
++}
++
+ .ume-form-section.open {
+   display: grid;
+   gap: 12px;
+   padding-bottom: 14px;
+ }
+ 
+-.ume-form-section.open > :not(header) {
++.ume-form-section.open > :not(header):not(.ume-form-section-header) {
+   margin-inline: 14px;
+ }
+ 
+@@ -2934,6 +2963,32 @@ body.ume-resizing-detail .ume-detail-panel {
+   gap: 8px;
+ }
+ 
++.ume-schema-group {
++  display: grid;
++  gap: 6px;
++}
++
++.ume-schema-group-title {
++  display: flex;
++  align-items: center;
++  gap: 6px;
++  color: #3b414d;
++  font-size: 13px;
++  font-weight: 700;
++}
++
++.ume-schema-group-title em {
++  min-width: 18px;
++  height: 18px;
++  display: inline-grid;
++  place-items: center;
++  border-radius: 999px;
++  background: #eef2f7;
++  color: #7b8496;
++  font-size: 11px;
++  font-style: normal;
++}
++
+ .ume-schema-row {
+   display: flex;
+   align-items: center;
+@@ -3100,6 +3155,220 @@ body.ume-resizing-detail .ume-detail-panel {
+   color: #fff;
+ }
+ 
++.ume-spec-display-backdrop {
++  z-index: 2147483647;
++  background: rgba(0, 0, 0, 0.48);
++  backdrop-filter: none;
++}
++
++.ume-spec-display-dialog {
++  width: min(1560px, calc(100vw - 390px));
++  min-width: min(920px, calc(100vw - 48px));
++  max-height: min(740px, calc(100vh - 92px));
++  display: grid;
++  grid-template-rows: auto minmax(0, 1fr) auto;
++  overflow: hidden;
++  border: 1px solid #d9dde5;
++  border-radius: 5px;
++  background: #fff;
++  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.22);
++}
++
++.ume-spec-display-header {
++  min-height: 72px;
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 20px;
++  padding: 0 32px;
++  border-bottom: 0;
++}
++
++.ume-spec-display-header strong {
++  color: #303641;
++  font-size: 19px;
++  font-weight: 700;
++}
++
++.ume-spec-display-close {
++  width: 36px;
++  height: 36px;
++  display: grid;
++  place-items: center;
++  border: 0;
++  background: transparent;
++  color: #5f6673;
++  cursor: pointer;
++}
++
++.ume-spec-display-body {
++  min-height: 0;
++  display: grid;
++  gap: 11px;
++  overflow: auto;
++  padding: 28px 32px 18px;
++}
++
++.ume-spec-display-field {
++  min-width: 0;
++  display: grid;
++  grid-template-columns: 190px minmax(0, 1fr);
++  align-items: start;
++  gap: 14px;
++  color: #303641;
++  font-size: 15px;
++  font-weight: 700;
++}
++
++.ume-spec-display-field > span {
++  min-height: 42px;
++  display: flex;
++  align-items: center;
++  white-space: nowrap;
++}
++
++.ume-spec-display-field.required > span::before {
++  content: "*";
++  margin-right: 3px;
++  color: #f5222d;
++}
++
++.ume-spec-display-field em {
++  width: 17px;
++  height: 17px;
++  display: inline-grid;
++  place-items: center;
++  margin-left: 4px;
++  border: 1px solid #9ca3af;
++  border-radius: 999px;
++  color: #6b7280;
++  font-size: 11px;
++  font-style: normal;
++  line-height: 1;
++}
++
++.ume-spec-display-input-wrap,
++.ume-spec-display-select {
++  position: relative;
++}
++
++.ume-spec-display-input-wrap small {
++  position: absolute;
++  right: 14px;
++  top: 50%;
++  color: #a6acb7;
++  font-size: 14px;
++  font-weight: 500;
++  transform: translateY(-50%);
++}
++
++.ume-spec-display-field input,
++.ume-spec-display-field textarea {
++  width: 100%;
++  box-sizing: border-box;
++  border: 1px solid #d9dce3;
++  border-radius: 4px;
++  outline: 0;
++  background: #fff;
++  color: #303641;
++  font-family: var(--ume-font-sans);
++  font-size: 15px;
++  font-weight: 600;
++}
++
++.ume-spec-display-field input {
++  height: 42px;
++  padding: 0 22px;
++}
++
++.ume-spec-display-input-wrap input {
++  padding-right: 72px;
++}
++
++.ume-spec-display-field textarea {
++  min-height: 106px;
++  padding: 16px 22px;
++  resize: none;
++}
++
++.ume-spec-display-field input::placeholder,
++.ume-spec-display-field textarea::placeholder {
++  color: #b8bdc6;
++}
++
++.ume-spec-display-i18n {
++  min-width: 0;
++  display: grid;
++  grid-template-columns: 48px minmax(0, 1fr) 48px minmax(0, 1fr);
++}
++
++.ume-spec-display-i18n b {
++  height: 42px;
++  display: grid;
++  place-items: center;
++  border: 1px solid #d9dce3;
++  border-right: 0;
++  background: #fafafa;
++  color: #6b7280;
++  font-size: 15px;
++  font-weight: 600;
++}
++
++.ume-spec-display-i18n input,
++.ume-spec-display-i18n textarea {
++  border-radius: 0 4px 4px 0;
++}
++
++.ume-spec-display-i18n input + b,
++.ume-spec-display-i18n textarea + b {
++  margin-left: 8px;
++}
++
++.ume-spec-display-i18n.textarea b {
++  height: 106px;
++}
++
++.ume-spec-display-select input {
++  padding-right: 42px;
++  color: #9ca3af;
++}
++
++.ume-spec-display-select svg {
++  position: absolute;
++  right: 12px;
++  top: 50%;
++  color: #b4bac4;
++  pointer-events: none;
++  transform: translateY(-50%);
++}
++
++.ume-spec-display-footer {
++  min-height: 76px;
++  display: flex;
++  align-items: center;
++  justify-content: flex-end;
++  gap: 12px;
++  padding: 16px 32px 30px;
++}
++
++.ume-spec-display-footer button {
++  min-width: 76px;
++  height: 42px;
++  border: 1px solid #d4d8df;
++  border-radius: 3px;
++  background: #fff;
++  color: #303641;
++  cursor: pointer;
++  font-size: 15px;
++  font-weight: 600;
++}
++
++.ume-spec-display-footer button.primary {
++  border-color: #0064d9;
++  background: #006bdc;
++  color: #fff;
++}
++
+ .ume-dialog header div {
+   min-width: 0;
+   display: flex;
+-- 
+2.50.1 (Apple Git-155)
+
