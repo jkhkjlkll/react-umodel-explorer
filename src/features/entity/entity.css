@@ -877,9 +877,24 @@
   border-radius: 999px;
 }
 
-.entity-topology-full {
+.entity-topology-split {
   position: relative;
   grid-row: 1 / -1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+  background: #fff;
+}
+
+.entity-topology-split.has-detail {
+  grid-template-columns: minmax(360px, 1fr) minmax(560px, 44%);
+}
+
+.entity-topology-full {
+  position: relative;
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -1032,6 +1047,154 @@
   height: 100%;
   display: block;
   background: #fff;
+}
+
+.entity-topology-detail-panel {
+  min-width: 0;
+  min-height: 0;
+  padding: 42px 20px 22px 26px;
+  border-left: 1px solid #e7ebf2;
+  background: #fff;
+  overflow: auto;
+}
+
+.entity-topology-detail-table-wrap {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dfe5ec;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.entity-topology-detail-table {
+  width: 100%;
+  min-width: 0;
+  border-collapse: collapse;
+  color: #303641;
+  font-size: 13px;
+}
+
+.entity-topology-detail-table th {
+  height: 52px;
+  padding: 0 10px;
+  border-bottom: 1px solid #d8dde6;
+  background: #fafafa;
+  color: #303641;
+  text-align: left;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.entity-topology-detail-table th:first-child {
+  width: 38%;
+}
+
+.entity-topology-detail-table th:nth-child(2),
+.entity-topology-detail-table th:nth-child(3),
+.entity-topology-detail-table th:nth-child(4) {
+  width: 20.66%;
+}
+
+.entity-topology-detail-table td {
+  height: 46px;
+  padding: 0 10px;
+  border-bottom: 1px solid #d8dde6;
+  background: #fff;
+  font-weight: 600;
+}
+
+.entity-topology-detail-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.entity-topology-detail-table a {
+  color: #2b6bdc;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.entity-topology-detail-table a:hover {
+  text-decoration: underline;
+}
+
+.entity-topology-info {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 4px;
+  border: 1px solid #8d96a6;
+  border-radius: 999px;
+  color: #687386;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.entity-topology-sort {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 14px;
+  margin-left: 12px;
+  vertical-align: middle;
+}
+
+.entity-topology-sort::before,
+.entity-topology-sort::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+}
+
+.entity-topology-sort::before {
+  top: 1px;
+  border-bottom: 5px solid #a8aeb8;
+}
+
+.entity-topology-sort::after {
+  bottom: 1px;
+  border-top: 5px solid #a8aeb8;
+}
+
+.entity-topology-detail-footer {
+  min-width: 0;
+  min-height: 74px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid #edf1f5;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.entity-topology-detail-footer button {
+  height: 34px;
+  min-width: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid #d8dde6;
+  border-radius: 3px;
+  background: #fff;
+  color: #4b5563;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.entity-topology-detail-footer button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.entity-topology-detail-footer button.active {
+  border-color: #1677ff;
+  color: #1677ff;
 }
 
 .entity-health-grid {

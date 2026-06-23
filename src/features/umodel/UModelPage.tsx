@@ -6,6 +6,7 @@ import {
   Box,
   Cable,
   Bookmark,
+  ChevronDown,
   Crosshair,
   Database,
   Download,
@@ -1206,6 +1207,9 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
   const metrics = asUnknownArray(spec.metrics)
   const dimensions = asUnknownArray(spec.dimensions)
   const specRows = specDetailRows(spec, fields, metrics, dimensions)
+  const schemaGroups = schemaDetailGroups(fields, metrics, dimensions)
+  const [schemaOpen, setSchemaOpen] = useState(false)
+  const [visibleSpec, setVisibleSpec] = useState<SpecRow | null>(null)
   return (
     <div className="ume-form-detail">
       <label className="ume-form-field required">
@@ -1245,8 +1249,30 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
         <header>› 更多配置</header>
       </section>
 
-      <section className="ume-form-section">
-        <header>› Schema 信息 (Schema)</header>
+      <section className={schemaOpen ? 'ume-form-section open' : 'ume-form-section'}>
+        <button className="ume-form-section-header" type="button" onClick={() => setSchemaOpen((value) => !value)}>
+          <span>{schemaOpen ? '⌄' : '›'} Schema 信息 (Schema)</span>
+          <em>{schemaGroups.reduce((sum, group) => sum + group.rows.length, 0)}</em>
+        </button>
+        {schemaOpen && (
+          <div className="ume-schema-list">
+            {schemaGroups.map((group) => (
+              <div key={group.title} className="ume-schema-group">
+                <div className="ume-schema-group-title">
+                  <span>{group.title}</span>
+                  <em>{group.rows.length}</em>
+                </div>
+                {group.rows.map((row, index) => (
+                  <div key={`${group.title}-${row.name}-${index}`} className="ume-schema-row">
+                    <strong>{row.name}</strong>
+                    <span>{row.type}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+            {schemaGroups.length === 0 && <div className="ume-schema-empty">暂无 Schema 信息</div>}
+          </div>
+        )}
       </section>
 
       <section className="ume-form-section open">
@@ -1259,13 +1285,14 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
             </div>
             <div className="ume-spec-card-list">
               {group.rows.map((row, index) => (
-                <SpecCard key={`${group.title}-${row.name}-${index}`} row={row} />
+                <SpecCard key={`${group.title}-${row.name}-${index}`} row={row} onShow={setVisibleSpec} />
               ))}
             </div>
           </div>
         ))}
         {specRows.length === 0 && <div className="ume-schema-empty">暂无属性信息</div>}
       </section>
+      {visibleSpec && <SpecDisplayDialog row={visibleSpec} onClose={() => setVisibleSpec(null)} />}
     </div>
   )
 }
@@ -1279,7 +1306,7 @@ interface SpecRow {
   value?: unknown
 }
 
-function SpecCard({ row }: { row: SpecRow }) {
+function SpecCard({ row, onShow }: { row: SpecRow; onShow: (row: SpecRow) => void }) {
   return (
     <article className="ume-spec-card">
       <div className="ume-spec-card-main">
@@ -1294,13 +1321,93 @@ function SpecCard({ row }: { row: SpecRow }) {
       {row.value !== undefined && (
         <code className="ume-spec-value">{formatSpecValue(row.value)}</code>
       )}
-      <div className="ume-spec-card-actions" aria-hidden>
+      <div className="ume-spec-card-actions">
         <button type="button">⌃</button>
         <button type="button">⌄</button>
-        <button className="primary" type="button">编辑</button>
+        <button className="primary" type="button" onClick={() => onShow(row)}>显示</button>
         <button type="button">⌫</button>
       </div>
     </article>
+  )
+}
+
+function SpecDisplayDialog({ row, onClose }: { row: SpecRow; onClose: () => void }) {
+  const detail = specDisplayDetail(row)
+  return ReactDOM.createPortal(
+    <div className="ume-dialog-backdrop ume-spec-display-backdrop" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose()
+    }}>
+      <section className="ume-spec-display-dialog" role="dialog" aria-modal="true" aria-label={`显示${detail.title}`}>
+        <header className="ume-spec-display-header">
+          <strong>显示{detail.title}</strong>
+          <button className="ume-spec-display-close" type="button" aria-label="关闭" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </header>
+        <div className="ume-spec-display-body">
+          <label className="ume-spec-display-field required">
+            <span>Name <em>?</em> :</span>
+            <div className="ume-spec-display-input-wrap">
+              <input value={detail.name} readOnly />
+              <small>{detail.name.length}/127</small>
+            </div>
+          </label>
+          <label className="ume-spec-display-field required">
+            <span>显示名 (Display Name) <em>?</em> :</span>
+            <div className="ume-spec-display-i18n">
+              <b>中</b>
+              <input value={detail.displayZh} placeholder="请输入中文显示名" readOnly />
+              <b>EN</b>
+              <input value={detail.displayEn} placeholder="Please enter English display name" readOnly />
+            </div>
+          </label>
+          <label className="ume-spec-display-field">
+            <span>描述 (Description) <em>?</em> :</span>
+            <div className="ume-spec-display-i18n textarea">
+              <b>中</b>
+              <textarea value={detail.descriptionZh} placeholder="请输入中文描述" readOnly />
+              <b>EN</b>
+              <textarea value={detail.descriptionEn} placeholder="Please enter English description" readOnly />
+            </div>
+          </label>
+          <label className="ume-spec-display-field">
+            <span>简短描述 (Short Description) <em>?</em> :</span>
+            <div className="ume-spec-display-i18n">
+              <b>中</b>
+              <input value={detail.shortDescriptionZh} placeholder="请输入中文简短描述" readOnly />
+              <b>EN</b>
+              <input value={detail.shortDescriptionEn} placeholder="Please enter English short description" readOnly />
+            </div>
+          </label>
+          <label className="ume-spec-display-field">
+            <span>发布阶段 (Launch Stage) :</span>
+            <div className="ume-spec-display-select">
+              <input value={detail.launchStage} placeholder="请选择" readOnly />
+              <ChevronDown size={18} />
+            </div>
+          </label>
+          <label className="ume-spec-display-field required">
+            <span>字段类型 (Type) <em>?</em> :</span>
+            <div className="ume-spec-display-select">
+              <input value={detail.type} readOnly />
+              <ChevronDown size={18} />
+            </div>
+          </label>
+          <label className="ume-spec-display-field">
+            <span>语义角色 (Semantic Role) :</span>
+            <div className="ume-spec-display-select">
+              <input value={detail.semanticRole} placeholder="请选择" readOnly />
+              <ChevronDown size={18} />
+            </div>
+          </label>
+        </div>
+        <footer className="ume-spec-display-footer">
+          <button type="button" onClick={onClose}>取消</button>
+          <button className="primary" type="button" onClick={onClose}>确定</button>
+        </footer>
+      </section>
+    </div>,
+    document.body,
   )
 }
 
@@ -1334,6 +1441,27 @@ function specDetailRows(
   return groups
 }
 
+function schemaDetailGroups(fields: unknown[], metrics: unknown[], dimensions: unknown[]) {
+  const groups: Array<{ title: string; rows: Array<{ name: string; type: string }> }> = []
+  if (fields.length > 0) {
+    groups.push({ title: 'Fields', rows: fields.map((item, index) => schemaPreviewRow(item, `field_${index + 1}`)) })
+  }
+  if (metrics.length > 0) {
+    groups.push({ title: 'Metrics', rows: metrics.map((item, index) => schemaPreviewRow(item, `metric_${index + 1}`)) })
+  }
+  if (dimensions.length > 0) {
+    groups.push({ title: 'Dimensions', rows: dimensions.map((item, index) => schemaPreviewRow(item, `dimension_${index + 1}`)) })
+  }
+  return groups
+}
+
+function schemaPreviewRow(value: unknown, fallbackName: string) {
+  return {
+    name: schemaItemName(value) || fallbackName,
+    type: schemaItemType(value) || (typeof value === 'string' ? 'string' : typeof value),
+  }
+}
+
 function schemaSpecRow(value: unknown, fallbackName: string, spec: Record<string, unknown>): SpecRow {
   if (typeof value === 'string') {
     return {
@@ -1341,6 +1469,7 @@ function schemaSpecRow(value: unknown, fallbackName: string, spec: Record<string
       key: value,
       type: 'string',
       flags: fieldFlags(value, spec),
+      value,
     }
   }
   if (!isObject(value)) {
@@ -1359,6 +1488,7 @@ function schemaSpecRow(value: unknown, fallbackName: string, spec: Record<string
     type: optionalString(value.type) || optionalString(value.value_type) || 'string',
     description: localizedText(value.short_description, 'zh_cn') || localizedText(value.description, 'zh_cn') || optionalString(value.description),
     flags: fieldFlags(key, spec, value),
+    value,
   }
 }
 
@@ -1385,6 +1515,30 @@ function formatSpecValue(value: unknown) {
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
   if (Array.isArray(value)) return value.map((item) => (typeof item === 'string' ? item : stringify(item))).join(', ')
   return stringify(value)
+}
+
+function specDisplayDetail(row: SpecRow) {
+  const raw = isObject(row.value) ? row.value : {}
+  const displayZh = localizedText(raw.display_name, 'zh_cn') || row.name
+  const displayEn = localizedText(raw.display_name, 'en_us') || optionalString(raw.display_name_en) || row.key
+  const descriptionZh = localizedText(raw.description, 'zh_cn') || row.description || ''
+  const descriptionEn = localizedText(raw.description, 'en_us') || optionalString(raw.description_en) || ''
+  const shortDescriptionZh = localizedText(raw.short_description, 'zh_cn') || row.description || ''
+  const shortDescriptionEn = localizedText(raw.short_description, 'en_us') || optionalString(raw.short_description_en) || ''
+  const title = row.flags.includes('P') ? 'Keys' : row.name
+  return {
+    title,
+    name: optionalString(raw.name) || row.key,
+    displayZh,
+    displayEn,
+    descriptionZh,
+    descriptionEn,
+    shortDescriptionZh,
+    shortDescriptionEn,
+    launchStage: optionalString(raw.launch_stage) || optionalString(raw.launchStage) || '',
+    type: row.type || optionalString(raw.type) || 'string',
+    semanticRole: optionalString(raw.semantic_role) || optionalString(raw.semanticRole) || '',
+  }
 }
 
 function localizedText(value: unknown, locale: 'zh_cn' | 'en_us') {

@@ -305,7 +305,7 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
         </section>
       </main>
 
-      <EntityDetail record={selected} onClose={() => setSelected(null)} />
+      <EntityDetail record={view === 'topology' ? null : selected} onClose={() => setSelected(null)} />
     </div>
   )
 }
@@ -689,12 +689,19 @@ function EntityTopologyView({
 }) {
   const referenceTopology = useMemo(() => createReferenceStyleTopology(data), [data])
   const selectedId = selectedNode?.id
+  const selectedReferenceItem = selectedId
+    ? referenceTopology.nodes.find((item) => item.node.id === selectedId) || null
+    : null
   const [zoom, setZoom] = useState(10)
   const zoomScale = zoom / 10
+  const focusedZoomScale = selectedReferenceItem ? zoomScale * 10.5 : zoomScale
+  const zoomDisplay = Math.round(zoomScale * 98)
   const zoomProgress = (zoom - 10) / 36
-  const sceneX = -2550 * zoomProgress
-  const sceneY = -425 * zoomProgress
-  const sceneTransform = `translate(${sceneX} ${sceneY}) scale(${zoomScale})`
+  const focusCenterX = selectedReferenceItem ? selectedReferenceItem.x + selectedReferenceItem.width / 2 : 0
+  const focusCenterY = selectedReferenceItem ? selectedReferenceItem.y + selectedReferenceItem.height / 2 : 0
+  const sceneX = selectedReferenceItem ? 1239 - focusCenterX * focusedZoomScale : -2550 * zoomProgress
+  const sceneY = selectedReferenceItem ? 619 - focusCenterY * focusedZoomScale : -425 * zoomProgress
+  const sceneTransform = `translate(${sceneX} ${sceneY}) scale(${focusedZoomScale})`
   const changeZoom = (direction: 1 | -1) => {
     setZoom((value) => Math.max(10, Math.min(46, value + direction * 6)))
   }
@@ -706,79 +713,157 @@ function EntityTopologyView({
   }
 
   return (
-    <section className="entity-topology-full" onWheel={handleWheelZoom}>
-      <div className="entity-topology-zoom">
-        <button className="entity-topology-zoom-action" type="button" data-zoom-action="out" aria-label="缩小拓扑" onClick={zoomOut}>−</button>
-        <b>{zoom}%</b>
-        <button className="entity-topology-zoom-action" type="button" data-zoom-action="in" aria-label="放大拓扑" onClick={zoomIn}>＋</button>
-        <button className="entity-topology-zoom-action" type="button" data-zoom-action="fit" aria-label="适应画布" onClick={() => setZoom(10)}>⌖</button>
-      </div>
-      <svg className="entity-cms-reference-graph" viewBox="0 0 2478 1238" preserveAspectRatio="xMinYMin meet" role="img" aria-label="实体拓扑关系图">
-        <defs>
-          <pattern id="entity-reference-dot-grid" width="12" height="12" patternUnits="userSpaceOnUse">
-            <circle cx="1.2" cy="1.2" r="1" fill="#e7ebf1" />
-          </pattern>
-          <marker id="entity-reference-arrow" markerWidth="5" markerHeight="5" refX="4.6" refY="2.5" orient="auto">
-            <path d="M0,0 L5,2.5 L0,5 Z" fill="#c3c8d0" />
-          </marker>
-        </defs>
-        <rect width="2478" height="1238" fill="#fff" />
-        <rect width="2478" height="1238" fill="url(#entity-reference-dot-grid)" opacity="0.52" />
-        <g className="entity-reference-scene" transform={sceneTransform}>
-          <g className="entity-reference-links">
-            {referenceTopology.edges.map((edge) => (
-              <g key={edge.id}>
-                <path d={referenceEdgePath(edge)} markerEnd="url(#entity-reference-arrow)" />
-                {edge.showLabel && (
-                  <text x={(edge.source.x + edge.target.x) / 2} y={(edge.source.y + edge.target.y) / 2 - 4}>
-                    {edge.label}
-                  </text>
-                )}
-              </g>
-            ))}
-          </g>
-          <g className="entity-reference-nodes">
-            {referenceTopology.nodes.map((item, index) => (
-              <g
-                key={item.node.id}
-                className={selectedId === item.node.id ? 'selected' : ''}
-                transform={`translate(${item.x} ${item.y})`}
-                onClick={() => {
-                  onSelectNode(item.node)
-                  onFocusType(item.node.type)
-                }}
-              >
-                <clipPath id={`entity-reference-title-clip-${index}`}>
-                  <rect x="7.6" y="3.2" width={Math.max(12, item.width - 26)} height="6.4" />
-                </clipPath>
-                <clipPath id={`entity-reference-subtitle-clip-${index}`}>
-                  <rect x="7.6" y={item.height - 6.8} width={Math.max(17, item.width - 9)} height="5.4" />
-                </clipPath>
-                <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx="1.8" fill={item.color} />
-                <rect className="entity-reference-card" width={item.width} height={item.height} rx="1.8" fill="none" stroke={item.color} />
-                <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="1.55" rx="0.78" fill={item.color} />
-                <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(3.1 5.3) scale(0.17)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <text x="7.6" y="7.45" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
-                <text x={item.width - 2} y="7.45" className="count" textAnchor="end">已接入: {item.access}</text>
-                <text x="7.6" y={item.height - 2.8} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
-              </g>
-            ))}
-          </g>
-        </g>
-      </svg>
-      <div className="entity-cms-minimap" aria-hidden="true">
-        <svg viewBox="0 0 2478 1238">
+    <section className={selectedReferenceItem ? 'entity-topology-split has-detail' : 'entity-topology-split'}>
+      <div className="entity-topology-full" onWheel={handleWheelZoom}>
+        <div className="entity-topology-zoom">
+          <button className="entity-topology-zoom-action" type="button" data-zoom-action="out" aria-label="缩小拓扑" onClick={zoomOut}>−</button>
+          <b>{zoomDisplay}%</b>
+          <button className="entity-topology-zoom-action" type="button" data-zoom-action="in" aria-label="放大拓扑" onClick={zoomIn}>＋</button>
+          <button className="entity-topology-zoom-action" type="button" data-zoom-action="fit" aria-label="适应画布" onClick={() => setZoom(10)}>⌖</button>
+        </div>
+        <svg className="entity-cms-reference-graph" viewBox="0 0 2478 1238" preserveAspectRatio="xMinYMin meet" role="img" aria-label="实体拓扑关系图">
+          <defs>
+            <pattern id="entity-reference-dot-grid" width="12" height="12" patternUnits="userSpaceOnUse">
+              <circle cx="1.2" cy="1.2" r="1" fill="#e7ebf1" />
+            </pattern>
+            <marker id="entity-reference-arrow" markerWidth="5" markerHeight="5" refX="4.6" refY="2.5" orient="auto">
+              <path d="M0,0 L5,2.5 L0,5 Z" fill="#c3c8d0" />
+            </marker>
+          </defs>
           <rect width="2478" height="1238" fill="#fff" />
-          <g transform="translate(0 0)">
-            {referenceTopology.nodes.map((item) => (
-              <rect key={item.node.id} x={item.x} y={item.y} width="12" height="4" fill="#cfd5dd" opacity="0.75" />
-            ))}
+          <rect width="2478" height="1238" fill="url(#entity-reference-dot-grid)" opacity="0.52" />
+          <g className="entity-reference-scene" transform={sceneTransform}>
+            <g className="entity-reference-links">
+              {referenceTopology.edges.map((edge) => (
+                <g key={edge.id}>
+                  <path d={referenceEdgePath(edge)} markerEnd="url(#entity-reference-arrow)" />
+                  {edge.showLabel && (
+                    <text x={(edge.source.x + edge.target.x) / 2} y={(edge.source.y + edge.target.y) / 2 - 4}>
+                      {edge.label}
+                    </text>
+                  )}
+                </g>
+              ))}
+            </g>
+            <g className="entity-reference-nodes">
+              {referenceTopology.nodes.map((item, index) => (
+                <g
+                  key={item.node.id}
+                  className={selectedId === item.node.id ? 'selected' : ''}
+                  transform={`translate(${item.x} ${item.y})`}
+                  onClick={() => {
+                    onSelectNode(item.node)
+                    onFocusType(item.node.type)
+                  }}
+                >
+                  <clipPath id={`entity-reference-title-clip-${index}`}>
+                    <rect x="7.6" y="3.2" width={Math.max(12, item.width - 26)} height="6.4" />
+                  </clipPath>
+                  <clipPath id={`entity-reference-subtitle-clip-${index}`}>
+                    <rect x="7.6" y={item.height - 6.8} width={Math.max(17, item.width - 9)} height="5.4" />
+                  </clipPath>
+                  <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx="1.8" fill={item.color} />
+                  <rect className="entity-reference-card" width={item.width} height={item.height} rx="1.8" fill="none" stroke={item.color} />
+                  <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="1.55" rx="0.78" fill={item.color} />
+                  <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(3.1 5.3) scale(0.17)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <text x="7.6" y="7.45" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
+                  <text x={item.width - 2} y="7.45" className="count" textAnchor="end">查询量: {item.access}</text>
+                  <text x="7.6" y={item.height - 2.8} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
+                </g>
+              ))}
+            </g>
           </g>
-          <rect x="430" y="80" width="1080" height="720" fill="none" stroke="#e0e5ec" strokeWidth="34" />
         </svg>
+        <div className="entity-cms-minimap" aria-hidden="true">
+          <svg viewBox="0 0 2478 1238">
+            <rect width="2478" height="1238" fill="#fff" />
+            <g transform="translate(0 0)">
+              {referenceTopology.nodes.map((item) => (
+                <rect key={item.node.id} x={item.x} y={item.y} width="12" height="4" fill="#cfd5dd" opacity="0.75" />
+              ))}
+            </g>
+            <rect x="430" y="80" width="1080" height="720" fill="none" stroke="#e0e5ec" strokeWidth="34" />
+          </svg>
+        </div>
       </div>
+      {selectedReferenceItem && <EntityTopologyMetricPanel item={selectedReferenceItem} />}
     </section>
   )
+}
+
+function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
+  const rows = topologyMetricRowsFor(item)
+  const total = topologyMetricTotalFor(item)
+  return (
+    <aside className="entity-topology-detail-panel" aria-label={`${item.title}拓扑明细`}>
+      <div className="entity-topology-detail-table-wrap">
+        <table className="entity-topology-detail-table">
+          <thead>
+            <tr>
+              <th>{item.title}名称</th>
+              <th>平均请求次数 <span className="entity-topology-info">?</span><span className="entity-topology-sort" /></th>
+              <th>平均错误次数 <span className="entity-topology-info">?</span><span className="entity-topology-sort" /></th>
+              <th>平均延迟时间 <span className="entity-topology-sort" /></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.name}>
+                <td><a href="#entity-topology-detail" onClick={(event) => event.preventDefault()}>{row.name}</a></td>
+                <td>{row.requests}</td>
+                <td>{row.errors}</td>
+                <td>{row.latency}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="entity-topology-detail-footer">
+          <span>每页显示:</span>
+          <button type="button">10 <ChevronDown size={14} /></button>
+          <span>总数: {total}</span>
+          <button type="button" disabled>‹ 上一页</button>
+          <button type="button" className="active">1</button>
+          <button type="button">2</button>
+          <button type="button">下一页 ›</button>
+        </div>
+      </div>
+    </aside>
+  )
+}
+
+function topologyMetricRowsFor(item: ReferenceTopologyNode) {
+  if (item.title.includes('大模型')) {
+    return [
+      { name: 'qwen3.7-plus', requests: '', errors: '', latency: '' },
+      { name: 'wanx2.1-t2v-turbo', requests: '1', errors: '', latency: '' },
+      { name: 'qwen3-max', requests: '5', errors: '', latency: '' },
+      { name: 'ack-vercel-demo-agent', requests: '8', errors: '', latency: '' },
+      { name: 'wan2.7-image', requests: '2', errors: '', latency: '' },
+      { name: 'dashscope/qwen-plus', requests: '86', errors: '', latency: '' },
+      { name: 'auto', requests: '', errors: '', latency: '' },
+      { name: 'qwen3.6-plus', requests: '', errors: '', latency: '' },
+      { name: 'qwen3.5-flash', requests: '10', errors: '', latency: '' },
+      { name: 'cosyvoice-v1', requests: '1', errors: '', latency: '' },
+    ]
+  }
+
+  const baseName = item.subtitle.split('.').filter(Boolean).slice(-1)[0] || item.title.toLowerCase().replace(/\s+/g, '-')
+  const rows = Array.from({ length: 10 }, (_, index) => {
+    const value = index === 0 ? '' : String(((item.access + index * 7) % 96) || index)
+    return {
+      name: `${baseName}-${String(index + 1).padStart(2, '0')}`,
+      requests: value,
+      errors: index % 4 === 0 ? '0' : '',
+      latency: index % 3 === 0 ? `${18 + ((item.access + index) % 82)} ms` : '',
+    }
+  })
+  if (rows[0]) rows[0].name = item.title
+  return rows
+}
+
+function topologyMetricTotalFor(item: ReferenceTopologyNode) {
+  if (item.title.includes('大模型')) return 15
+  return Math.max(10, item.access)
 }
 
 function EntityHealthGrid({ records, onSelect }: { records: EntityRecord[]; onSelect: (record: EntityRecord) => void }) {
