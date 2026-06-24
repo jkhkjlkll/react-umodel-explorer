@@ -1,0 +1,345 @@
+From 46cb08404c10c8661b59890f4a19596b31b36b34 Mon Sep 17 00:00:00 2001
+From: jkhkjlkll <jkhkjlkll@users.noreply.github.com>
+Date: Wed, 24 Jun 2026 09:43:06 +0800
+Subject: [PATCH] Polish omodel detail panels and card labels
+
+---
+ .../umodel/UModelOpenTopoXGraphView.tsx       |  18 ++-
+ src/features/umodel/UModelPage.tsx            | 108 ++++++++++--------
+ src/features/umodel/graphModel.ts             |   2 +-
+ src/features/umodel/umodel.css                |  43 ++++++-
+ 4 files changed, 118 insertions(+), 53 deletions(-)
+
+diff --git a/src/features/umodel/UModelOpenTopoXGraphView.tsx b/src/features/umodel/UModelOpenTopoXGraphView.tsx
+index 348d71d..0b87836 100644
+--- a/src/features/umodel/UModelOpenTopoXGraphView.tsx
++++ b/src/features/umodel/UModelOpenTopoXGraphView.tsx
+@@ -7,7 +7,7 @@ import 'opentopox/style.css'
+ import type { UModelElement } from '../../api/types'
+ import { useI18n, type TFunction } from '../../i18n'
+ import { UMODEL_NODE_HEIGHT, UMODEL_NODE_WIDTH, type GraphModel, type UModelEdgeData, type UModelNodeData } from './graphModel'
+-import { colorForKind, elementKey, isLinkElement, labelForKind, type BackgroundStyle, type ZoomLevel } from './model'
++import { colorForKind, elementKey, isLinkElement, labelForKind, maxVisibleTags, type BackgroundStyle, type ZoomLevel } from './model'
+ 
+ registerNodeShape('umodelNode', (node: { data?: Record<string, unknown> }) => renderUModelNode(node.data || {}))
+ 
+@@ -269,6 +269,8 @@ function toOpenTopoXData(graph: GraphModel): TopologyGraphData & Record<string,
+           domain: data.domain,
+           kind: data.kind,
+           actions: data.actions,
++          tags: data.tags,
++          totalTagCount: data.totalTagCount,
+           color: color.color,
+           colorBg: color.bg,
+           colorText: color.text,
+@@ -421,12 +423,24 @@ function renderUModelNode(data: Record<string, unknown>) {
+   const label = String(data.label || data.kind || 'OModel')
+   const title = String(data.title || '')
+   const domain = String(data.domain || 'unknown')
++  const tags = Array.isArray(data.tags) ? data.tags.map(String).filter(Boolean) : []
++  const totalTagCount = typeof data.totalTagCount === 'number' ? data.totalTagCount : tags.length
++  const visibleTags = tags.slice(0, maxVisibleTags)
++  const hiddenTotal = Math.max(0, totalTagCount - Math.min(maxVisibleTags, tags.length))
++  const tagHtml = visibleTags.length > 0
++    ? `
++            <div class="ume-node-tags">
++              ${visibleTags.map((tag) => `<span title="${escapeAttr(tag)}">${escapeHtml(tag)}</span>`).join('')}
++              ${hiddenTotal > 0 ? `<span>+${hiddenTotal}</span>` : ''}
++            </div>`
++    : ''
+   return `
+     <div class="v2-node-card ume-map-node" style="--node-color: ${escapeAttr(color)}">
+       <span class="ume-node-menu-trigger" role="button" aria-label="Open node actions" title="Actions">...</span>
+       <div class="v2-zoom-mini">
+         <div class="v2-node-card-body ume-node-mini" style="border-color: ${escapeAttr(color)}">
+           <span style="color: ${escapeAttr(color)}">${escapeHtml(title)}</span>
++          ${tagHtml}
+         </div>
+       </div>
+       <div class="v2-zoom-compact">
+@@ -435,6 +449,7 @@ function renderUModelNode(data: Record<string, unknown>) {
+           <div class="ume-node-compact-main">
+             <span class="ume-kind-tag large" style="background: ${escapeAttr(colorBg)}; color: ${escapeAttr(colorText)}">${escapeHtml(label)}</span>
+             <strong>${escapeHtml(title)}</strong>
++            ${tagHtml}
+           </div>
+         </div>
+       </div>
+@@ -447,6 +462,7 @@ function renderUModelNode(data: Record<string, unknown>) {
+               <code>${escapeHtml(domain)}</code>
+             </div>
+             <strong class="ume-node-title">${escapeHtml(title)}</strong>
++            ${tagHtml}
+           </div>
+         </div>
+       </div>
+diff --git a/src/features/umodel/UModelPage.tsx b/src/features/umodel/UModelPage.tsx
+index e3a7a6e..7afa79e 100644
+--- a/src/features/umodel/UModelPage.tsx
++++ b/src/features/umodel/UModelPage.tsx
+@@ -1208,7 +1208,10 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
+   const dimensions = asUnknownArray(spec.dimensions)
+   const specRows = specDetailRows(spec, fields, metrics, dimensions)
+   const schemaGroups = schemaDetailGroups(fields, metrics, dimensions)
++  const [metadataOpen, setMetadataOpen] = useState(true)
++  const [moreOpen, setMoreOpen] = useState(false)
+   const [schemaOpen, setSchemaOpen] = useState(false)
++  const [specOpen, setSpecOpen] = useState(true)
+   const [visibleSpec, setVisibleSpec] = useState<SpecRow | null>(null)
+   return (
+     <div className="ume-form-detail">
+@@ -1219,34 +1222,43 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
+         </div>
+       </label>
+ 
+-      <section className="ume-form-section open">
+-        <header>⌄ 元数据信息 (Metadata)</header>
+-        <label className="ume-form-field required">
+-          <span>域 (Domain) :</span>
+-          <input value={element.domain || ''} readOnly />
+-        </label>
+-        <label className="ume-form-field required">
+-          <span>Name :</span>
+-          <input value={element.name || ''} readOnly />
+-        </label>
+-        <label className="ume-form-field required">
+-          <span>显示名 (Display Name) :</span>
+-          <div className="ume-i18n-row">
+-            <input value={localizedText((spec.display_name as unknown) || element.name, 'zh_cn')} placeholder="请输入中文显示名" readOnly />
+-            <input value={localizedText((spec.display_name as unknown) || element.name, 'en_us')} placeholder="Please enter" readOnly />
+-          </div>
+-        </label>
+-        <label className="ume-form-field">
+-          <span>描述 (Description) :</span>
+-          <div className="ume-i18n-row">
+-            <textarea value={description} placeholder="请输入中文描述" readOnly />
+-            <textarea value={description} placeholder="Please enter English description" readOnly />
+-          </div>
+-        </label>
++      <section className={metadataOpen ? 'ume-form-section open' : 'ume-form-section'}>
++        <button className="ume-form-section-header" type="button" onClick={() => setMetadataOpen((value) => !value)}>
++          <span>{metadataOpen ? '⌄' : '›'} 元数据信息 (Metadata)</span>
++        </button>
++        {metadataOpen && (
++          <>
++            <label className="ume-form-field required">
++              <span>域 (Domain) :</span>
++              <input value={element.domain || ''} readOnly />
++            </label>
++            <label className="ume-form-field required">
++              <span>Name :</span>
++              <input value={element.name || ''} readOnly />
++            </label>
++            <label className="ume-form-field required">
++              <span>显示名 (Display Name) :</span>
++              <div className="ume-i18n-row">
++                <input value={localizedText((spec.display_name as unknown) || element.name, 'zh_cn')} placeholder="请输入中文显示名" readOnly />
++                <input value={localizedText((spec.display_name as unknown) || element.name, 'en_us')} placeholder="Please enter" readOnly />
++              </div>
++            </label>
++            <label className="ume-form-field">
++              <span>描述 (Description) :</span>
++              <div className="ume-i18n-row">
++                <textarea value={description} placeholder="请输入中文描述" readOnly />
++                <textarea value={description} placeholder="Please enter English description" readOnly />
++              </div>
++            </label>
++          </>
++        )}
+       </section>
+ 
+-      <section className="ume-form-section">
+-        <header>› 更多配置</header>
++      <section className={moreOpen ? 'ume-form-section open' : 'ume-form-section'}>
++        <button className="ume-form-section-header" type="button" onClick={() => setMoreOpen((value) => !value)}>
++          <span>{moreOpen ? '⌄' : '›'} 更多配置</span>
++        </button>
++        {moreOpen && <div className="ume-schema-empty">暂无更多配置</div>}
+       </section>
+ 
+       <section className={schemaOpen ? 'ume-form-section open' : 'ume-form-section'}>
+@@ -1275,22 +1287,28 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
+         )}
+       </section>
+ 
+-      <section className="ume-form-section open">
+-        <header>⌄ 属性信息 (Spec)</header>
+-        {specRows.map((group) => (
+-          <div key={group.title} className="ume-spec-group">
+-            <div className="ume-spec-group-title">
+-              <span>{group.title}</span>
+-              <em>{group.rows.length}</em>
+-            </div>
+-            <div className="ume-spec-card-list">
+-              {group.rows.map((row, index) => (
+-                <SpecCard key={`${group.title}-${row.name}-${index}`} row={row} onShow={setVisibleSpec} />
+-              ))}
+-            </div>
+-          </div>
+-        ))}
+-        {specRows.length === 0 && <div className="ume-schema-empty">暂无属性信息</div>}
++      <section className={specOpen ? 'ume-form-section open' : 'ume-form-section'}>
++        <button className="ume-form-section-header" type="button" onClick={() => setSpecOpen((value) => !value)}>
++          <span>{specOpen ? '⌄' : '›'} 属性信息 (Spec)</span>
++        </button>
++        {specOpen && (
++          <>
++            {specRows.map((group) => (
++              <div key={group.title} className="ume-spec-group">
++                <div className="ume-spec-group-title">
++                  <span>{group.title}</span>
++                  <em>{group.rows.length}</em>
++                </div>
++                <div className="ume-spec-card-list">
++                  {group.rows.map((row, index) => (
++                    <SpecCard key={`${group.title}-${row.name}-${index}`} row={row} onShow={setVisibleSpec} />
++                  ))}
++                </div>
++              </div>
++            ))}
++            {specRows.length === 0 && <div className="ume-schema-empty">暂无属性信息</div>}
++          </>
++        )}
+       </section>
+       {visibleSpec && <SpecDisplayDialog row={visibleSpec} onClose={() => setVisibleSpec(null)} />}
+     </div>
+@@ -1324,7 +1342,7 @@ function SpecCard({ row, onShow }: { row: SpecRow; onShow: (row: SpecRow) => voi
+       <div className="ume-spec-card-actions">
+         <button type="button">⌃</button>
+         <button type="button">⌄</button>
+-        <button className="primary" type="button" onClick={() => onShow(row)}>显示</button>
++        <button className="primary" type="button" onClick={() => onShow(row)}>查看</button>
+         <button type="button">⌫</button>
+       </div>
+     </article>
+@@ -1337,9 +1355,9 @@ function SpecDisplayDialog({ row, onClose }: { row: SpecRow; onClose: () => void
+     <div className="ume-dialog-backdrop ume-spec-display-backdrop" onMouseDown={(event) => {
+       if (event.target === event.currentTarget) onClose()
+     }}>
+-      <section className="ume-spec-display-dialog" role="dialog" aria-modal="true" aria-label={`显示${detail.title}`}>
++      <section className="ume-spec-display-dialog" role="dialog" aria-modal="true" aria-label={`查看${detail.title}`}>
+         <header className="ume-spec-display-header">
+-          <strong>显示{detail.title}</strong>
++          <strong>查看{detail.title}</strong>
+           <button className="ume-spec-display-close" type="button" aria-label="关闭" onClick={onClose}>
+             <X size={20} />
+           </button>
+diff --git a/src/features/umodel/graphModel.ts b/src/features/umodel/graphModel.ts
+index 1d4d6ac..abdeac6 100644
+--- a/src/features/umodel/graphModel.ts
++++ b/src/features/umodel/graphModel.ts
+@@ -81,7 +81,7 @@ export interface GraphEdge<TData extends Record<string, unknown> = Record<string
+ }
+ 
+ export const UMODEL_NODE_WIDTH = 176
+-export const UMODEL_NODE_HEIGHT = 56
++export const UMODEL_NODE_HEIGHT = 64
+ const ENTITY_LINK_NODE_MAX_WIDTH = 170
+ const ENTITY_LINK_NODE_MIN_WIDTH = 86
+ const ENTITY_LINK_NODE_HEIGHT = 34
+diff --git a/src/features/umodel/umodel.css b/src/features/umodel/umodel.css
+index 6b35069..de0da8f 100644
+--- a/src/features/umodel/umodel.css
++++ b/src/features/umodel/umodel.css
+@@ -1802,7 +1802,7 @@
+   background: #fff;
+ }
+ 
+-.ume-node-mini span {
++.ume-node-mini > span {
+   width: 100%;
+   overflow: hidden;
+   font-size: 32px;
+@@ -2489,7 +2489,7 @@ body.ume-resizing-detail .ume-detail-panel {
+ .ume-v2 .ume-node-full {
+   box-sizing: border-box;
+   width: 176px !important;
+-  min-height: 56px;
++  min-height: 64px;
+   display: flex;
+   overflow: hidden;
+   align-items: stretch;
+@@ -2502,7 +2502,7 @@ body.ume-resizing-detail .ume-detail-panel {
+   width: auto !important;
+   max-width: 118px;
+   min-width: 58px;
+-  min-height: 24px !important;
++  min-height: 46px !important;
+   border-radius: 4px;
+ }
+ 
+@@ -2529,7 +2529,7 @@ body.ume-resizing-detail .ume-detail-panel {
+ .v2-graph-container[data-zoom="mini"] .ume-map-node,
+ .v2-graph-container[data-zoom="compact"] .ume-map-node {
+   width: 176px;
+-  height: 56px;
++  height: 64px;
+   align-items: center;
+ }
+ 
+@@ -2545,7 +2545,7 @@ body.ume-resizing-detail .ume-detail-panel {
+   width: 100% !important;
+   max-width: none;
+   min-width: 0;
+-  height: 24px;
++  height: 46px;
+   box-sizing: border-box;
+   border-color: color-mix(in srgb, var(--node-color) 58%, #ffffff);
+   background: color-mix(in srgb, var(--node-color) 7%, #ffffff);
+@@ -2589,7 +2589,7 @@ body.ume-resizing-detail .ume-detail-panel {
+ }
+ 
+ .ume-v2 .ume-node-title {
+-  margin-bottom: 0;
++  margin-bottom: 4px;
+   max-width: 140px;
+   color: var(--node-color);
+   font-size: 10px;
+@@ -2600,6 +2600,22 @@ body.ume-resizing-detail .ume-detail-panel {
+   white-space: nowrap;
+ }
+ 
++.ume-v2 .ume-node-tags {
++  max-width: 150px;
++  gap: 4px;
++}
++
++.ume-v2 .ume-node-tags span {
++  max-width: 62px;
++  padding: 1px 6px;
++  border-radius: 5px;
++  background: color-mix(in srgb, var(--node-color, #8b5cf6) 12%, #ffffff);
++  color: color-mix(in srgb, var(--node-color, #8b5cf6) 82%, #374151);
++  font-size: 10px;
++  font-weight: 700;
++  line-height: 16px;
++}
++
+ .v2-graph-container[data-zoom="mini"] .ume-node-title,
+ .v2-graph-container[data-zoom="compact"] .ume-node-title {
+   max-width: 84px;
+@@ -2607,6 +2623,21 @@ body.ume-resizing-detail .ume-detail-panel {
+   line-height: 12px;
+ }
+ 
++.v2-graph-container[data-zoom="mini"] .ume-node-tags,
++.v2-graph-container[data-zoom="compact"] .ume-node-tags {
++  max-width: 126px;
++  margin-top: 3px;
++}
++
++.v2-graph-container[data-zoom="mini"] .ume-node-tags span,
++.v2-graph-container[data-zoom="compact"] .ume-node-tags span {
++  max-width: 38px;
++  padding: 0 5px;
++  border-radius: 4px;
++  font-size: 8px;
++  line-height: 13px;
++}
++
+ .ume-opentopox-wrap {
+   overflow: hidden;
+   background-color: var(--ume-color-bg);
+-- 
+2.50.1 (Apple Git-155)
+

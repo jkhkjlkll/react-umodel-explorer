@@ -6,13 +6,74 @@ Repository: `react-umodel-explorer`
 
 Branch when generated: `codex/opentopox-experiment`
 
-Generated at: `2026-06-23 16:34 +0800`
+Generated at: `2026-06-24 09:43 +0800`
 
 ## Summary
 
-There are 5 commits after `2026-06-18 00:00:00 +0800` on the current branch.
+There are 7 commits after `2026-06-18 00:00:00 +0800` on the current branch.
 
 ## Commits
+
+### 46cb084 - Polish omodel detail panels and card labels
+
+- Full hash: `46cb08404c10c8661b59890f4a19596b31b36b34`
+- Author: `jkhkjlkll <jkhkjlkll@users.noreply.github.com>`
+- Date: `2026-06-24 09:43:06 +0800`
+- Full patch: `patches/0001-Polish-omodel-detail-panels-and-card-labels.patch`
+
+#### Changed Files
+
+| Status | File |
+| --- | --- |
+| M | `src/features/umodel/UModelOpenTopoXGraphView.tsx` |
+| M | `src/features/umodel/UModelPage.tsx` |
+| M | `src/features/umodel/graphModel.ts` |
+| M | `src/features/umodel/umodel.css` |
+
+#### Change Notes For AI Review
+
+- Made all OModel detail form sections collapsible, including Metadata, More Config, Schema, and Spec.
+- Changed the OModel property action label and dialog title from `显示` to `查看`, while keeping `显示名 (Display Name)` unchanged.
+- Passed precomputed OModel field tags into the OpenTopoX custom node renderer.
+- Rendered field label chips under OModel graph cards in full, compact, and mini zoom modes.
+- Increased OModel card height from 56px to 64px so field labels are visible without clipping.
+- Tuned card label chip styles to match the root project's `.ume-node-tags` treatment while preserving the Aliyun-style card look.
+
+#### Diff Stat
+
+```text
+src/features/umodel/UModelOpenTopoXGraphView.tsx |  18 +++-
+src/features/umodel/UModelPage.tsx               | 108 +++++++++++++----------
+src/features/umodel/graphModel.ts                |   2 +-
+src/features/umodel/umodel.css                   |  43 +++++++--
+4 files changed, 118 insertions(+), 53 deletions(-)
+```
+
+### c601609 - Add topology detail patch log
+
+- Full hash: `c60160969bba8983cc9c60bc83ae3e7c4352228c`
+- Author: `jkhkjlkll <jkhkjlkll@users.noreply.github.com>`
+- Date: `2026-06-23 16:37:32 +0800`
+
+#### Changed Files
+
+| Status | File |
+| --- | --- |
+| M | `COMMIT_LOG.md` |
+| A | `patches/0001-Add-topology-detail-panel-and-spec-display-dialog.patch` |
+
+#### Change Notes For AI Review
+
+- Added the full patch file for `4c6d665` so ZIP-based handoff can inspect the exact topology detail and OModel property dialog diff.
+- Updated the offline commit log with topology detail panel and spec display dialog context.
+
+#### Diff Stat
+
+```text
+COMMIT_LOG.md                                                |   62 +-
+patches/0001-Add-topology-detail-panel-and-spec-display-dialog.patch | 1025 ++++++++++++++++++++
+2 files changed, 1085 insertions(+), 2 deletions(-)
+```
 
 ### 4c6d665 - Add topology detail panel and spec display dialog
 
