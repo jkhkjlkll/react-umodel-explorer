@@ -7,7 +7,7 @@ import 'opentopox/style.css'
 import type { UModelElement } from '../../api/types'
 import { useI18n, type TFunction } from '../../i18n'
 import { UMODEL_NODE_HEIGHT, UMODEL_NODE_WIDTH, type GraphModel, type UModelEdgeData, type UModelNodeData } from './graphModel'
-import { colorForKind, elementKey, isLinkElement, labelForKind, type BackgroundStyle, type ZoomLevel } from './model'
+import { colorForKind, elementKey, isLinkElement, labelForKind, maxVisibleTags, type BackgroundStyle, type ZoomLevel } from './model'
 
 registerNodeShape('umodelNode', (node: { data?: Record<string, unknown> }) => renderUModelNode(node.data || {}))
 
@@ -269,6 +269,8 @@ function toOpenTopoXData(graph: GraphModel): TopologyGraphData & Record<string, 
           domain: data.domain,
           kind: data.kind,
           actions: data.actions,
+          tags: data.tags,
+          totalTagCount: data.totalTagCount,
           color: color.color,
           colorBg: color.bg,
           colorText: color.text,
@@ -421,12 +423,24 @@ function renderUModelNode(data: Record<string, unknown>) {
   const label = String(data.label || data.kind || 'OModel')
   const title = String(data.title || '')
   const domain = String(data.domain || 'unknown')
+  const tags = Array.isArray(data.tags) ? data.tags.map(String).filter(Boolean) : []
+  const totalTagCount = typeof data.totalTagCount === 'number' ? data.totalTagCount : tags.length
+  const visibleTags = tags.slice(0, maxVisibleTags)
+  const hiddenTotal = Math.max(0, totalTagCount - Math.min(maxVisibleTags, tags.length))
+  const tagHtml = visibleTags.length > 0
+    ? `
+            <div class="ume-node-tags">
+              ${visibleTags.map((tag) => `<span title="${escapeAttr(tag)}">${escapeHtml(tag)}</span>`).join('')}
+              ${hiddenTotal > 0 ? `<span>+${hiddenTotal}</span>` : ''}
+            </div>`
+    : ''
   return `
     <div class="v2-node-card ume-map-node" style="--node-color: ${escapeAttr(color)}">
       <span class="ume-node-menu-trigger" role="button" aria-label="Open node actions" title="Actions">...</span>
       <div class="v2-zoom-mini">
         <div class="v2-node-card-body ume-node-mini" style="border-color: ${escapeAttr(color)}">
           <span style="color: ${escapeAttr(color)}">${escapeHtml(title)}</span>
+          ${tagHtml}
         </div>
       </div>
       <div class="v2-zoom-compact">
@@ -435,6 +449,7 @@ function renderUModelNode(data: Record<string, unknown>) {
           <div class="ume-node-compact-main">
             <span class="ume-kind-tag large" style="background: ${escapeAttr(colorBg)}; color: ${escapeAttr(colorText)}">${escapeHtml(label)}</span>
             <strong>${escapeHtml(title)}</strong>
+            ${tagHtml}
           </div>
         </div>
       </div>
@@ -447,6 +462,7 @@ function renderUModelNode(data: Record<string, unknown>) {
               <code>${escapeHtml(domain)}</code>
             </div>
             <strong class="ume-node-title">${escapeHtml(title)}</strong>
+            ${tagHtml}
           </div>
         </div>
       </div>

@@ -81,7 +81,7 @@ export interface GraphEdge<TData extends Record<string, unknown> = Record<string
 }
 
 export const UMODEL_NODE_WIDTH = 176
-export const UMODEL_NODE_HEIGHT = 56
+export const UMODEL_NODE_HEIGHT = 64
 const ENTITY_LINK_NODE_MAX_WIDTH = 170
 const ENTITY_LINK_NODE_MIN_WIDTH = 86
 const ENTITY_LINK_NODE_HEIGHT = 34

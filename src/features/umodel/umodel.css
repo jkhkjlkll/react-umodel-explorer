@@ -1802,7 +1802,7 @@
   background: #fff;
 }
 
-.ume-node-mini span {
+.ume-node-mini > span {
   width: 100%;
   overflow: hidden;
   font-size: 32px;
@@ -2489,7 +2489,7 @@ body.ume-resizing-detail .ume-detail-panel {
 .ume-v2 .ume-node-full {
   box-sizing: border-box;
   width: 176px !important;
-  min-height: 56px;
+  min-height: 64px;
   display: flex;
   overflow: hidden;
   align-items: stretch;
@@ -2502,7 +2502,7 @@ body.ume-resizing-detail .ume-detail-panel {
   width: auto !important;
   max-width: 118px;
   min-width: 58px;
-  min-height: 24px !important;
+  min-height: 46px !important;
   border-radius: 4px;
 }
 
@@ -2529,7 +2529,7 @@ body.ume-resizing-detail .ume-detail-panel {
 .v2-graph-container[data-zoom="mini"] .ume-map-node,
 .v2-graph-container[data-zoom="compact"] .ume-map-node {
   width: 176px;
-  height: 56px;
+  height: 64px;
   align-items: center;
 }
 
@@ -2545,7 +2545,7 @@ body.ume-resizing-detail .ume-detail-panel {
   width: 100% !important;
   max-width: none;
   min-width: 0;
-  height: 24px;
+  height: 46px;
   box-sizing: border-box;
   border-color: color-mix(in srgb, var(--node-color) 58%, #ffffff);
   background: color-mix(in srgb, var(--node-color) 7%, #ffffff);
@@ -2589,7 +2589,7 @@ body.ume-resizing-detail .ume-detail-panel {
 }
 
 .ume-v2 .ume-node-title {
-  margin-bottom: 0;
+  margin-bottom: 4px;
   max-width: 140px;
   color: var(--node-color);
   font-size: 10px;
@@ -2600,11 +2600,42 @@ body.ume-resizing-detail .ume-detail-panel {
   white-space: nowrap;
 }
 
+.ume-v2 .ume-node-tags {
+  max-width: 150px;
+  gap: 4px;
+}
+
+.ume-v2 .ume-node-tags span {
+  max-width: 62px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--node-color, #8b5cf6) 12%, #ffffff);
+  color: color-mix(in srgb, var(--node-color, #8b5cf6) 82%, #374151);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+}
+
 .v2-graph-container[data-zoom="mini"] .ume-node-title,
 .v2-graph-container[data-zoom="compact"] .ume-node-title {
   max-width: 84px;
   font-size: 8px;
   line-height: 12px;
+}
+
+.v2-graph-container[data-zoom="mini"] .ume-node-tags,
+.v2-graph-container[data-zoom="compact"] .ume-node-tags {
+  max-width: 126px;
+  margin-top: 3px;
+}
+
+.v2-graph-container[data-zoom="mini"] .ume-node-tags span,
+.v2-graph-container[data-zoom="compact"] .ume-node-tags span {
+  max-width: 38px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 8px;
+  line-height: 13px;
 }
 
 .ume-opentopox-wrap {

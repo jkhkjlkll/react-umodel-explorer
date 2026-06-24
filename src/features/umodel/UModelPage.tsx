@@ -1208,7 +1208,10 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
   const dimensions = asUnknownArray(spec.dimensions)
   const specRows = specDetailRows(spec, fields, metrics, dimensions)
   const schemaGroups = schemaDetailGroups(fields, metrics, dimensions)
+  const [metadataOpen, setMetadataOpen] = useState(true)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [schemaOpen, setSchemaOpen] = useState(false)
+  const [specOpen, setSpecOpen] = useState(true)
   const [visibleSpec, setVisibleSpec] = useState<SpecRow | null>(null)
   return (
     <div className="ume-form-detail">
@@ -1219,34 +1222,43 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
         </div>
       </label>
 
-      <section className="ume-form-section open">
-        <header>⌄ 元数据信息 (Metadata)</header>
-        <label className="ume-form-field required">
-          <span>域 (Domain) :</span>
-          <input value={element.domain || ''} readOnly />
-        </label>
-        <label className="ume-form-field required">
-          <span>Name :</span>
-          <input value={element.name || ''} readOnly />
-        </label>
-        <label className="ume-form-field required">
-          <span>显示名 (Display Name) :</span>
-          <div className="ume-i18n-row">
-            <input value={localizedText((spec.display_name as unknown) || element.name, 'zh_cn')} placeholder="请输入中文显示名" readOnly />
-            <input value={localizedText((spec.display_name as unknown) || element.name, 'en_us')} placeholder="Please enter" readOnly />
-          </div>
-        </label>
-        <label className="ume-form-field">
-          <span>描述 (Description) :</span>
-          <div className="ume-i18n-row">
-            <textarea value={description} placeholder="请输入中文描述" readOnly />
-            <textarea value={description} placeholder="Please enter English description" readOnly />
-          </div>
-        </label>
+      <section className={metadataOpen ? 'ume-form-section open' : 'ume-form-section'}>
+        <button className="ume-form-section-header" type="button" onClick={() => setMetadataOpen((value) => !value)}>
+          <span>{metadataOpen ? '⌄' : '›'} 元数据信息 (Metadata)</span>
+        </button>
+        {metadataOpen && (
+          <>
+            <label className="ume-form-field required">
+              <span>域 (Domain) :</span>
+              <input value={element.domain || ''} readOnly />
+            </label>
+            <label className="ume-form-field required">
+              <span>Name :</span>
+              <input value={element.name || ''} readOnly />
+            </label>
+            <label className="ume-form-field required">
+              <span>显示名 (Display Name) :</span>
+              <div className="ume-i18n-row">
+                <input value={localizedText((spec.display_name as unknown) || element.name, 'zh_cn')} placeholder="请输入中文显示名" readOnly />
+                <input value={localizedText((spec.display_name as unknown) || element.name, 'en_us')} placeholder="Please enter" readOnly />
+              </div>
+            </label>
+            <label className="ume-form-field">
+              <span>描述 (Description) :</span>
+              <div className="ume-i18n-row">
+                <textarea value={description} placeholder="请输入中文描述" readOnly />
+                <textarea value={description} placeholder="Please enter English description" readOnly />
+              </div>
+            </label>
+          </>
+        )}
       </section>
 
-      <section className="ume-form-section">
-        <header>› 更多配置</header>
+      <section className={moreOpen ? 'ume-form-section open' : 'ume-form-section'}>
+        <button className="ume-form-section-header" type="button" onClick={() => setMoreOpen((value) => !value)}>
+          <span>{moreOpen ? '⌄' : '›'} 更多配置</span>
+        </button>
+        {moreOpen && <div className="ume-schema-empty">暂无更多配置</div>}
       </section>
 
       <section className={schemaOpen ? 'ume-form-section open' : 'ume-form-section'}>
@@ -1275,22 +1287,28 @@ function UModelFormDetail({ element }: { element: UModelElement }) {
         )}
       </section>
 
-      <section className="ume-form-section open">
-        <header>⌄ 属性信息 (Spec)</header>
-        {specRows.map((group) => (
-          <div key={group.title} className="ume-spec-group">
-            <div className="ume-spec-group-title">
-              <span>{group.title}</span>
-              <em>{group.rows.length}</em>
-            </div>
-            <div className="ume-spec-card-list">
-              {group.rows.map((row, index) => (
-                <SpecCard key={`${group.title}-${row.name}-${index}`} row={row} onShow={setVisibleSpec} />
-              ))}
-            </div>
-          </div>
-        ))}
-        {specRows.length === 0 && <div className="ume-schema-empty">暂无属性信息</div>}
+      <section className={specOpen ? 'ume-form-section open' : 'ume-form-section'}>
+        <button className="ume-form-section-header" type="button" onClick={() => setSpecOpen((value) => !value)}>
+          <span>{specOpen ? '⌄' : '›'} 属性信息 (Spec)</span>
+        </button>
+        {specOpen && (
+          <>
+            {specRows.map((group) => (
+              <div key={group.title} className="ume-spec-group">
+                <div className="ume-spec-group-title">
+                  <span>{group.title}</span>
+                  <em>{group.rows.length}</em>
+                </div>
+                <div className="ume-spec-card-list">
+                  {group.rows.map((row, index) => (
+                    <SpecCard key={`${group.title}-${row.name}-${index}`} row={row} onShow={setVisibleSpec} />
+                  ))}
+                </div>
+              </div>
+            ))}
+            {specRows.length === 0 && <div className="ume-schema-empty">暂无属性信息</div>}
+          </>
+        )}
       </section>
       {visibleSpec && <SpecDisplayDialog row={visibleSpec} onClose={() => setVisibleSpec(null)} />}
     </div>
@@ -1324,7 +1342,7 @@ function SpecCard({ row, onShow }: { row: SpecRow; onShow: (row: SpecRow) => voi
       <div className="ume-spec-card-actions">
         <button type="button">⌃</button>
         <button type="button">⌄</button>
-        <button className="primary" type="button" onClick={() => onShow(row)}>显示</button>
+        <button className="primary" type="button" onClick={() => onShow(row)}>查看</button>
         <button type="button">⌫</button>
       </div>
     </article>
@@ -1337,9 +1355,9 @@ function SpecDisplayDialog({ row, onClose }: { row: SpecRow; onClose: () => void
     <div className="ume-dialog-backdrop ume-spec-display-backdrop" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose()
     }}>
-      <section className="ume-spec-display-dialog" role="dialog" aria-modal="true" aria-label={`显示${detail.title}`}>
+      <section className="ume-spec-display-dialog" role="dialog" aria-modal="true" aria-label={`查看${detail.title}`}>
         <header className="ume-spec-display-header">
-          <strong>显示{detail.title}</strong>
+          <strong>查看{detail.title}</strong>
           <button className="ume-spec-display-close" type="button" aria-label="关闭" onClick={onClose}>
             <X size={20} />
           </button>
