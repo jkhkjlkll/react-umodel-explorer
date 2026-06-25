@@ -1340,10 +1340,10 @@ function SpecCard({ row, onShow }: { row: SpecRow; onShow: (row: SpecRow) => voi
         <code className="ume-spec-value">{formatSpecValue(row.value)}</code>
       )}
       <div className="ume-spec-card-actions">
-        <button type="button">⌃</button>
-        <button type="button">⌄</button>
+        <button type="button" disabled title="当前为查看模式">⌃</button>
+        <button type="button" disabled title="当前为查看模式">⌄</button>
         <button className="primary" type="button" onClick={() => onShow(row)}>查看</button>
-        <button type="button">⌫</button>
+        <button type="button" disabled title="当前为查看模式">⌫</button>
       </div>
     </article>
   )

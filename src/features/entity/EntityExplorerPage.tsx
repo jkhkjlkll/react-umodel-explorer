@@ -1,7 +1,6 @@
 import { type WheelEvent, useMemo, useState } from 'react'
 import {
   Box,
-  ChevronDown,
   Filter,
   Grid2X2,
   HeartPulse,
@@ -107,6 +106,7 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
   const [catalogQuery, setCatalogQuery] = useState('')
   const [mainSuggestOpen, setMainSuggestOpen] = useState(false)
   const [catalogSuggestOpen, setCatalogSuggestOpen] = useState(false)
+  const [showSummaryCards, setShowSummaryCards] = useState(true)
   const [drilldown, setDrilldown] = useState<EntityDrilldown | null>(null)
   const [selected, setSelected] = useState<EntityRecord | null>(null)
   const [selectedTopoNode, setSelectedTopoNode] = useState<TopologyNode | null>(null)
@@ -189,14 +189,30 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
             <button className={queryMode === 'usearch' ? 'active' : ''} type="button" onClick={() => setQueryMode('usearch')}>USearch</button>
             <button className={queryMode === 'spl' ? 'active' : ''} type="button" onClick={() => setQueryMode('spl')}>SPL</button>
           </div>
-          <button className="entity-icon-button" type="button"><Grid2X2 size={15} /></button>
+          <button
+            className={`entity-icon-button ${showSummaryCards ? 'active' : ''}`}
+            type="button"
+            aria-label={showSummaryCards ? '隐藏统计卡片' : '显示统计卡片'}
+            title={showSummaryCards ? '隐藏统计卡片' : '显示统计卡片'}
+            onClick={() => setShowSummaryCards((value) => !value)}
+          >
+            <Grid2X2 size={15} />
+          </button>
           {drilldown && (
             <button className="entity-selected-filter" type="button" onClick={clearDrilldown}>
               <span>{drilldown.token}</span>
               <X size={14} />
             </button>
           )}
-          <button className="entity-icon-button" type="button"><Filter size={15} /></button>
+          <button
+            className={`entity-icon-button ${filtersOpen ? 'active' : ''}`}
+            type="button"
+            aria-label="切换过滤器"
+            title="切换过滤器"
+            onClick={() => setFiltersOpen((value) => !value)}
+          >
+            <Filter size={15} />
+          </button>
           <div className="entity-search entity-search-with-popover">
             <Search size={15} />
             <input
@@ -246,17 +262,19 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
             />
           ) : (
             <>
-              <div className="entity-summary-grid">
-                <EntityStatCard title="实体" items={[
-                  { value: stats.total.toLocaleString(), label: '实体总数' },
-                  { value: stats.domainCount.toLocaleString(), label: '实体Domain' },
-                  { value: stats.typeCount.toLocaleString(), label: '实体类型' },
-                ]} />
-                <EventCard stats={stats} />
-                <HealthCard stats={stats} />
-              </div>
+              {showSummaryCards && (
+                <div className="entity-summary-grid">
+                  <EntityStatCard title="实体" items={[
+                    { value: stats.total.toLocaleString(), label: '实体总数' },
+                    { value: stats.domainCount.toLocaleString(), label: '实体Domain' },
+                    { value: stats.typeCount.toLocaleString(), label: '实体类型' },
+                  ]} />
+                  <EventCard stats={stats} />
+                  <HealthCard stats={stats} />
+                </div>
+              )}
 
-              <div className="entity-lower-grid">
+              <div className={`entity-lower-grid ${showSummaryCards ? '' : 'no-summary'}`}>
                 <FilterPanel
                   total={filtered.length}
                   scope={scope}
@@ -547,6 +565,21 @@ function EntityRecommendationGroup({
 }
 
 function EntityMetricsResult({ selection }: { selection: EntityDrilldown }) {
+  const totalPages = Math.max(1, Math.ceil((selection.count || 83) / 10))
+  const [page, setPage] = useState(1)
+  const [pageDraft, setPageDraft] = useState('1')
+  const [selectedAppName, setSelectedAppName] = useState(appMetricsRows[0]?.name || '')
+  const goPage = (nextPage: number) => {
+    const safePage = Math.max(1, Math.min(totalPages, nextPage))
+    setPage(safePage)
+    setPageDraft(String(safePage))
+  }
+  const rows = appMetricsRows.map((row, index) => ({
+    ...row,
+    name: page === 1 ? row.name : `${row.name}-${page}`,
+    active: row.active || (page + index) % 3 === 0,
+    calls: row.calls === '0' ? String((page * 7 + index) % 41) : row.calls,
+  }))
   return (
     <section className="entity-metrics-result">
       <div className="entity-metrics-table-wrap">
@@ -564,9 +597,9 @@ function EntityMetricsResult({ selection }: { selection: EntityDrilldown }) {
             </tr>
           </thead>
           <tbody>
-            {appMetricsRows.map((row, index) => (
-              <tr key={row.name}>
-                <td><a href="#entity-result" onClick={(event) => event.preventDefault()}>{row.name}</a></td>
+            {rows.map((row, index) => (
+              <tr key={row.name} className={selectedAppName === row.name ? 'active' : ''}>
+                <td><button className="entity-table-link" type="button" onClick={() => setSelectedAppName(row.name)}>{row.name}</button></td>
                 <td>{row.probe}</td>
                 <td>{row.language}</td>
                 <td>{row.region}</td>
@@ -581,24 +614,41 @@ function EntityMetricsResult({ selection }: { selection: EntityDrilldown }) {
       </div>
       <div className="entity-metrics-footer">
         <span>每页显示：</span>
-        <button type="button">10 <ChevronDown size={14} /></button>
+        <span className="entity-page-size">10</span>
         <span>总数: {selection.count || 83}</span>
-        <button type="button" disabled>上一页</button>
-        <button type="button" className="active">1</button>
-        <button type="button">2</button>
-        <button type="button">3</button>
-        <button type="button">4</button>
-        <span>...</span>
-        <button type="button">9</button>
-        <button type="button">下一页</button>
-        <span>1/9</span>
+        <button type="button" disabled={page <= 1} onClick={() => goPage(page - 1)}>上一页</button>
+        {visiblePageNumbers(totalPages, page).map((item, index) => (
+          item === '...'
+            ? <span key={`ellipsis-${index}`}>...</span>
+            : <button key={item} type="button" className={page === item ? 'active' : ''} onClick={() => goPage(item)}>{item}</button>
+        ))}
+        <button type="button" disabled={page >= totalPages} onClick={() => goPage(page + 1)}>下一页</button>
+        <span>{page}/{totalPages}</span>
         <span>到第</span>
-        <input aria-label="页码" />
+        <input
+          aria-label="页码"
+          value={pageDraft}
+          onChange={(event) => setPageDraft(event.target.value.replace(/[^\d]/g, ''))}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') goPage(Number(pageDraft) || 1)
+          }}
+        />
         <span>页</span>
-        <button type="button">确定</button>
+        <button type="button" onClick={() => goPage(Number(pageDraft) || 1)}>确定</button>
       </div>
     </section>
   )
+}
+
+function visiblePageNumbers(totalPages: number, page: number): Array<number | '...'> {
+  if (totalPages <= 6) return Array.from({ length: totalPages }, (_, index) => index + 1)
+  const pages = new Set([1, totalPages, page, page - 1, page + 1].filter((value) => value >= 1 && value <= totalPages))
+  const sorted = [...pages].sort((a, b) => a - b)
+  return sorted.flatMap((value, index) => {
+    const previous = sorted[index - 1]
+    if (previous !== undefined && value - previous > 1) return ['...' as const, value]
+    return [value]
+  })
 }
 
 function MetricCell({ color, value, active, seed }: { color: string; value: string; active: boolean; seed: number }) {
@@ -794,6 +844,15 @@ function EntityTopologyView({
 function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
   const rows = topologyMetricRowsFor(item)
   const total = topologyMetricTotalFor(item)
+  const totalPages = Math.max(1, Math.ceil(total / 10))
+  const [page, setPage] = useState(1)
+  const [selectedRowName, setSelectedRowName] = useState(rows[0]?.name || '')
+  const goPage = (nextPage: number) => setPage(Math.max(1, Math.min(totalPages, nextPage)))
+  const visibleRows = rows.map((row, index) => page === 1 ? row : {
+    ...row,
+    name: `${row.name}-${page}`,
+    requests: row.requests || String((page * 5 + index) % 67),
+  })
   return (
     <aside className="entity-topology-detail-panel" aria-label={`${item.title}拓扑明细`}>
       <div className="entity-topology-detail-table-wrap">
@@ -807,9 +866,9 @@ function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.name}>
-                <td><a href="#entity-topology-detail" onClick={(event) => event.preventDefault()}>{row.name}</a></td>
+            {visibleRows.map((row) => (
+              <tr key={row.name} className={selectedRowName === row.name ? 'active' : ''}>
+                <td><button className="entity-table-link" type="button" onClick={() => setSelectedRowName(row.name)}>{row.name}</button></td>
                 <td>{row.requests}</td>
                 <td>{row.errors}</td>
                 <td>{row.latency}</td>
@@ -819,12 +878,15 @@ function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
         </table>
         <div className="entity-topology-detail-footer">
           <span>每页显示:</span>
-          <button type="button">10 <ChevronDown size={14} /></button>
+          <span className="entity-page-size">10</span>
           <span>总数: {total}</span>
-          <button type="button" disabled>‹ 上一页</button>
-          <button type="button" className="active">1</button>
-          <button type="button">2</button>
-          <button type="button">下一页 ›</button>
+          <button type="button" disabled={page <= 1} onClick={() => goPage(page - 1)}>‹ 上一页</button>
+          {visiblePageNumbers(totalPages, page).map((item, index) => (
+            item === '...'
+              ? <span key={`ellipsis-${index}`}>...</span>
+              : <button key={item} type="button" className={page === item ? 'active' : ''} onClick={() => goPage(item)}>{item}</button>
+          ))}
+          <button type="button" disabled={page >= totalPages} onClick={() => goPage(page + 1)}>下一页 ›</button>
         </div>
       </div>
     </aside>

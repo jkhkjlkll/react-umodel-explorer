@@ -26,6 +26,11 @@
   color: #6559e8;
 }
 
+.entity-icon-button.active {
+  background: #eef2ff;
+  color: #6559e8;
+}
+
 .entity-main {
   min-width: 0;
   height: 100%;
@@ -332,6 +337,10 @@
   display: grid;
   grid-template-columns: 260px 280px minmax(480px, 1fr);
   gap: 12px;
+}
+
+.entity-lower-grid.no-summary {
+  min-height: calc(100vh - 112px);
 }
 
 .entity-filter-panel,
@@ -779,13 +788,22 @@
   background: #f5f6f8;
 }
 
-.entity-metrics-table a {
+.entity-metrics-table tbody tr.active td,
+.entity-topology-detail-table tbody tr.active td {
+  background: #f2f6ff;
+}
+
+.entity-table-link {
+  border: 0;
+  background: transparent;
   color: #2b6bdc;
+  cursor: pointer;
   font-weight: 700;
+  font: inherit;
   text-decoration: none;
 }
 
-.entity-metrics-table a:hover {
+.entity-table-link:hover {
   text-decoration: underline;
 }
 
@@ -838,6 +856,19 @@
   color: #4b5563;
   cursor: pointer;
   font-size: 13px;
+}
+
+.entity-page-size {
+  min-width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid #d8dde6;
+  border-radius: 3px;
+  background: #f8fafc;
+  color: #4b5563;
 }
 
 .entity-metrics-footer button:disabled {
@@ -1105,16 +1136,6 @@
 
 .entity-topology-detail-table tbody tr:last-child td {
   border-bottom: 0;
-}
-
-.entity-topology-detail-table a {
-  color: #2b6bdc;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.entity-topology-detail-table a:hover {
-  text-decoration: underline;
 }
 
 .entity-topology-info {

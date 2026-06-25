@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom'
 import {
   ChevronRight,
   CircleHelp,
+  Clock3,
   Grid2X2,
   Network,
   Play,
@@ -17,6 +18,13 @@ import { TopologyCanvas } from './TopologyCanvas'
 import './topology.css'
 
 type PanelTab = 'overview' | 'layout'
+type TimeRangeMode = '1h' | '1d' | 'custom'
+
+interface TopologyTimeRange {
+  mode: TimeRangeMode
+  from: string
+  to: string
+}
 
 const mockApplications = [
   { id: 'app-cms-prod-001', name: '云监控生产应用' },
@@ -25,6 +33,11 @@ const mockApplications = [
   { id: 'app-slb-gateway-039', name: 'SLB 网关入口' },
   { id: 'app-ecs-billing-052', name: 'ECS 计费服务' },
   { id: 'app-arms-observe-073', name: 'ARMS 观测服务' },
+]
+
+const timeRangePresets: Array<{ mode: TimeRangeMode; label: string; hours: number }> = [
+  { mode: '1h', label: '1小时', hours: 1 },
+  { mode: '1d', label: '1天', hours: 24 },
 ]
 
 export function TopologyExplorerPage({
@@ -48,12 +61,17 @@ export function TopologyExplorerPage({
   const [playing, setPlaying] = useState(false)
   const [playhead, setPlayhead] = useState(0.98)
   const [selectedApplicationId, setSelectedApplicationId] = useState(mockApplications[0]?.id || '')
+  const [timeRange, setTimeRange] = useState<TopologyTimeRange>(() => createPresetTimeRange('1h'))
+  const [customRangeDraft, setCustomRangeDraft] = useState<TopologyTimeRange>(() => createPresetTimeRange('1h'))
+  const [timePanelOpen, setTimePanelOpen] = useState(false)
   const [searchDraft, setSearchDraft] = useState('')
   const [searchText, setSearchText] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const searchBlurRef = useRef<number | null>(null)
   const searchWrapRef = useRef<HTMLDivElement | null>(null)
+  const timeWrapRef = useRef<HTMLDivElement | null>(null)
   const [searchPanelStyle, setSearchPanelStyle] = useState<CSSProperties>()
+  const [timePanelStyle, setTimePanelStyle] = useState<CSSProperties>()
   const focusedTypeSet = useMemo(() => new Set(focusedTypes), [focusedTypes])
   const searchNeedles = useMemo(() => splitSearchWords(searchText), [searchText])
   const displayData = useMemo(() => {
@@ -87,6 +105,7 @@ export function TopologyExplorerPage({
       .slice(0, 8)
   }, [data.nodes, searchDraft])
   const activeTypes = useMemo(() => data.types.filter((type) => type.count > 0).slice(0, 8), [data.types])
+  const timeRangeSummary = useMemo(() => formatTimeRangeSummary(timeRange), [timeRange])
 
   useEffect(() => {
     if (!playing) return
@@ -115,6 +134,24 @@ export function TopologyExplorerPage({
     })
   }, [])
 
+  const updateTimePanelGeometry = useCallback(() => {
+    const wrap = timeWrapRef.current
+    if (!wrap) return
+    const rect = wrap.getBoundingClientRect()
+    const viewportPadding = 12
+    const width = Math.min(292, window.innerWidth - viewportPadding * 2)
+    const left = Math.min(
+      Math.max(viewportPadding, rect.right - width),
+      Math.max(viewportPadding, window.innerWidth - width - viewportPadding),
+    )
+    setTimePanelStyle({
+      left,
+      top: rect.bottom + 8,
+      width,
+      maxHeight: Math.max(190, window.innerHeight - rect.bottom - 20),
+    })
+  }, [])
+
   useLayoutEffect(() => {
     if (!searchOpen) return
     updateSearchPanelGeometry()
@@ -125,6 +162,26 @@ export function TopologyExplorerPage({
       window.removeEventListener('scroll', updateSearchPanelGeometry, true)
     }
   }, [searchOpen, updateSearchPanelGeometry])
+
+  useLayoutEffect(() => {
+    if (!timePanelOpen) return
+    updateTimePanelGeometry()
+    window.addEventListener('resize', updateTimePanelGeometry)
+    window.addEventListener('scroll', updateTimePanelGeometry, true)
+    return () => {
+      window.removeEventListener('resize', updateTimePanelGeometry)
+      window.removeEventListener('scroll', updateTimePanelGeometry, true)
+    }
+  }, [timePanelOpen, updateTimePanelGeometry])
+
+  useEffect(() => {
+    if (!timePanelOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setTimePanelOpen(false)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [timePanelOpen])
 
   const focusType = (type: string) => {
     setSelectedNode(null)
@@ -151,6 +208,28 @@ export function TopologyExplorerPage({
     setSearchDraft(value)
     setSearchOpen(false)
     setSelectedNode(null)
+  }
+
+  const applyPresetTimeRange = (mode: TimeRangeMode) => {
+    const nextRange = createPresetTimeRange(mode)
+    setTimeRange(nextRange)
+    setCustomRangeDraft(nextRange)
+    setTimePanelOpen(false)
+    setPlaying(false)
+  }
+
+  const openCustomTimeRange = () => {
+    setCustomRangeDraft(timeRange.mode === 'custom' ? timeRange : createPresetTimeRange('1h', 'custom'))
+    setTimePanelOpen((value) => !value)
+  }
+
+  const applyCustomTimeRange = () => {
+    if (!customRangeDraft.from || !customRangeDraft.to) return
+    const normalized = normalizeCustomTimeRange(customRangeDraft)
+    setTimeRange(normalized)
+    setCustomRangeDraft(normalized)
+    setTimePanelOpen(false)
+    setPlaying(false)
   }
 
   return (
@@ -268,9 +347,30 @@ export function TopologyExplorerPage({
               </select>
             </label>
             <div className="topo-time-player">
-              <button type="button">1小时</button>
-              <button type="button">1天</button>
-              <button type="button">自定义</button>
+              {timeRangePresets.map((preset) => (
+                <button
+                  key={preset.mode}
+                  className={timeRange.mode === preset.mode ? 'active' : ''}
+                  type="button"
+                  onClick={() => applyPresetTimeRange(preset.mode)}
+                >
+                  {preset.label}
+                </button>
+              ))}
+              <div className="topo-time-custom" ref={timeWrapRef}>
+                <button className={timeRange.mode === 'custom' ? 'active' : ''} type="button" onClick={openCustomTimeRange}>
+                  自定义
+                </button>
+                {timePanelOpen && (
+                  <TimeRangePopover
+                    range={customRangeDraft}
+                    style={timePanelStyle}
+                    onChange={setCustomRangeDraft}
+                    onClose={() => setTimePanelOpen(false)}
+                    onApply={applyCustomTimeRange}
+                  />
+                )}
+              </div>
               <div className="topo-timeline" aria-hidden>
                 {Array.from({ length: 30 }).map((_, index) => (
                   <span key={index} style={{ backgroundColor: data.types[index % data.types.length]?.color }} />
@@ -280,7 +380,7 @@ export function TopologyExplorerPage({
                 <Play size={15} />
                 {playing ? '暂停' : '播放'}
               </button>
-              <span>已缓存</span>
+              <span className="topo-time-summary">{timeRangeSummary}</span>
             </div>
           </header>
 
@@ -298,7 +398,16 @@ export function TopologyExplorerPage({
               onFocusType={focusType}
             />
             {selectedNode && (
-              <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />
+              <NodeDetail
+                node={selectedNode}
+                onClose={() => setSelectedNode(null)}
+                onInspect={(node) => {
+                  setSearchText(node.label)
+                  setSearchDraft(node.label)
+                  setFocusedTypes([])
+                  setSelectedNode(null)
+                }}
+              />
             )}
           </section>
 
@@ -318,6 +427,41 @@ export function TopologyExplorerPage({
       </section>
     </div>
   )
+}
+
+function createPresetTimeRange(mode: TimeRangeMode, nextMode = mode): TopologyTimeRange {
+  const preset = timeRangePresets.find((item) => item.mode === mode) || timeRangePresets[0]
+  const to = new Date()
+  const from = new Date(to.getTime() - preset.hours * 60 * 60 * 1000)
+  return {
+    mode: nextMode,
+    from: toDateTimeLocalValue(from),
+    to: toDateTimeLocalValue(to),
+  }
+}
+
+function normalizeCustomTimeRange(range: TopologyTimeRange): TopologyTimeRange {
+  if (!range.from || !range.to) return { ...range, mode: 'custom' }
+  return range.from <= range.to
+    ? { ...range, mode: 'custom' }
+    : { mode: 'custom', from: range.to, to: range.from }
+}
+
+function toDateTimeLocalValue(date: Date) {
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
+}
+
+function formatTimeRangeSummary(range: TopologyTimeRange) {
+  if (range.mode === '1h') return '最近1小时'
+  if (range.mode === '1d') return '最近1天'
+  return `${formatShortDateTime(range.from)} 至 ${formatShortDateTime(range.to)}`
+}
+
+function formatShortDateTime(value: string) {
+  const [date, time = ''] = value.split('T')
+  const [, month = '', day = ''] = date.split('-')
+  return `${month}-${day} ${time}`
 }
 
 function SearchPopover({
@@ -369,6 +513,55 @@ function SearchPopover({
             </button>
           ))}
         </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function TimeRangePopover({
+  range,
+  style,
+  onChange,
+  onClose,
+  onApply,
+}: {
+  range: TopologyTimeRange
+  style?: CSSProperties
+  onChange: (range: TopologyTimeRange | ((value: TopologyTimeRange) => TopologyTimeRange)) => void
+  onClose: () => void
+  onApply: () => void
+}) {
+  if (typeof document === 'undefined') return null
+  const updateFrom = (value: string) => onChange((current) => ({ ...current, from: value, mode: 'custom' }))
+  const updateTo = (value: string) => onChange((current) => ({ ...current, to: value, mode: 'custom' }))
+  return ReactDOM.createPortal(
+    <div className="topo-time-popover" style={style} onMouseDown={(event) => event.stopPropagation()}>
+      <div className="topo-time-popover-title">
+        <Clock3 size={15} />
+        <strong>自定义时间范围</strong>
+      </div>
+      <label>
+        <span>开始时间</span>
+        <input
+          type="datetime-local"
+          value={range.from}
+          onInput={(event) => updateFrom(event.currentTarget.value)}
+          onChange={(event) => updateFrom(event.currentTarget.value)}
+        />
+      </label>
+      <label>
+        <span>结束时间</span>
+        <input
+          type="datetime-local"
+          value={range.to}
+          onInput={(event) => updateTo(event.currentTarget.value)}
+          onChange={(event) => updateTo(event.currentTarget.value)}
+        />
+      </label>
+      <div className="topo-time-popover-actions">
+        <button type="button" onClick={onClose}>取消</button>
+        <button className="primary" type="button" disabled={!range.from || !range.to} onClick={onApply}>应用</button>
       </div>
     </div>,
     document.body,
@@ -466,7 +659,7 @@ function ToggleRow({ title, value, disabled, onChange }: { title: string; value:
   )
 }
 
-function NodeDetail({ node, onClose }: { node: TopologyNode; onClose: () => void }) {
+function NodeDetail({ node, onClose, onInspect }: { node: TopologyNode; onClose: () => void; onInspect: (node: TopologyNode) => void }) {
   const rows = [
     ['service_id', `${node.id.replace('entity-', 'hwx28v3j7p@19bf')}`],
     ['service', node.label.toLowerCase().replace(/\s+/g, '-').slice(0, 20)],
@@ -504,7 +697,7 @@ function NodeDetail({ node, onClose }: { node: TopologyNode; onClose: () => void
           </div>
         ))}
       </div>
-      <button className="topo-detail-primary" type="button">
+      <button className="topo-detail-primary" type="button" onClick={() => onInspect(node)}>
         <Shuffle size={15} />
         实体详情
       </button>
