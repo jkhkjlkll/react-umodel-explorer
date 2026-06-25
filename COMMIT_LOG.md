@@ -6,13 +6,80 @@ Repository: `react-umodel-explorer`
 
 Branch when generated: `codex/opentopox-experiment`
 
-Generated at: `2026-06-24 09:43 +0800`
+Generated at: `2026-06-25 15:43 +0800`
 
 ## Summary
 
-There are 7 commits after `2026-06-18 00:00:00 +0800` on the current branch.
+There are 9 commits after `2026-06-18 00:00:00 +0800` on the current branch.
 
 ## Commits
+
+### 7d8dcaa - Fix explorer interaction controls
+
+- Full hash: `7d8dcaaa51f648a9c5685d6c6f18f3a6b3173a1e`
+- Author: `jkhkjlkll <jkhkjlkll@users.noreply.github.com>`
+- Date: `2026-06-25 15:36:56 +0800`
+- Full patch: `patches/0001-Fix-explorer-interaction-controls.patch`
+
+#### Changed Files
+
+| Status | File |
+| --- | --- |
+| M | `src/features/entity/EntityExplorerPage.tsx` |
+| M | `src/features/entity/entity.css` |
+| M | `src/features/topology/TopologyExplorerPage.tsx` |
+| M | `src/features/topology/topology.css` |
+| M | `src/features/umodel/UModelPage.tsx` |
+| M | `src/features/umodel/umodel.css` |
+
+#### Change Notes For AI Review
+
+- Made the Topology Explorer time controls functional, including `1小时`, `1天`, and a custom time-range popover.
+- Rendered the custom time popover through a fixed portal so it is not clipped by the toolbar or covered by the graph canvas.
+- Added reliable `datetime-local` input handling so custom ranges update the displayed summary.
+- Added functional Entity Explorer toolbar controls for showing/hiding summary cards and toggling the filter panel.
+- Made Entity Explorer metric and topology-detail pagination interactive, including previous/next, page number buttons, and page-jump input.
+- Replaced fake table links with real row-selection buttons and highlighted selected rows.
+- Converted read-only page-size controls to status pills instead of clickable buttons.
+- Disabled non-functional OModel spec-card reorder/delete controls in read-only detail mode, leaving only `查看` as the actionable control.
+
+#### Diff Stat
+
+```text
+src/features/entity/EntityExplorerPage.tsx     | 134 +++++++++++-----
+src/features/entity/entity.css                 |  45 ++++--
+src/features/topology/TopologyExplorerPage.tsx | 207 ++++++++++++++++++++++++-
+src/features/topology/topology.css             |  96 ++++++++++++
+src/features/umodel/UModelPage.tsx             |   6 +-
+src/features/umodel/umodel.css                 |   5 +
+6 files changed, 435 insertions(+), 58 deletions(-)
+```
+
+### a43bb1a - Add omodel polish patch log
+
+- Full hash: `a43bb1ab8dc349ecd76d1f672ba83e0992b8e9b4`
+- Author: `jkhkjlkll <jkhkjlkll@users.noreply.github.com>`
+- Date: `2026-06-24 09:51:07 +0800`
+
+#### Changed Files
+
+| Status | File |
+| --- | --- |
+| M | `COMMIT_LOG.md` |
+| A | `patches/0001-Polish-omodel-detail-panels-and-card-labels.patch` |
+
+#### Change Notes For AI Review
+
+- Added the full patch file for `46cb084` so ZIP-based handoff can inspect the exact OModel detail-panel and card-label diff.
+- Updated the offline commit log with OModel detail panel collapsibility and card field-label context.
+
+#### Diff Stat
+
+```text
+COMMIT_LOG.md                                      |  65 +++-
+patches/0001-Polish-omodel-detail-panels-and-card-labels.patch | 345 +++++++++++++++++++++
+2 files changed, 408 insertions(+), 2 deletions(-)
+```
 
 ### 46cb084 - Polish omodel detail panels and card labels
 

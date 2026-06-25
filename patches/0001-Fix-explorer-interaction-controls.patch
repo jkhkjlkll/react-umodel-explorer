@@ -1,0 +1,807 @@
+From 7d8dcaaa51f648a9c5685d6c6f18f3a6b3173a1e Mon Sep 17 00:00:00 2001
+From: jkhkjlkll <jkhkjlkll@users.noreply.github.com>
+Date: Thu, 25 Jun 2026 15:36:56 +0800
+Subject: [PATCH] Fix explorer interaction controls
+
+---
+ src/features/entity/EntityExplorerPage.tsx    | 134 +++++++++---
+ src/features/entity/entity.css                |  45 +++-
+ .../topology/TopologyExplorerPage.tsx         | 207 +++++++++++++++++-
+ src/features/topology/topology.css            |  96 ++++++++
+ src/features/umodel/UModelPage.tsx            |   6 +-
+ src/features/umodel/umodel.css                |   5 +
+ 6 files changed, 435 insertions(+), 58 deletions(-)
+
+diff --git a/src/features/entity/EntityExplorerPage.tsx b/src/features/entity/EntityExplorerPage.tsx
+index df18fda..8c02578 100644
+--- a/src/features/entity/EntityExplorerPage.tsx
++++ b/src/features/entity/EntityExplorerPage.tsx
+@@ -1,7 +1,6 @@
+ import { type WheelEvent, useMemo, useState } from 'react'
+ import {
+   Box,
+-  ChevronDown,
+   Filter,
+   Grid2X2,
+   HeartPulse,
+@@ -107,6 +106,7 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
+   const [catalogQuery, setCatalogQuery] = useState('')
+   const [mainSuggestOpen, setMainSuggestOpen] = useState(false)
+   const [catalogSuggestOpen, setCatalogSuggestOpen] = useState(false)
++  const [showSummaryCards, setShowSummaryCards] = useState(true)
+   const [drilldown, setDrilldown] = useState<EntityDrilldown | null>(null)
+   const [selected, setSelected] = useState<EntityRecord | null>(null)
+   const [selectedTopoNode, setSelectedTopoNode] = useState<TopologyNode | null>(null)
+@@ -189,14 +189,30 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
+             <button className={queryMode === 'usearch' ? 'active' : ''} type="button" onClick={() => setQueryMode('usearch')}>USearch</button>
+             <button className={queryMode === 'spl' ? 'active' : ''} type="button" onClick={() => setQueryMode('spl')}>SPL</button>
+           </div>
+-          <button className="entity-icon-button" type="button"><Grid2X2 size={15} /></button>
++          <button
++            className={`entity-icon-button ${showSummaryCards ? 'active' : ''}`}
++            type="button"
++            aria-label={showSummaryCards ? '隐藏统计卡片' : '显示统计卡片'}
++            title={showSummaryCards ? '隐藏统计卡片' : '显示统计卡片'}
++            onClick={() => setShowSummaryCards((value) => !value)}
++          >
++            <Grid2X2 size={15} />
++          </button>
+           {drilldown && (
+             <button className="entity-selected-filter" type="button" onClick={clearDrilldown}>
+               <span>{drilldown.token}</span>
+               <X size={14} />
+             </button>
+           )}
+-          <button className="entity-icon-button" type="button"><Filter size={15} /></button>
++          <button
++            className={`entity-icon-button ${filtersOpen ? 'active' : ''}`}
++            type="button"
++            aria-label="切换过滤器"
++            title="切换过滤器"
++            onClick={() => setFiltersOpen((value) => !value)}
++          >
++            <Filter size={15} />
++          </button>
+           <div className="entity-search entity-search-with-popover">
+             <Search size={15} />
+             <input
+@@ -246,17 +262,19 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
+             />
+           ) : (
+             <>
+-              <div className="entity-summary-grid">
+-                <EntityStatCard title="实体" items={[
+-                  { value: stats.total.toLocaleString(), label: '实体总数' },
+-                  { value: stats.domainCount.toLocaleString(), label: '实体Domain' },
+-                  { value: stats.typeCount.toLocaleString(), label: '实体类型' },
+-                ]} />
+-                <EventCard stats={stats} />
+-                <HealthCard stats={stats} />
+-              </div>
++              {showSummaryCards && (
++                <div className="entity-summary-grid">
++                  <EntityStatCard title="实体" items={[
++                    { value: stats.total.toLocaleString(), label: '实体总数' },
++                    { value: stats.domainCount.toLocaleString(), label: '实体Domain' },
++                    { value: stats.typeCount.toLocaleString(), label: '实体类型' },
++                  ]} />
++                  <EventCard stats={stats} />
++                  <HealthCard stats={stats} />
++                </div>
++              )}
+ 
+-              <div className="entity-lower-grid">
++              <div className={`entity-lower-grid ${showSummaryCards ? '' : 'no-summary'}`}>
+                 <FilterPanel
+                   total={filtered.length}
+                   scope={scope}
+@@ -547,6 +565,21 @@ function EntityRecommendationGroup({
+ }
+ 
+ function EntityMetricsResult({ selection }: { selection: EntityDrilldown }) {
++  const totalPages = Math.max(1, Math.ceil((selection.count || 83) / 10))
++  const [page, setPage] = useState(1)
++  const [pageDraft, setPageDraft] = useState('1')
++  const [selectedAppName, setSelectedAppName] = useState(appMetricsRows[0]?.name || '')
++  const goPage = (nextPage: number) => {
++    const safePage = Math.max(1, Math.min(totalPages, nextPage))
++    setPage(safePage)
++    setPageDraft(String(safePage))
++  }
++  const rows = appMetricsRows.map((row, index) => ({
++    ...row,
++    name: page === 1 ? row.name : `${row.name}-${page}`,
++    active: row.active || (page + index) % 3 === 0,
++    calls: row.calls === '0' ? String((page * 7 + index) % 41) : row.calls,
++  }))
+   return (
+     <section className="entity-metrics-result">
+       <div className="entity-metrics-table-wrap">
+@@ -564,9 +597,9 @@ function EntityMetricsResult({ selection }: { selection: EntityDrilldown }) {
+             </tr>
+           </thead>
+           <tbody>
+-            {appMetricsRows.map((row, index) => (
+-              <tr key={row.name}>
+-                <td><a href="#entity-result" onClick={(event) => event.preventDefault()}>{row.name}</a></td>
++            {rows.map((row, index) => (
++              <tr key={row.name} className={selectedAppName === row.name ? 'active' : ''}>
++                <td><button className="entity-table-link" type="button" onClick={() => setSelectedAppName(row.name)}>{row.name}</button></td>
+                 <td>{row.probe}</td>
+                 <td>{row.language}</td>
+                 <td>{row.region}</td>
+@@ -581,26 +614,43 @@ function EntityMetricsResult({ selection }: { selection: EntityDrilldown }) {
+       </div>
+       <div className="entity-metrics-footer">
+         <span>每页显示：</span>
+-        <button type="button">10 <ChevronDown size={14} /></button>
++        <span className="entity-page-size">10</span>
+         <span>总数: {selection.count || 83}</span>
+-        <button type="button" disabled>上一页</button>
+-        <button type="button" className="active">1</button>
+-        <button type="button">2</button>
+-        <button type="button">3</button>
+-        <button type="button">4</button>
+-        <span>...</span>
+-        <button type="button">9</button>
+-        <button type="button">下一页</button>
+-        <span>1/9</span>
++        <button type="button" disabled={page <= 1} onClick={() => goPage(page - 1)}>上一页</button>
++        {visiblePageNumbers(totalPages, page).map((item, index) => (
++          item === '...'
++            ? <span key={`ellipsis-${index}`}>...</span>
++            : <button key={item} type="button" className={page === item ? 'active' : ''} onClick={() => goPage(item)}>{item}</button>
++        ))}
++        <button type="button" disabled={page >= totalPages} onClick={() => goPage(page + 1)}>下一页</button>
++        <span>{page}/{totalPages}</span>
+         <span>到第</span>
+-        <input aria-label="页码" />
++        <input
++          aria-label="页码"
++          value={pageDraft}
++          onChange={(event) => setPageDraft(event.target.value.replace(/[^\d]/g, ''))}
++          onKeyDown={(event) => {
++            if (event.key === 'Enter') goPage(Number(pageDraft) || 1)
++          }}
++        />
+         <span>页</span>
+-        <button type="button">确定</button>
++        <button type="button" onClick={() => goPage(Number(pageDraft) || 1)}>确定</button>
+       </div>
+     </section>
+   )
+ }
+ 
++function visiblePageNumbers(totalPages: number, page: number): Array<number | '...'> {
++  if (totalPages <= 6) return Array.from({ length: totalPages }, (_, index) => index + 1)
++  const pages = new Set([1, totalPages, page, page - 1, page + 1].filter((value) => value >= 1 && value <= totalPages))
++  const sorted = [...pages].sort((a, b) => a - b)
++  return sorted.flatMap((value, index) => {
++    const previous = sorted[index - 1]
++    if (previous !== undefined && value - previous > 1) return ['...' as const, value]
++    return [value]
++  })
++}
++
+ function MetricCell({ color, value, active, seed }: { color: string; value: string; active: boolean; seed: number }) {
+   return (
+     <td className="entity-metric-cell">
+@@ -794,6 +844,15 @@ function EntityTopologyView({
+ function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
+   const rows = topologyMetricRowsFor(item)
+   const total = topologyMetricTotalFor(item)
++  const totalPages = Math.max(1, Math.ceil(total / 10))
++  const [page, setPage] = useState(1)
++  const [selectedRowName, setSelectedRowName] = useState(rows[0]?.name || '')
++  const goPage = (nextPage: number) => setPage(Math.max(1, Math.min(totalPages, nextPage)))
++  const visibleRows = rows.map((row, index) => page === 1 ? row : {
++    ...row,
++    name: `${row.name}-${page}`,
++    requests: row.requests || String((page * 5 + index) % 67),
++  })
+   return (
+     <aside className="entity-topology-detail-panel" aria-label={`${item.title}拓扑明细`}>
+       <div className="entity-topology-detail-table-wrap">
+@@ -807,9 +866,9 @@ function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
+             </tr>
+           </thead>
+           <tbody>
+-            {rows.map((row) => (
+-              <tr key={row.name}>
+-                <td><a href="#entity-topology-detail" onClick={(event) => event.preventDefault()}>{row.name}</a></td>
++            {visibleRows.map((row) => (
++              <tr key={row.name} className={selectedRowName === row.name ? 'active' : ''}>
++                <td><button className="entity-table-link" type="button" onClick={() => setSelectedRowName(row.name)}>{row.name}</button></td>
+                 <td>{row.requests}</td>
+                 <td>{row.errors}</td>
+                 <td>{row.latency}</td>
+@@ -819,12 +878,15 @@ function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
+         </table>
+         <div className="entity-topology-detail-footer">
+           <span>每页显示:</span>
+-          <button type="button">10 <ChevronDown size={14} /></button>
++          <span className="entity-page-size">10</span>
+           <span>总数: {total}</span>
+-          <button type="button" disabled>‹ 上一页</button>
+-          <button type="button" className="active">1</button>
+-          <button type="button">2</button>
+-          <button type="button">下一页 ›</button>
++          <button type="button" disabled={page <= 1} onClick={() => goPage(page - 1)}>‹ 上一页</button>
++          {visiblePageNumbers(totalPages, page).map((item, index) => (
++            item === '...'
++              ? <span key={`ellipsis-${index}`}>...</span>
++              : <button key={item} type="button" className={page === item ? 'active' : ''} onClick={() => goPage(item)}>{item}</button>
++          ))}
++          <button type="button" disabled={page >= totalPages} onClick={() => goPage(page + 1)}>下一页 ›</button>
+         </div>
+       </div>
+     </aside>
+diff --git a/src/features/entity/entity.css b/src/features/entity/entity.css
+index a2189a4..d344d6f 100644
+--- a/src/features/entity/entity.css
++++ b/src/features/entity/entity.css
+@@ -26,6 +26,11 @@
+   color: #6559e8;
+ }
+ 
++.entity-icon-button.active {
++  background: #eef2ff;
++  color: #6559e8;
++}
++
+ .entity-main {
+   min-width: 0;
+   height: 100%;
+@@ -334,6 +339,10 @@
+   gap: 12px;
+ }
+ 
++.entity-lower-grid.no-summary {
++  min-height: calc(100vh - 112px);
++}
++
+ .entity-filter-panel,
+ .entity-catalog,
+ .entity-result-panel {
+@@ -779,13 +788,22 @@
+   background: #f5f6f8;
+ }
+ 
+-.entity-metrics-table a {
++.entity-metrics-table tbody tr.active td,
++.entity-topology-detail-table tbody tr.active td {
++  background: #f2f6ff;
++}
++
++.entity-table-link {
++  border: 0;
++  background: transparent;
+   color: #2b6bdc;
++  cursor: pointer;
+   font-weight: 700;
++  font: inherit;
+   text-decoration: none;
+ }
+ 
+-.entity-metrics-table a:hover {
++.entity-table-link:hover {
+   text-decoration: underline;
+ }
+ 
+@@ -840,6 +858,19 @@
+   font-size: 13px;
+ }
+ 
++.entity-page-size {
++  min-width: 34px;
++  height: 34px;
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  padding: 0 10px;
++  border: 1px solid #d8dde6;
++  border-radius: 3px;
++  background: #f8fafc;
++  color: #4b5563;
++}
++
+ .entity-metrics-footer button:disabled {
+   cursor: default;
+   opacity: 0.45;
+@@ -1107,16 +1138,6 @@
+   border-bottom: 0;
+ }
+ 
+-.entity-topology-detail-table a {
+-  color: #2b6bdc;
+-  font-weight: 700;
+-  text-decoration: none;
+-}
+-
+-.entity-topology-detail-table a:hover {
+-  text-decoration: underline;
+-}
+-
+ .entity-topology-info {
+   display: inline-grid;
+   place-items: center;
+diff --git a/src/features/topology/TopologyExplorerPage.tsx b/src/features/topology/TopologyExplorerPage.tsx
+index b4f63bd..d8585cb 100644
+--- a/src/features/topology/TopologyExplorerPage.tsx
++++ b/src/features/topology/TopologyExplorerPage.tsx
+@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom'
+ import {
+   ChevronRight,
+   CircleHelp,
++  Clock3,
+   Grid2X2,
+   Network,
+   Play,
+@@ -17,6 +18,13 @@ import { TopologyCanvas } from './TopologyCanvas'
+ import './topology.css'
+ 
+ type PanelTab = 'overview' | 'layout'
++type TimeRangeMode = '1h' | '1d' | 'custom'
++
++interface TopologyTimeRange {
++  mode: TimeRangeMode
++  from: string
++  to: string
++}
+ 
+ const mockApplications = [
+   { id: 'app-cms-prod-001', name: '云监控生产应用' },
+@@ -27,6 +35,11 @@ const mockApplications = [
+   { id: 'app-arms-observe-073', name: 'ARMS 观测服务' },
+ ]
+ 
++const timeRangePresets: Array<{ mode: TimeRangeMode; label: string; hours: number }> = [
++  { mode: '1h', label: '1小时', hours: 1 },
++  { mode: '1d', label: '1天', hours: 24 },
++]
++
+ export function TopologyExplorerPage({
+   api: _api,
+   workspaceId: _workspaceId,
+@@ -48,12 +61,17 @@ export function TopologyExplorerPage({
+   const [playing, setPlaying] = useState(false)
+   const [playhead, setPlayhead] = useState(0.98)
+   const [selectedApplicationId, setSelectedApplicationId] = useState(mockApplications[0]?.id || '')
++  const [timeRange, setTimeRange] = useState<TopologyTimeRange>(() => createPresetTimeRange('1h'))
++  const [customRangeDraft, setCustomRangeDraft] = useState<TopologyTimeRange>(() => createPresetTimeRange('1h'))
++  const [timePanelOpen, setTimePanelOpen] = useState(false)
+   const [searchDraft, setSearchDraft] = useState('')
+   const [searchText, setSearchText] = useState('')
+   const [searchOpen, setSearchOpen] = useState(false)
+   const searchBlurRef = useRef<number | null>(null)
+   const searchWrapRef = useRef<HTMLDivElement | null>(null)
++  const timeWrapRef = useRef<HTMLDivElement | null>(null)
+   const [searchPanelStyle, setSearchPanelStyle] = useState<CSSProperties>()
++  const [timePanelStyle, setTimePanelStyle] = useState<CSSProperties>()
+   const focusedTypeSet = useMemo(() => new Set(focusedTypes), [focusedTypes])
+   const searchNeedles = useMemo(() => splitSearchWords(searchText), [searchText])
+   const displayData = useMemo(() => {
+@@ -87,6 +105,7 @@ export function TopologyExplorerPage({
+       .slice(0, 8)
+   }, [data.nodes, searchDraft])
+   const activeTypes = useMemo(() => data.types.filter((type) => type.count > 0).slice(0, 8), [data.types])
++  const timeRangeSummary = useMemo(() => formatTimeRangeSummary(timeRange), [timeRange])
+ 
+   useEffect(() => {
+     if (!playing) return
+@@ -115,6 +134,24 @@ export function TopologyExplorerPage({
+     })
+   }, [])
+ 
++  const updateTimePanelGeometry = useCallback(() => {
++    const wrap = timeWrapRef.current
++    if (!wrap) return
++    const rect = wrap.getBoundingClientRect()
++    const viewportPadding = 12
++    const width = Math.min(292, window.innerWidth - viewportPadding * 2)
++    const left = Math.min(
++      Math.max(viewportPadding, rect.right - width),
++      Math.max(viewportPadding, window.innerWidth - width - viewportPadding),
++    )
++    setTimePanelStyle({
++      left,
++      top: rect.bottom + 8,
++      width,
++      maxHeight: Math.max(190, window.innerHeight - rect.bottom - 20),
++    })
++  }, [])
++
+   useLayoutEffect(() => {
+     if (!searchOpen) return
+     updateSearchPanelGeometry()
+@@ -126,6 +163,26 @@ export function TopologyExplorerPage({
+     }
+   }, [searchOpen, updateSearchPanelGeometry])
+ 
++  useLayoutEffect(() => {
++    if (!timePanelOpen) return
++    updateTimePanelGeometry()
++    window.addEventListener('resize', updateTimePanelGeometry)
++    window.addEventListener('scroll', updateTimePanelGeometry, true)
++    return () => {
++      window.removeEventListener('resize', updateTimePanelGeometry)
++      window.removeEventListener('scroll', updateTimePanelGeometry, true)
++    }
++  }, [timePanelOpen, updateTimePanelGeometry])
++
++  useEffect(() => {
++    if (!timePanelOpen) return
++    const handleKeyDown = (event: KeyboardEvent) => {
++      if (event.key === 'Escape') setTimePanelOpen(false)
++    }
++    window.addEventListener('keydown', handleKeyDown)
++    return () => window.removeEventListener('keydown', handleKeyDown)
++  }, [timePanelOpen])
++
+   const focusType = (type: string) => {
+     setSelectedNode(null)
+     setFocusedTypes((current) => {
+@@ -153,6 +210,28 @@ export function TopologyExplorerPage({
+     setSelectedNode(null)
+   }
+ 
++  const applyPresetTimeRange = (mode: TimeRangeMode) => {
++    const nextRange = createPresetTimeRange(mode)
++    setTimeRange(nextRange)
++    setCustomRangeDraft(nextRange)
++    setTimePanelOpen(false)
++    setPlaying(false)
++  }
++
++  const openCustomTimeRange = () => {
++    setCustomRangeDraft(timeRange.mode === 'custom' ? timeRange : createPresetTimeRange('1h', 'custom'))
++    setTimePanelOpen((value) => !value)
++  }
++
++  const applyCustomTimeRange = () => {
++    if (!customRangeDraft.from || !customRangeDraft.to) return
++    const normalized = normalizeCustomTimeRange(customRangeDraft)
++    setTimeRange(normalized)
++    setCustomRangeDraft(normalized)
++    setTimePanelOpen(false)
++    setPlaying(false)
++  }
++
+   return (
+     <div className="topo-page">
+       <section className="topo-console">
+@@ -268,9 +347,30 @@ export function TopologyExplorerPage({
+               </select>
+             </label>
+             <div className="topo-time-player">
+-              <button type="button">1小时</button>
+-              <button type="button">1天</button>
+-              <button type="button">自定义</button>
++              {timeRangePresets.map((preset) => (
++                <button
++                  key={preset.mode}
++                  className={timeRange.mode === preset.mode ? 'active' : ''}
++                  type="button"
++                  onClick={() => applyPresetTimeRange(preset.mode)}
++                >
++                  {preset.label}
++                </button>
++              ))}
++              <div className="topo-time-custom" ref={timeWrapRef}>
++                <button className={timeRange.mode === 'custom' ? 'active' : ''} type="button" onClick={openCustomTimeRange}>
++                  自定义
++                </button>
++                {timePanelOpen && (
++                  <TimeRangePopover
++                    range={customRangeDraft}
++                    style={timePanelStyle}
++                    onChange={setCustomRangeDraft}
++                    onClose={() => setTimePanelOpen(false)}
++                    onApply={applyCustomTimeRange}
++                  />
++                )}
++              </div>
+               <div className="topo-timeline" aria-hidden>
+                 {Array.from({ length: 30 }).map((_, index) => (
+                   <span key={index} style={{ backgroundColor: data.types[index % data.types.length]?.color }} />
+@@ -280,7 +380,7 @@ export function TopologyExplorerPage({
+                 <Play size={15} />
+                 {playing ? '暂停' : '播放'}
+               </button>
+-              <span>已缓存</span>
++              <span className="topo-time-summary">{timeRangeSummary}</span>
+             </div>
+           </header>
+ 
+@@ -298,7 +398,16 @@ export function TopologyExplorerPage({
+               onFocusType={focusType}
+             />
+             {selectedNode && (
+-              <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />
++              <NodeDetail
++                node={selectedNode}
++                onClose={() => setSelectedNode(null)}
++                onInspect={(node) => {
++                  setSearchText(node.label)
++                  setSearchDraft(node.label)
++                  setFocusedTypes([])
++                  setSelectedNode(null)
++                }}
++              />
+             )}
+           </section>
+ 
+@@ -320,6 +429,41 @@ export function TopologyExplorerPage({
+   )
+ }
+ 
++function createPresetTimeRange(mode: TimeRangeMode, nextMode = mode): TopologyTimeRange {
++  const preset = timeRangePresets.find((item) => item.mode === mode) || timeRangePresets[0]
++  const to = new Date()
++  const from = new Date(to.getTime() - preset.hours * 60 * 60 * 1000)
++  return {
++    mode: nextMode,
++    from: toDateTimeLocalValue(from),
++    to: toDateTimeLocalValue(to),
++  }
++}
++
++function normalizeCustomTimeRange(range: TopologyTimeRange): TopologyTimeRange {
++  if (!range.from || !range.to) return { ...range, mode: 'custom' }
++  return range.from <= range.to
++    ? { ...range, mode: 'custom' }
++    : { mode: 'custom', from: range.to, to: range.from }
++}
++
++function toDateTimeLocalValue(date: Date) {
++  const offsetMs = date.getTimezoneOffset() * 60 * 1000
++  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
++}
++
++function formatTimeRangeSummary(range: TopologyTimeRange) {
++  if (range.mode === '1h') return '最近1小时'
++  if (range.mode === '1d') return '最近1天'
++  return `${formatShortDateTime(range.from)} 至 ${formatShortDateTime(range.to)}`
++}
++
++function formatShortDateTime(value: string) {
++  const [date, time = ''] = value.split('T')
++  const [, month = '', day = ''] = date.split('-')
++  return `${month}-${day} ${time}`
++}
++
+ function SearchPopover({
+   query,
+   nodes,
+@@ -375,6 +519,55 @@ function SearchPopover({
+   )
+ }
+ 
++function TimeRangePopover({
++  range,
++  style,
++  onChange,
++  onClose,
++  onApply,
++}: {
++  range: TopologyTimeRange
++  style?: CSSProperties
++  onChange: (range: TopologyTimeRange | ((value: TopologyTimeRange) => TopologyTimeRange)) => void
++  onClose: () => void
++  onApply: () => void
++}) {
++  if (typeof document === 'undefined') return null
++  const updateFrom = (value: string) => onChange((current) => ({ ...current, from: value, mode: 'custom' }))
++  const updateTo = (value: string) => onChange((current) => ({ ...current, to: value, mode: 'custom' }))
++  return ReactDOM.createPortal(
++    <div className="topo-time-popover" style={style} onMouseDown={(event) => event.stopPropagation()}>
++      <div className="topo-time-popover-title">
++        <Clock3 size={15} />
++        <strong>自定义时间范围</strong>
++      </div>
++      <label>
++        <span>开始时间</span>
++        <input
++          type="datetime-local"
++          value={range.from}
++          onInput={(event) => updateFrom(event.currentTarget.value)}
++          onChange={(event) => updateFrom(event.currentTarget.value)}
++        />
++      </label>
++      <label>
++        <span>结束时间</span>
++        <input
++          type="datetime-local"
++          value={range.to}
++          onInput={(event) => updateTo(event.currentTarget.value)}
++          onChange={(event) => updateTo(event.currentTarget.value)}
++        />
++      </label>
++      <div className="topo-time-popover-actions">
++        <button type="button" onClick={onClose}>取消</button>
++        <button className="primary" type="button" disabled={!range.from || !range.to} onClick={onApply}>应用</button>
++      </div>
++    </div>,
++    document.body,
++  )
++}
++
+ function OverviewPanel({
+   types,
+   focusedTypes,
+@@ -466,7 +659,7 @@ function ToggleRow({ title, value, disabled, onChange }: { title: string; value:
+   )
+ }
+ 
+-function NodeDetail({ node, onClose }: { node: TopologyNode; onClose: () => void }) {
++function NodeDetail({ node, onClose, onInspect }: { node: TopologyNode; onClose: () => void; onInspect: (node: TopologyNode) => void }) {
+   const rows = [
+     ['service_id', `${node.id.replace('entity-', 'hwx28v3j7p@19bf')}`],
+     ['service', node.label.toLowerCase().replace(/\s+/g, '-').slice(0, 20)],
+@@ -504,7 +697,7 @@ function NodeDetail({ node, onClose }: { node: TopologyNode; onClose: () => void
+           </div>
+         ))}
+       </div>
+-      <button className="topo-detail-primary" type="button">
++      <button className="topo-detail-primary" type="button" onClick={() => onInspect(node)}>
+         <Shuffle size={15} />
+         实体详情
+       </button>
+diff --git a/src/features/topology/topology.css b/src/features/topology/topology.css
+index 888f453..2fb02b8 100644
+--- a/src/features/topology/topology.css
++++ b/src/features/topology/topology.css
+@@ -488,6 +488,7 @@
+ }
+ 
+ .topo-time-player {
++  position: relative;
+   min-width: 0;
+   flex: 0 0 auto;
+   height: 42px;
+@@ -509,6 +510,92 @@
+   background: transparent;
+   color: #9aa2af;
+   cursor: pointer;
++  white-space: nowrap;
++}
++
++.topo-time-player button:hover,
++.topo-time-player button.active {
++  background: #edf0ff;
++  color: #5147d9;
++}
++
++.topo-time-player button:disabled {
++  cursor: default;
++  opacity: 0.45;
++}
++
++.topo-time-custom {
++  position: relative;
++  display: inline-flex;
++}
++
++.topo-time-popover {
++  position: fixed;
++  z-index: 80;
++  width: 292px;
++  max-height: min(430px, calc(100vh - 24px));
++  overflow: auto;
++  display: grid;
++  gap: 12px;
++  padding: 14px;
++  border: 1px solid #dde3ee;
++  border-radius: 8px;
++  background: #fff;
++  box-shadow: 0 16px 42px rgba(31, 45, 75, 0.18);
++  color: #2f3645;
++}
++
++.topo-time-popover-title {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  color: #252b3a;
++  font-size: 13px;
++}
++
++.topo-time-popover label {
++  display: grid;
++  gap: 6px;
++  color: #6b7280;
++  font-size: 12px;
++  font-weight: 650;
++}
++
++.topo-time-popover input {
++  width: 100%;
++  height: 34px;
++  padding: 0 9px;
++  border: 1px solid #d8dde8;
++  border-radius: 6px;
++  outline: 0;
++  background: #fbfcff;
++  color: #252b3a;
++  font: 13px var(--om-sans);
++}
++
++.topo-time-popover input:focus {
++  border-color: #a8b1ff;
++  box-shadow: 0 0 0 3px rgba(101, 89, 232, 0.1);
++}
++
++.topo-time-popover-actions {
++  display: flex;
++  justify-content: flex-end;
++  gap: 8px;
++}
++
++.topo-time-popover-actions button {
++  min-width: 64px;
++  padding: 0 12px;
++  border: 1px solid #d8dde8;
++  background: #fff;
++  color: #4b5563;
++}
++
++.topo-time-popover-actions button.primary {
++  border-color: #6559e8;
++  background: #6559e8;
++  color: #fff;
+ }
+ 
+ .topo-timeline {
+@@ -536,6 +623,15 @@
+   color: #fff !important;
+ }
+ 
++.topo-time-summary {
++  max-width: 190px;
++  overflow: hidden;
++  color: #687386;
++  font-size: 12px;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
+ .topo-graph-card {
+   position: relative;
+   min-width: 0;
+diff --git a/src/features/umodel/UModelPage.tsx b/src/features/umodel/UModelPage.tsx
+index 7afa79e..89fb281 100644
+--- a/src/features/umodel/UModelPage.tsx
++++ b/src/features/umodel/UModelPage.tsx
+@@ -1340,10 +1340,10 @@ function SpecCard({ row, onShow }: { row: SpecRow; onShow: (row: SpecRow) => voi
+         <code className="ume-spec-value">{formatSpecValue(row.value)}</code>
+       )}
+       <div className="ume-spec-card-actions">
+-        <button type="button">⌃</button>
+-        <button type="button">⌄</button>
++        <button type="button" disabled title="当前为查看模式">⌃</button>
++        <button type="button" disabled title="当前为查看模式">⌄</button>
+         <button className="primary" type="button" onClick={() => onShow(row)}>查看</button>
+-        <button type="button">⌫</button>
++        <button type="button" disabled title="当前为查看模式">⌫</button>
+       </div>
+     </article>
+   )
+diff --git a/src/features/umodel/umodel.css b/src/features/umodel/umodel.css
+index de0da8f..29c413f 100644
+--- a/src/features/umodel/umodel.css
++++ b/src/features/umodel/umodel.css
+@@ -3179,6 +3179,11 @@ body.ume-resizing-detail .ume-detail-panel {
+   font-weight: 650;
+ }
+ 
++.ume-spec-card-actions button:disabled {
++  cursor: default;
++  opacity: 0.42;
++}
++
+ .ume-spec-card-actions button.primary {
+   min-width: 74px;
+   border-color: #0f7cff;
+-- 
+2.50.1 (Apple Git-155)
+
