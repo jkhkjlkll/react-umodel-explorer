@@ -40,13 +40,28 @@ export class ApiError extends Error {
 }
 
 export interface UModelApiClient {
+  readonly baseUrl: string
   health(): Promise<HealthResponse>
+  listWorkspaces(options?: { includeDeleted?: boolean; includeConflicts?: boolean }): Promise<Page<WorkspaceMetadata>>
+  createWorkspace(payload: CreateWorkspaceRequest): Promise<WorkspaceMetadata>
   getWorkspace(workspace: string): Promise<WorkspaceMetadata>
+  updateWorkspace(workspace: string, payload: UpdateWorkspaceRequest): Promise<WorkspaceMetadata>
+  deleteWorkspace(workspace: string): Promise<WorkspaceMetadata>
+  query(workspace: string, payload: QueryRequest): Promise<QueryResult>
+  explain(workspace: string, payload: QueryRequest): Promise<QueryExplain>
   listUModel(workspace: string, limit?: number): Promise<QueryResult>
+  importUModel(workspace: string, payload: UModelImportRequest): Promise<UModelImportResult>
   importSampleData(workspace: string, sample?: string): Promise<SampleImportResult>
   validateUModel(workspace: string, elements: UModelElement[]): Promise<ValidationResult>
   putUModel(workspace: string, elements: UModelElement[]): Promise<WriteResult>
   deleteUModel(workspace: string, ids: string[]): Promise<WriteResult>
+  writeEntities(workspace: string, payload: EntityWriteBatch): Promise<WriteResult>
+  expireEntities(workspace: string, payload: ExpireRequest): Promise<WriteResult>
+  writeRelations(workspace: string, payload: RelationWriteBatch): Promise<WriteResult>
+  expireRelations(workspace: string, payload: ExpireRequest): Promise<WriteResult>
+  discoverAgent(workspace: string): Promise<AgentDiscovery>
+  readAgentResource(workspace: string, uri: string): Promise<AgentResourceReadResult>
+  executeAgentTool(workspace: string, name: string, args: Record<string, unknown>): Promise<AgentToolCallResult>
 }
 
 export class UModelApi implements UModelApiClient {
@@ -106,7 +121,7 @@ export class UModelApi implements UModelApiClient {
     })
   }
 
-  listUModel(workspace: string, limit = 100): Promise<QueryResult> {
+  listUModel(workspace: string, limit = 1000): Promise<QueryResult> {
     return this.query(workspace, { query: `.umodel | sort name | limit ${limit}`, limit })
   }
 

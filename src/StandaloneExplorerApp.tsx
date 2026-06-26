@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Box, GitBranch, Network, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
+import { Box, GitBranch, Network, PanelLeftClose, PanelLeftOpen, RefreshCcw, SearchCode, ServerCog, Settings2, UploadCloud } from 'lucide-react'
 import { UModelApi, type UModelApiClient } from './api/client'
 import { MockUModelApi } from './api/mockClient'
 import type { WorkspaceMetadata } from './api/types'
@@ -10,6 +10,10 @@ import { useLocalStorageState } from './lib/storage'
 import { UModelPage } from './features/umodel/UModelPage'
 import { TopologyExplorerPage } from './features/topology/TopologyExplorerPage'
 import { EntityExplorerPage } from './features/entity/EntityExplorerPage'
+import { QueryPage } from './features/query/QueryPage'
+import { ImportsPage } from './features/imports/ImportsPage'
+import { SettingsPage } from './features/settings/SettingsPage'
+import { ApiMapPage } from './features/settings/ApiMapPage'
 
 const storageKeys = {
   apiBase: 'standalone.umodel.apiBase',
@@ -19,7 +23,7 @@ const storageKeys = {
 }
 
 type DataSource = 'mock' | 'api'
-type StandaloneSection = 'umodel' | 'entity' | 'topology'
+type StandaloneSection = 'umodel' | 'entity' | 'topology' | 'query' | 'imports' | 'settings' | 'apiDebug'
 
 export function StandaloneExplorerApp() {
   const { t } = useI18n()
@@ -93,6 +97,22 @@ export function StandaloneExplorerApp() {
             <Network size={16} />
             <span className="workspace-nav-label">{t('nav.entityTopo')}</span>
           </button>
+          <button className={section === 'query' ? 'active' : ''} type="button" title={t('nav.query')} onClick={() => setSection('query')}>
+            <SearchCode size={16} />
+            <span className="workspace-nav-label">{t('nav.query')}</span>
+          </button>
+          <button className={section === 'imports' ? 'active' : ''} type="button" title={t('nav.imports')} onClick={() => setSection('imports')}>
+            <UploadCloud size={16} />
+            <span className="workspace-nav-label">{t('nav.imports')}</span>
+          </button>
+          <button className={section === 'settings' ? 'active' : ''} type="button" title={t('nav.settings')} onClick={() => setSection('settings')}>
+            <Settings2 size={16} />
+            <span className="workspace-nav-label">{t('nav.settings')}</span>
+          </button>
+          <button className={section === 'apiDebug' ? 'active' : ''} type="button" title={t('nav.apiMap')} onClick={() => setSection('apiDebug')}>
+            <ServerCog size={16} />
+            <span className="workspace-nav-label">{t('nav.apiMap')}</span>
+          </button>
         </nav>
         <div className="workspace-sidebar-footer standalone-sidebar-footer">
           <Button className="workspace-back-button" variant="ghost" onClick={() => void refresh()}>
@@ -109,8 +129,22 @@ export function StandaloneExplorerApp() {
             <UModelPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
           ) : section === 'entity' ? (
             <EntityExplorerPage refreshToken={refreshToken} />
-          ) : (
+          ) : section === 'topology' ? (
             <TopologyExplorerPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
+          ) : section === 'query' ? (
+            <QueryPage api={api} workspaceId={workspaceId} />
+          ) : section === 'imports' ? (
+            <ImportsPage api={api} workspaceId={workspaceId} onChanged={() => setRefreshToken((value) => value + 1)} />
+          ) : section === 'settings' ? (
+            <SettingsPage
+              api={api}
+              workspaceId={workspaceId}
+              workspace={workspace}
+              onWorkspaceChange={setWorkspace}
+              onBack={() => setSection('umodel')}
+            />
+          ) : (
+            <ApiMapPage api={api} workspaceId={workspaceId} />
           )}
         </main>
       </section>
