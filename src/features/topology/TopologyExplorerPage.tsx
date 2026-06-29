@@ -1,42 +1,48 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import ReactDOM from 'react-dom'
 import {
+  AlertCircle,
   ChevronRight,
   CircleHelp,
   Grid2X2,
   Network,
   Play,
+  RefreshCcw,
   Search,
   Settings,
-  Shuffle,
 } from 'lucide-react'
 import type { UModelApiClient } from '../../api/client'
-import { createAliyunLikeTopologyData, type TopologyNode } from './topologyModel'
+import { formatError } from '../../lib/json'
+import { createTopologyDataFromResults, type TopologyExplorerData, type TopologyNode } from './topologyModel'
 import { resolveTopologyNodeIconPreset, TopologyPresetIcon } from './topologyIcons'
 import { TopologyCanvas } from './TopologyCanvas'
 import './topology.css'
 
 type PanelTab = 'overview' | 'layout'
 
-const mockApplications = [
-  { id: 'app-cms-prod-001', name: '云监控生产应用' },
-  { id: 'app-k8s-core-018', name: 'Kubernetes 核心链路' },
-  { id: 'app-pai-eas-026', name: 'PAI-EAS 推理服务' },
-  { id: 'app-slb-gateway-039', name: 'SLB 网关入口' },
-  { id: 'app-ecs-billing-052', name: 'ECS 计费服务' },
-  { id: 'app-arms-observe-073', name: 'ARMS 观测服务' },
-]
+const ENTITY_LIMIT = 2000
+const TOPO_LIMIT = 4000
+
+const emptyTopologyData: TopologyExplorerData = {
+  nodes: [],
+  edges: [],
+  types: [],
+  nodesById: new Map(),
+  bounds: { minX: -1, minY: -1, maxX: 1, maxY: 1 },
+}
 
 export function TopologyExplorerPage({
-  api: _api,
-  workspaceId: _workspaceId,
+  api,
+  workspaceId,
   refreshToken,
 }: {
   api: UModelApiClient
   workspaceId: string
   refreshToken: number
 }) {
-  const data = useMemo(() => createAliyunLikeTopologyData(), [refreshToken])
+  const [data, setData] = useState<TopologyExplorerData>(emptyTopologyData)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [tab, setTab] = useState<PanelTab>('layout')
   const [layoutMode, setLayoutMode] = useState<'force' | 'cluster'>('force')
   const [clusterRule, setClusterRule] = useState<'replace' | 'append'>('replace')
@@ -46,14 +52,56 @@ export function TopologyExplorerPage({
   const [focusedTypes, setFocusedTypes] = useState<string[]>([])
   const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null)
   const [playing, setPlaying] = useState(false)
-  const [playhead, setPlayhead] = useState(0.98)
-  const [selectedApplicationId, setSelectedApplicationId] = useState(mockApplications[0]?.id || '')
+  const [playhead, setPlayhead] = useState(1)
   const [searchDraft, setSearchDraft] = useState('')
   const [searchText, setSearchText] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const searchBlurRef = useRef<number | null>(null)
   const searchWrapRef = useRef<HTMLDivElement | null>(null)
   const [searchPanelStyle, setSearchPanelStyle] = useState<CSSProperties>()
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const [entityResult, topoResult] = await Promise.all([
+        api.query(workspaceId, { query: `.entity | limit ${ENTITY_LIMIT}`, limit: ENTITY_LIMIT }),
+        api.query(workspaceId, { query: `.topo | limit ${TOPO_LIMIT}`, limit: TOPO_LIMIT }),
+      ])
+      const nextData = createTopologyDataFromResults(entityResult, topoResult)
+      setData(nextData)
+      setSelectedNode((current) => (current ? nextData.nodesById.get(current.id) || null : null))
+    } catch (nextError) {
+      setError(formatError(nextError))
+      setData(emptyTopologyData)
+      setSelectedNode(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [api, workspaceId])
+
+  useEffect(() => {
+    void load()
+  }, [load, refreshToken])
+
+  useEffect(() => {
+    if (!playing) {
+      setPlayhead(1)
+      return
+    }
+    setPlayhead(0.12)
+    const timer = window.setInterval(() => {
+      setPlayhead((value) => {
+        if (value >= 1) {
+          window.clearInterval(timer)
+          return 1
+        }
+        return Math.min(1, value + 0.08)
+      })
+    }, 120)
+    return () => window.clearInterval(timer)
+  }, [playing, data.edges.length])
+
   const focusedTypeSet = useMemo(() => new Set(focusedTypes), [focusedTypes])
   const searchNeedles = useMemo(() => splitSearchWords(searchText), [searchText])
   const displayData = useMemo(() => {
@@ -72,10 +120,11 @@ export function TopologyExplorerPage({
       types: data.types.map((type) => ({
         ...type,
         count: nodes.filter((node) => node.type === type.type).length,
-      })),
+      })).filter((type) => type.count > 0),
       bounds: nodes.length > 0 ? computeDisplayBounds(nodes) : data.bounds,
     }
   }, [data, focusedTypeSet, focusedTypes.length, searchNeedles])
+
   const currentNodeCount = displayData.nodes.length
   const currentEdgeCount = displayData.edges.length
   const searchMatches = useMemo(() => {
@@ -87,14 +136,7 @@ export function TopologyExplorerPage({
       .slice(0, 8)
   }, [data.nodes, searchDraft])
   const activeTypes = useMemo(() => data.types.filter((type) => type.count > 0).slice(0, 8), [data.types])
-
-  useEffect(() => {
-    if (!playing) return
-    const timer = window.setInterval(() => {
-      setPlayhead((value) => (value >= 1 ? 0.08 : Math.min(1, value + 0.035)))
-    }, 160)
-    return () => window.clearInterval(timer)
-  }, [playing])
+  const relationTypeCount = useMemo(() => new Set(data.edges.map((edge) => edge.type)).size, [data.edges])
 
   const updateSearchPanelGeometry = useCallback(() => {
     const wrap = searchWrapRef.current
@@ -228,15 +270,20 @@ export function TopologyExplorerPage({
                   if (event.key === 'Enter') applySearch()
                   if (event.key === 'Escape') setSearchOpen(false)
                 }}
-                placeholder="搜索实体、类型、属性..."
+                placeholder="搜索实体、类型或属性"
               />
               {searchText && (
-                <button className="topo-search-clear" type="button" aria-label="清除搜索" onClick={() => {
-                  setSearchText('')
-                  setSearchDraft('')
-                  setSearchOpen(false)
-                }}>
-                  ×
+                <button
+                  className="topo-search-clear"
+                  type="button"
+                  aria-label="清除搜索"
+                  onClick={() => {
+                    setSearchText('')
+                    setSearchDraft('')
+                    setSearchOpen(false)
+                  }}
+                >
+                  x
                 </button>
               )}
               {searchOpen && (
@@ -257,30 +304,23 @@ export function TopologyExplorerPage({
                 />
               )}
             </div>
-            <label className="topo-app-selector">
-              <span>应用 ID</span>
-              <select value={selectedApplicationId} onChange={(event) => setSelectedApplicationId(event.target.value)}>
-                {mockApplications.map((application) => (
-                  <option key={application.id} value={application.id}>
-                    {application.id} · {application.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+
+            <div className="topo-app-selector">
+              <span>Workspace</span>
+              <strong title={workspaceId}>{workspaceId}</strong>
+            </div>
+
             <div className="topo-time-player">
-              <button type="button">1小时</button>
-              <button type="button">1天</button>
-              <button type="button">自定义</button>
-              <div className="topo-timeline" aria-hidden>
-                {Array.from({ length: 30 }).map((_, index) => (
-                  <span key={index} style={{ backgroundColor: data.types[index % data.types.length]?.color }} />
-                ))}
-              </div>
-              <button className="topo-play-button" type="button" onClick={() => setPlaying((value) => !value)}>
+              <button type="button" onClick={() => setPlaying((value) => !value)} disabled={data.edges.length === 0}>
                 <Play size={15} />
-                {playing ? '暂停' : '播放'}
+                {playing ? '关系展开中' : '关系展开'}
               </button>
-              <span>已缓存</span>
+              <span>{relationTypeCount} 种关系</span>
+              <span>{data.types.length} 类实体</span>
+              <button type="button" onClick={() => void load()}>
+                <RefreshCcw size={14} />
+                刷新
+              </button>
             </div>
           </header>
 
@@ -297,22 +337,42 @@ export function TopologyExplorerPage({
               onSelectNode={setSelectedNode}
               onFocusType={focusType}
             />
-            {selectedNode && (
-              <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />
+            {loading && (
+              <div className="topo-feedback-overlay">
+                <strong>正在加载后端拓扑数据...</strong>
+                <span>工作空间 `{workspaceId}`</span>
+              </div>
             )}
+            {!loading && error && (
+              <div className="topo-feedback-overlay error">
+                <AlertCircle size={18} />
+                <strong>拓扑查询失败</strong>
+                <span>{error}</span>
+                <button type="button" onClick={() => void load()}>
+                  重试
+                </button>
+              </div>
+            )}
+            {!loading && !error && data.nodes.length === 0 && (
+              <div className="topo-feedback-overlay empty">
+                <strong>当前工作空间暂无拓扑数据</strong>
+                <span>请先导入样例或写入实体与关系后再查看拓扑。</span>
+              </div>
+            )}
+            {selectedNode && <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />}
           </section>
 
           <footer className="topo-statusbar">
-            <span>当前：{currentNodeCount.toLocaleString()} 实体 / {currentEdgeCount.toLocaleString()} 关系</span>
+            <span>当前: {currentNodeCount.toLocaleString()} 实体 / {currentEdgeCount.toLocaleString()} 关系</span>
             {searchText && (
               <>
                 <i />
-                <span>搜索：{searchText}</span>
+                <span>搜索: {searchText}</span>
               </>
             )}
             <i />
-            <span>总量：{data.nodes.length.toLocaleString()} 实体 / {data.edges.length.toLocaleString()} 关系</span>
-            <b>拓扑探索</b>
+            <span>总量: {data.nodes.length.toLocaleString()} 实体 / {data.edges.length.toLocaleString()} 关系</span>
+            <b>实时拓扑</b>
           </footer>
         </main>
       </section>
@@ -353,7 +413,7 @@ function SearchPopover({
             <span className="topo-search-dot" style={{ background: node.color }} />
             <span>
               <b>{node.label}</b>
-              <small>{node.type} · {node.properties.region}</small>
+              <small>{node.type} | {stringProp(node.properties, '__domain__') || stringProp(node.properties, 'namespace') || node.id}</small>
             </span>
           </button>
         ))}
@@ -387,13 +447,18 @@ function OverviewPanel({
   const focusedTypeSet = new Set(focusedTypes)
   return (
     <div className="topo-overview-list">
-          {types.map((item) => (
-            <button key={item.type} className={focusedTypeSet.has(item.type) ? 'active' : ''} type="button" onClick={() => onSelectType(item.type)}>
-              <span className="topo-type-icon" style={{ color: item.color, borderColor: item.color }}>
-                <TopologyPresetIcon preset={resolveTypeSummaryPreset(item.type)} label={item.type} size={13} />
-              </span>
-              <span>{item.type}</span>
-              <b>{item.count}</b>
+      {types.map((item) => (
+        <button
+          key={item.type}
+          className={focusedTypeSet.has(item.type) ? 'active' : ''}
+          type="button"
+          onClick={() => onSelectType(item.type)}
+        >
+          <span className="topo-type-icon" style={{ color: item.color, borderColor: item.color }}>
+            <TopologyPresetIcon preset={resolveTypeSummaryPreset(item.type)} label={item.type} size={13} />
+          </span>
+          <span>{item.type}</span>
+          <b>{item.count}</b>
           <CircleHelp size={14} />
           <ChevronRight size={14} />
         </button>
@@ -428,13 +493,13 @@ function LayoutPanel({
   return (
     <div className="topo-layout-panel">
       <SectionTitle title="布局算法" />
-      <RadioCard active={layoutMode === 'force'} title="力导向" desc="按实体连接关系布局，不按类型聚类" onClick={() => onLayoutModeChange('force')} />
-      <RadioCard active={layoutMode === 'cluster'} title="聚类" desc="按实体类型分组，生成聚类拓扑总览" onClick={() => onLayoutModeChange('cluster')} />
-      <SectionTitle title="仿真" />
+      <RadioCard active={layoutMode === 'force'} title="关系布局" desc="按照实体连接关系展示真实拓扑。" onClick={() => onLayoutModeChange('force')} />
+      <RadioCard active={layoutMode === 'cluster'} title="类型聚类" desc="按照实体类型分组查看结构总览。" onClick={() => onLayoutModeChange('cluster')} />
+      <SectionTitle title="交互" />
       <ToggleRow title="允许拖拽" value={allowDrag} onChange={onAllowDragChange} />
       <SectionTitle title="聚焦规则" />
-      <RadioCard active={clusterRule === 'replace'} title="替换聚焦" desc="每次聚焦只保留当前实体" onClick={() => onClusterRuleChange('replace')} />
-      <RadioCard active={clusterRule === 'append'} title="追加聚焦" desc="每次聚焦追加到现有聚焦实体" onClick={() => onClusterRuleChange('append')} />
+      <RadioCard active={clusterRule === 'replace'} title="替换聚焦" desc="每次只保留当前类型聚焦。" onClick={() => onClusterRuleChange('replace')} />
+      <RadioCard active={clusterRule === 'append'} title="追加聚焦" desc="可叠加多个类型一起观察。" onClick={() => onClusterRuleChange('append')} />
       <SectionTitle title="显示" />
       <ToggleRow title="显示标签" value={showLabels} onChange={onShowLabelsChange} />
       <ToggleRow title="聚类标签" value={showClusterLabels} onChange={onShowClusterLabelsChange} disabled={layoutMode !== 'cluster'} />
@@ -467,32 +532,18 @@ function ToggleRow({ title, value, disabled, onChange }: { title: string; value:
 }
 
 function NodeDetail({ node, onClose }: { node: TopologyNode; onClose: () => void }) {
-  const rows = [
-    ['service_id', `${node.id.replace('entity-', 'hwx28v3j7p@19bf')}`],
-    ['service', node.label.toLowerCase().replace(/\s+/g, '-').slice(0, 20)],
-    ['source', 'apm'],
-    ['language', ['dotnet', 'java', 'go', 'nodejs'][Number(node.properties.relationCount) % 4]],
-    ['cluster_id', `ca50119b1cae34a8e91ff52c5b65f5bb9`],
-    ['workload_name', node.type.includes('Kubernetes') ? 'accounting' : 'cms-demo'],
-    ['workload_kind', node.type.includes('Kubernetes') ? 'deployment' : 'service'],
-    ['namespace', 'cms-demo'],
-    ['pod_name', `${node.label.split(' ')[0]}-7cf85d999d-4gmq7`],
-    ['instance_id', `i-j6cd1zguzn6sfmxemmy4`],
-    ['host', node.properties.host || node.properties.ip || '10.179.126.252'],
-    ['ip', node.properties.ip || '10.179.126.252'],
-    ['properties', JSON.stringify(node.properties)],
-  ]
+  const rows = detailRowsFor(node)
 
   return (
     <aside className="topo-node-detail">
-      <button className="topo-detail-close" type="button" onClick={onClose}>×</button>
+      <button className="topo-detail-close" type="button" onClick={onClose}>x</button>
       <div className="topo-detail-header">
         <div className="topo-detail-icon" style={{ color: node.color, borderColor: node.color }}>
           <TopologyPresetIcon preset={resolveTopologyNodeIconPreset(node)} label={node.type} size={22} />
         </div>
         <div>
           <strong>{shortDetailTitle(node)}</strong>
-          <span><i style={{ backgroundColor: node.color }} /> 实例</span>
+          <span><i style={{ backgroundColor: node.color }} /> {node.type}</span>
         </div>
       </div>
       <div className="topo-detail-section-title">属性</div>
@@ -504,18 +555,42 @@ function NodeDetail({ node, onClose }: { node: TopologyNode; onClose: () => void
           </div>
         ))}
       </div>
-      <button className="topo-detail-primary" type="button">
-        <Shuffle size={15} />
-        实体详情
-      </button>
     </aside>
   )
 }
 
+function detailRowsFor(node: TopologyNode) {
+  const preferredKeys = [
+    '__domain__',
+    '__entity_type__',
+    '__entity_id__',
+    'display_name',
+    'name',
+    'namespace',
+    'environment',
+    'id',
+    'relationCount',
+    '__first_observed_time__',
+    '__last_observed_time__',
+  ]
+  const rows: Array<[string, string]> = []
+  preferredKeys.forEach((key) => {
+    const value = node.properties[key]
+    if (value === undefined || value === '') return
+    rows.push([key, String(value)])
+  })
+  Object.entries(node.properties).forEach(([key, value]) => {
+    if (preferredKeys.includes(key) || value === undefined || value === '') return
+    rows.push([key, String(value)])
+  })
+  return rows
+}
+
 function shortDetailTitle(node: TopologyNode) {
-  if (node.type.includes('Kubernetes')) return node.properties.host ? String(node.properties.host) : 'openclaw-chat-config'
-  if (node.type.includes('ECS')) return '10.179.126.252'
-  return node.label.replace(/\s+\d+$/, '').slice(0, 28)
+  return stringProp(node.properties, 'display_name')
+    || stringProp(node.properties, 'name')
+    || node.label.replace(/\s+\d+$/, '')
+    || node.id
 }
 
 function resolveTypeSummaryPreset(type: string) {
@@ -525,7 +600,7 @@ function resolveTypeSummaryPreset(type: string) {
 function splitSearchWords(text: string) {
   return text
     .toLowerCase()
-    .split(/[\s,，/|]+/g)
+    .split(/[\s,|]+/g)
     .map((item) => item.trim())
     .filter(Boolean)
 }
@@ -558,4 +633,9 @@ function computeDisplayBounds(nodes: TopologyNode[]) {
   }
   const padding = 80
   return { minX: minX - padding, minY: minY - padding, maxX: maxX + padding, maxY: maxY + padding }
+}
+
+function stringProp(properties: Record<string, string | number>, key: string) {
+  const value = properties[key]
+  return typeof value === 'string' ? value : ''
 }

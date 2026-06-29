@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Box, GitBranch, Network, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
+import { ArrowLeft, Box, GitBranch, Network, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
 import { UModelApi, type UModelApiClient } from './api/client'
-import { MockUModelApi } from './api/mockClient'
 import type { WorkspaceMetadata } from './api/types'
 import { Button, IconButton } from './design/components'
 import { useI18n } from './i18n'
@@ -10,30 +9,33 @@ import { useLocalStorageState } from './lib/storage'
 import { UModelPage } from './features/umodel/UModelPage'
 import { TopologyExplorerPage } from './features/topology/TopologyExplorerPage'
 import { EntityExplorerPage } from './features/entity/EntityExplorerPage'
+import { WorkspacePortal } from './features/workspace/WorkspacePortal'
+import { useWorkspaceStore } from './features/workspace/workspaceStore'
 
 const storageKeys = {
   apiBase: 'standalone.umodel.apiBase',
   workspace: 'standalone.umodel.workspace',
-  dataSource: 'standalone.umodel.dataSource',
   section: 'standalone.umodel.section',
+  activeWorkspace: 'standalone.umodel.activeWorkspace',
 }
 
-type DataSource = 'mock' | 'api'
 type StandaloneSection = 'umodel' | 'entity' | 'topology'
 
 export function StandaloneExplorerApp() {
   const { t } = useI18n()
   const [apiBase, setApiBase] = useLocalStorageState(storageKeys.apiBase, '')
   const [workspaceId, setWorkspaceId] = useLocalStorageState(storageKeys.workspace, 'demo')
-  const [dataSource, setDataSource] = useLocalStorageState<DataSource>(storageKeys.dataSource, 'mock')
+  const [activeWorkspaceId, setActiveWorkspaceId] = useLocalStorageState(storageKeys.activeWorkspace, '')
   const [workspace, setWorkspace] = useState<WorkspaceMetadata | null>(null)
   const [error, setError] = useState('')
   const [refreshToken, setRefreshToken] = useState(0)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [section, setSection] = useLocalStorageState<StandaloneSection>(storageKeys.section, 'topology')
-  const api = useMemo<UModelApiClient>(() => (
-    dataSource === 'mock' ? new MockUModelApi(360) : new UModelApi(apiBase)
-  ), [apiBase, dataSource])
+  const workspaceStore = useWorkspaceStore(apiBase)
+  const selectedWorkspace = useMemo(() => (
+    workspaceStore.workspaces.find((item) => item.id === activeWorkspaceId) || null
+  ), [activeWorkspaceId, workspaceStore.workspaces])
+  const api = useMemo<UModelApiClient>(() => new UModelApi(apiBase), [apiBase])
 
   const refresh = useCallback(async () => {
     setError('')
@@ -54,11 +56,31 @@ export function StandaloneExplorerApp() {
     const params = new URLSearchParams(window.location.search)
     const nextApiBase = params.get('apiBase')
     const nextWorkspaceId = params.get('workspace')
-    const nextDataSource = params.get('dataSource')
     if (nextApiBase !== null) setApiBase(nextApiBase.trim())
     if (nextWorkspaceId) setWorkspaceId(nextWorkspaceId.trim())
-    if (nextDataSource === 'api' || nextDataSource === 'mock') setDataSource(nextDataSource)
-  }, [setApiBase, setDataSource, setWorkspaceId])
+  }, [setApiBase, setWorkspaceId])
+
+  if (!selectedWorkspace) {
+    return (
+      <WorkspacePortal
+        workspaces={workspaceStore.workspaces}
+        loading={workspaceStore.loading}
+        error={workspaceStore.error}
+        onRefresh={() => void workspaceStore.refresh()}
+        onCreate={workspaceStore.createWorkspace}
+        onUpdate={workspaceStore.updateWorkspace}
+        onDelete={async (id) => {
+          await workspaceStore.deleteWorkspace(id)
+          if (activeWorkspaceId === id) setActiveWorkspaceId('')
+        }}
+        onStatusChange={workspaceStore.setWorkspaceStatus}
+        onEnter={(nextWorkspace) => {
+          setActiveWorkspaceId(nextWorkspace.id)
+          setWorkspaceId(nextWorkspace.id)
+        }}
+      />
+    )
+  }
 
   return (
     <div className={`workspace-shell app-shell canvas-host ${sidebarCollapsed ? 'collapsed' : ''}`}>
@@ -67,9 +89,9 @@ export function StandaloneExplorerApp() {
           <StandaloneBrand />
           <div className="workspace-sidebar-title" style={{ minWidth: 0 }}>
             <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {workspace?.name || workspaceId}
+              {selectedWorkspace.name || workspace?.name || workspaceId}
             </strong>
-            <span className="workspace-id">{workspaceId}</span>
+            <span className="workspace-id">{selectedWorkspace.id}</span>
           </div>
           <IconButton
             className="workspace-collapse-button"
@@ -95,6 +117,10 @@ export function StandaloneExplorerApp() {
           </button>
         </nav>
         <div className="workspace-sidebar-footer standalone-sidebar-footer">
+          <Button className="workspace-back-button" variant="ghost" onClick={() => setActiveWorkspaceId('')}>
+            <ArrowLeft size={16} />
+            <span className="workspace-back-label">工作空间</span>
+          </Button>
           <Button className="workspace-back-button" variant="ghost" onClick={() => void refresh()}>
             <RefreshCcw size={16} />
             <span className="workspace-back-label">{t('common.refresh')}</span>
@@ -108,7 +134,7 @@ export function StandaloneExplorerApp() {
           {section === 'umodel' ? (
             <UModelPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
           ) : section === 'entity' ? (
-            <EntityExplorerPage refreshToken={refreshToken} />
+            <EntityExplorerPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
           ) : (
             <TopologyExplorerPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} />
           )}

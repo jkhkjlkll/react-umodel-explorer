@@ -2,6 +2,7 @@ import type { UModelApiClient } from './client'
 import { createMockUModelDataset } from './mockData'
 import type {
   HealthResponse,
+  QueryRequest,
   QueryResult,
   SampleImportResult,
   UModelElement,
@@ -68,6 +69,21 @@ export class MockUModelApi implements UModelApiClient {
         limit,
         total: this.elements.length,
         has_more: this.elements.length > limit,
+      },
+    }
+  }
+
+  async query(workspace: string, payload: QueryRequest): Promise<QueryResult> {
+    if (payload.query.includes('.umodel')) {
+      return this.listUModel(workspace, payload.limit || 1000)
+    }
+    return {
+      columns: [],
+      rows: [],
+      page: {
+        limit: payload.limit,
+        total: 0,
+        has_more: false,
       },
     }
   }

@@ -1,3 +1,5 @@
+import type { QueryResult } from '../../api/types'
+
 export interface TopologyNode {
   id: string
   label: string
@@ -33,6 +35,72 @@ export interface TopologyExplorerData {
   types: TopologyTypeSummary[]
   nodesById: Map<string, TopologyNode>
   bounds: { minX: number; minY: number; maxX: number; maxY: number }
+}
+
+const realTopologyColors = [
+  '#2563eb',
+  '#0f766e',
+  '#7c3aed',
+  '#ea580c',
+  '#dc2626',
+  '#059669',
+  '#4f46e5',
+  '#0891b2',
+  '#9333ea',
+  '#ca8a04',
+]
+
+export function createTopologyDataFromResults(
+  entityResult: QueryResult | null,
+  topoResult: QueryResult | null,
+): TopologyExplorerData {
+  const entityRows = entityResult?.rows || []
+  const topoRows = topoResult?.rows || []
+  const entitiesById = new Map<string, Record<string, unknown>>()
+
+  entityRows.forEach((row) => registerTopologyEntity(entitiesById, row))
+  topoRows.forEach((row) => {
+    registerTopologyEntity(entitiesById, recordValue(row.src))
+    registerTopologyEntity(entitiesById, recordValue(row.dest))
+  })
+
+  const degreeById = new Map<string, number>()
+  const edges: TopologyEdge[] = []
+  const seenEdges = new Set<string>()
+
+  topoRows.forEach((row, index) => {
+    const src = recordValue(row.src)
+    const dest = recordValue(row.dest)
+    const relation = recordValue(row.relation)
+    const sourceId = topologyEntityId(src) || stringValue(row.__src_entity_id__)
+    const targetId = topologyEntityId(dest) || stringValue(row.__dest_entity_id__)
+    if (!sourceId || !targetId) return
+    const type = stringValue(row.__relation_type__) || stringValue(relation.__relation_type__) || 'relation'
+    const id = stringValue(relation.__relation_id__) || `${sourceId}:${type}:${targetId}:${index}`
+    if (seenEdges.has(id)) return
+    seenEdges.add(id)
+    degreeById.set(sourceId, (degreeById.get(sourceId) || 0) + 1)
+    degreeById.set(targetId, (degreeById.get(targetId) || 0) + 1)
+    edges.push({
+      id,
+      source: sourceId,
+      target: targetId,
+      type,
+      color: colorForTopologyKey(type),
+    })
+  })
+
+  const nodes = layoutTopologyNodes([...entitiesById.values()], degreeById)
+  const nodesById = new Map(nodes.map((node) => [node.id, node]))
+  const types = summarizeTopologyTypes(nodes)
+
+  return {
+    nodes,
+    edges: edges.filter((edge) => nodesById.has(edge.source) && nodesById.has(edge.target)),
+    types,
+    nodesById,
+    bounds: computeBounds(nodes),
+  }
 }
 
 const typeNames = [
@@ -252,7 +320,142 @@ function computeBounds(nodes: TopologyNode[]) {
     maxX = Math.max(maxX, node.x)
     maxY = Math.max(maxY, node.y)
   })
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return { minX: -1, minY: -1, maxX: 1, maxY: 1 }
+  }
   return { minX, minY, maxX, maxY }
+}
+
+function registerTopologyEntity(
+  entitiesById: Map<string, Record<string, unknown>>,
+  value: Record<string, unknown>,
+) {
+  if (Object.keys(value).length === 0) return
+  const id = topologyEntityId(value)
+  if (!id) return
+  entitiesById.set(id, { ...(entitiesById.get(id) || {}), ...value, __entity_id__: id })
+}
+
+function layoutTopologyNodes(
+  entities: Record<string, unknown>[],
+  degreeById: Map<string, number>,
+): TopologyNode[] {
+  const grouped = new Map<string, Record<string, unknown>[]>()
+  entities.forEach((entity) => {
+    const type = topologyEntityType(entity)
+    const items = grouped.get(type) || []
+    items.push(entity)
+    grouped.set(type, items)
+  })
+
+  const orderedGroups = [...grouped.entries()]
+    .sort((left, right) => right[1].length - left[1].length || left[0].localeCompare(right[0]))
+
+  const nodes: TopologyNode[] = []
+  orderedGroups.forEach(([type, group], groupIndex) => {
+    const center = topologyGroupCenter(groupIndex)
+    const radius = Math.max(34, Math.min(180, 24 + Math.sqrt(group.length) * 22))
+    const color = colorForTopologyKey(type)
+    group
+      .slice()
+      .sort((left, right) => topologyEntityLabel(left).localeCompare(topologyEntityLabel(right)) || topologyEntityId(left).localeCompare(topologyEntityId(right)))
+      .forEach((entity, index) => {
+        const local = topologyLocalPoint(index, group.length, radius)
+        const id = topologyEntityId(entity)
+        const properties = topologyProperties(entity)
+        const relationCount = degreeById.get(id) || 0
+        properties.relationCount = relationCount
+        nodes.push({
+          id,
+          label: topologyEntityLabel(entity),
+          type,
+          cluster: type,
+          color,
+          x: center.x + local.x,
+          y: center.y + local.y,
+          weight: Math.max(1, Math.min(8, 1 + relationCount)),
+          properties,
+        })
+      })
+  })
+
+  return nodes
+}
+
+function summarizeTopologyTypes(nodes: TopologyNode[]) {
+  const summary = new Map<string, { count: number; color: string }>()
+  nodes.forEach((node) => {
+    const current = summary.get(node.type) || { count: 0, color: node.color }
+    current.count += 1
+    summary.set(node.type, current)
+  })
+  return [...summary.entries()]
+    .map(([type, value]) => ({ type, count: value.count, color: value.color }))
+    .sort((left, right) => right.count - left.count || left.type.localeCompare(right.type))
+}
+
+function topologyGroupCenter(index: number) {
+  if (index === 0) return { x: 0, y: 0 }
+  const angle = index * 2.399963229728653
+  const orbit = 180 + Math.sqrt(index) * 140
+  return {
+    x: Math.cos(angle) * orbit,
+    y: Math.sin(angle) * orbit * 0.82,
+  }
+}
+
+function topologyLocalPoint(index: number, count: number, radius: number) {
+  if (count <= 1) return { x: 0, y: 0 }
+  const angle = index * 2.399963229728653
+  const distance = radius * Math.sqrt((index + 0.5) / count)
+  return {
+    x: Math.cos(angle) * distance,
+    y: Math.sin(angle) * distance,
+  }
+}
+
+function topologyProperties(entity: Record<string, unknown>) {
+  const properties: Record<string, string | number> = {}
+  Object.entries(entity).forEach(([key, value]) => {
+    if (typeof value === 'string' || typeof value === 'number') {
+      properties[key] = value
+    }
+  })
+  return properties
+}
+
+function topologyEntityId(entity: Record<string, unknown>) {
+  return (
+    stringValue(entity.__entity_id__)
+    || stringValue(entity.id)
+    || [stringValue(entity.__domain__), stringValue(entity.__entity_type__), stringValue(entity.name)].filter(Boolean).join(':')
+  )
+}
+
+function topologyEntityType(entity: Record<string, unknown>) {
+  return stringValue(entity.__entity_type__) || stringValue(entity.type) || 'entity'
+}
+
+function topologyEntityLabel(entity: Record<string, unknown>) {
+  return stringValue(entity.display_name) || stringValue(entity.name) || topologyEntityId(entity) || 'Unnamed entity'
+}
+
+function colorForTopologyKey(key: string) {
+  const normalized = (key || 'entity').toLowerCase()
+  let hash = 0
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash = ((hash << 5) - hash) + normalized.charCodeAt(index)
+    hash |= 0
+  }
+  return realTopologyColors[Math.abs(hash) % realTopologyColors.length]
+}
+
+function recordValue(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' ? value : ''
 }
 
 function inferMockIconPreset(type: string) {

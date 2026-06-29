@@ -42,6 +42,7 @@ export class ApiError extends Error {
 export interface UModelApiClient {
   health(): Promise<HealthResponse>
   getWorkspace(workspace: string): Promise<WorkspaceMetadata>
+  query(workspace: string, payload: QueryRequest): Promise<QueryResult>
   listUModel(workspace: string, limit?: number): Promise<QueryResult>
   importSampleData(workspace: string, sample?: string): Promise<SampleImportResult>
   validateUModel(workspace: string, elements: UModelElement[]): Promise<ValidationResult>

@@ -1,25 +1,66 @@
-import { type WheelEvent, useMemo, useState } from 'react'
+import { type WheelEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  ArrowLeft,
   Box,
   ChevronDown,
   Filter,
   Grid2X2,
-  HeartPulse,
-  Network,
+  Home,
+  Maximize2,
+  RefreshCw,
+  RotateCcw,
   Search,
+  SlidersHorizontal,
+  Sparkles,
   Star,
-  Table2,
   X,
 } from 'lucide-react'
-import { createAliyunLikeTopologyData, type TopologyNode } from '../topology/topologyModel'
-import { resolveTopologyNodeIconPreset, TopologyPresetIcon } from '../topology/topologyIcons'
+import type { UModelApiClient } from '../../api/client'
+import { formatError } from '../../lib/json'
+import { createTopologyDataFromResults, type TopologyEdge, type TopologyExplorerData, type TopologyNode } from '../topology/topologyModel'
+import { resolveTopologyNodeIconPreset, TopologyPresetIcon, type TopologyIconPreset } from '../topology/topologyIcons'
 import './entity.css'
 
 type EntityView = 'table' | 'topology' | 'health'
 type ScopeFilter = 'all' | 'recent' | 'starred'
 type EntityStatus = 'normal' | 'warning' | 'critical'
 type QueryMode = 'usearch' | 'spl'
+type SearchCategory = 'all' | 'name' | 'type' | 'domain' | 'instance'
+type EntityScopePreset = 'all' | 'applications' | 'k8s' | 'ecs' | 'rds' | 'rum'
 type RecommendationKind = 'domain' | 'entity' | 'catalog'
+type EntityInstanceTab =
+  | 'detail'
+  | 'topology'
+  | 'trace'
+  | 'page'
+  | 'heatmap'
+  | 'resource'
+  | 'api'
+  | 'exception'
+  | 'customEvent'
+  | 'customLog'
+  | 'settings'
+  | 'logSearch'
+  | 'related'
+
+type EntityDetailTab =
+  | 'detail'
+  | 'topology'
+  | 'trace'
+  | 'page'
+  | 'heatmap'
+  | 'resource'
+  | 'api'
+  | 'exception'
+  | 'customEvent'
+  | 'customLog'
+  | 'settings'
+  | 'logSearch'
+  | 'related'
+type EntityAggregateSortKey = 'name' | 'tags' | 'probe' | 'language' | 'region' | 'latency'
+type EntityTableSortKey = 'name' | 'type' | 'instance' | 'domain' | 'tags' | 'health' | 'events' | 'updated'
+type SortDirection = 'asc' | 'desc'
+type EntityRelationFilter = 'all' | 'provided' | 'dependency'
 
 interface EntityDrilldown {
   label: string
@@ -44,63 +85,74 @@ interface EntityRecord {
   starred: boolean
 }
 
-const ENTITY_TOTAL = 19865
-const ENTITY_DOMAIN_TOTAL = 7
-const ENTITY_TYPE_TOTAL = 101
-const OPEN_EVENT_TOTAL = 383
-const CHANGE_EVENT_TOTAL = 31569
-const TARGET_EVENT_BREAKDOWN = { critical: 346, error: 0, warning: 1, info: 117 }
-const TARGET_CONNECTED = { aiApp: 82, aiAgent: 17, starred: 8 }
+interface EntityScopeTab {
+  key: EntityScopePreset
+  label: string
+  count: number
+}
 
-const apps = ['AI 应用', 'AI Agent', '订单服务', '账单服务', 'CMS Demo', '网关入口', '观测平台']
-const domains = ['apm', 'k8s', 'ecs', 'sls', 'cms', 'arms', 'pai']
-const recommendedDomains = [
-  { label: 'k8s', token: 'k8s', count: 12933, kind: 'domain' as const },
-  { label: 'acs', token: 'acs', count: 3423, kind: 'domain' as const },
-  { label: 'apm', token: 'apm', count: 861, kind: 'domain' as const },
-  { label: 'devops', token: 'devops', count: 714, kind: 'domain' as const },
-  { label: 'infra', token: 'infra', count: 346, kind: 'domain' as const },
-  { label: 'synthetics', token: 'synthetics', count: 9, kind: 'domain' as const },
-  { label: 'rum', token: 'rum', count: 8, kind: 'domain' as const },
+interface EntityCatalogTypeItem {
+  key: string
+  label: string
+  count: number
+  color: string
+  iconPreset?: TopologyIconPreset
+}
+
+interface EntityCatalogDomainGroup {
+  key: string
+  title: string
+  summary: string
+  count: number
+  items: EntityCatalogTypeItem[]
+}
+
+const ENTITY_LIMIT = 2000
+const TOPO_LIMIT = 4000
+
+const searchCategories: Array<{ key: SearchCategory; label: string }> = [
+  { key: 'all', label: '全部' },
+  { key: 'name', label: '实体名称' },
+  { key: 'type', label: '实体类型' },
+  { key: 'domain', label: '实体Domain' },
+  { key: 'instance', label: '实例 ID' },
 ]
-const recommendedEntities = [
-  { label: 'Pod', token: 'k8s@Pod', count: 11731, kind: 'entity' as const },
-  { label: '云服务器 ECS（Disk）', token: 'acs@ecs.disk', count: 1396, kind: 'entity' as const },
-  { label: '云服务器 ECS（eni）', token: 'acs@ecs.eni', count: 805, kind: 'entity' as const },
-  { label: 'devops.image', token: 'devops@image', count: 419, kind: 'entity' as const },
-  { label: '云服务器 ECS（Instance）', token: 'acs@ecs.instance', count: 346, kind: 'entity' as const },
-  { label: '基础设施:主机', token: 'infra@host', count: 346, kind: 'entity' as const },
-  { label: 'Kubernetes 配置项', token: 'k8s@configmap', count: 336, kind: 'entity' as const },
-  { label: 'Kubernetes 服务', token: 'k8s@service', count: 301, kind: 'entity' as const },
-  { label: 'devops.image_registry', token: 'devops@image_registry', count: 268, kind: 'entity' as const },
-  { label: 'Kubernetes 无状态应用', token: 'k8s@deployment', count: 227, kind: 'entity' as const },
-]
-const appMetricsRows = [
-  { name: 'langchain-rag', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '2.52', errors: '0', latency: '28.03 s', tokens: '2.54K', active: true },
-  { name: 'google-adk-a2a-protocol', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '76.47', errors: '0', latency: '1.15 s', tokens: '72.24K', active: true },
-  { name: 'DeepResearch', probe: 'OpenTelemetry', language: 'java', region: 'cn-hongkong', calls: '0', errors: '0', latency: '0', tokens: '0', active: false },
-  { name: 'gw-d44v3iem1hkln8d0d8v0', probe: 'OpenTelemetry', language: 'java', region: 'cn-hongkong', calls: '0', errors: '0', latency: '0', tokens: '0', active: false },
-  { name: 'gw-d28nspmm1hksushjsnd0', probe: 'OpenTelemetry', language: 'java', region: 'cn-hongkong', calls: '0', errors: '0', latency: '0', tokens: '0', active: false },
-  { name: 'agentscope-code-correction', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '5.23', errors: '0', latency: '12.58 s', tokens: '5.77K', active: true },
-  { name: 'dashscope-multicapability', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '0', errors: '0', latency: '0', tokens: '0', active: false },
-  { name: 'claude-agent-doc-qa', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '7.52', errors: '0', latency: '284.82 ms', tokens: '126.24K', active: true },
-  { name: 'openai-marketing-agent', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '2.44', errors: '0', latency: '13.25 s', tokens: '5.93K', active: true },
-  { name: 'knowledge-base-qa', probe: 'ARMS', language: 'python', region: 'cn-hongkong', calls: '1.05', errors: '0', latency: '55.21 s', tokens: '3.71K', active: true },
-]
+
+const emptyEntityTopologyData: TopologyExplorerData = {
+  nodes: [],
+  edges: [],
+  types: [],
+  nodesById: new Map(),
+  bounds: { minX: -1, minY: -1, maxX: 1, maxY: 1 },
+}
+
 const statusMeta = {
   normal: { label: '正常', color: '#22c55e' },
   warning: { label: '警告', color: '#f97316' },
   critical: { label: '严重', color: '#ef4444' },
 } satisfies Record<EntityStatus, { label: string; color: string }>
 
-export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
-  const data = useMemo(() => createAliyunLikeTopologyData(), [refreshToken])
+export function EntityExplorerPage({
+  api,
+  workspaceId,
+  refreshToken,
+}: {
+  api: UModelApiClient
+  workspaceId: string
+  refreshToken: number
+}) {
+  const [data, setData] = useState<TopologyExplorerData>(emptyEntityTopologyData)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const records = useMemo(() => createEntityRecords(data.nodes), [data.nodes])
   const [view, setView] = useState<EntityView>('table')
+  const [selectedTopScope, setSelectedTopScope] = useState<EntityScopePreset>('all')
   const [scope, setScope] = useState<ScopeFilter>('all')
   const [selectedDomain, setSelectedDomain] = useState('all')
   const [selectedType, setSelectedType] = useState('all')
   const [queryMode, setQueryMode] = useState<QueryMode>('usearch')
+  const [searchCategory, setSearchCategory] = useState<SearchCategory>('all')
+  const [searchCategoryOpen, setSearchCategoryOpen] = useState(false)
   const [queryDraft, setQueryDraft] = useState('')
   const [query, setQuery] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(true)
@@ -110,40 +162,80 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
   const [drilldown, setDrilldown] = useState<EntityDrilldown | null>(null)
   const [selected, setSelected] = useState<EntityRecord | null>(null)
   const [selectedTopoNode, setSelectedTopoNode] = useState<TopologyNode | null>(null)
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const [entityResult, topoResult] = await Promise.all([
+        api.query(workspaceId, { query: `.entity | limit ${ENTITY_LIMIT}`, limit: ENTITY_LIMIT }),
+        api.query(workspaceId, { query: `.topo | limit ${TOPO_LIMIT}`, limit: TOPO_LIMIT }),
+      ])
+      const nextData = createTopologyDataFromResults(entityResult, topoResult)
+      const nextRecords = createEntityRecords(nextData.nodes)
+      setData(nextData)
+      setSelected((current) => current ? nextRecords.find((item) => item.id === current.id) || null : null)
+      setSelectedTopoNode((current) => current ? nextData.nodesById.get(current.id) || null : null)
+    } catch (nextError) {
+      setData(emptyEntityTopologyData)
+      setSelected(null)
+      setSelectedTopoNode(null)
+      setError(formatError(nextError))
+    } finally {
+      setLoading(false)
+    }
+  }, [api, workspaceId])
+
+  useEffect(() => {
+    void load()
+  }, [load, refreshToken])
 
   const filtered = useMemo(() => records.filter((record) => {
     const search = query.trim().toLowerCase()
-    const matchesSearch = !search || [
-      record.label,
-      record.type,
-      record.domain,
-      record.app,
-      record.properties.ip,
-      record.properties.host,
-    ].join(' ').toLowerCase().includes(search)
+    const matchesSearch = !search || entitySearchText(record, searchCategory).includes(search)
+    const matchesTopScope = selectedTopScope === 'all' || matchesEntityScopePreset(record, selectedTopScope)
     const matchesScope = scope === 'all'
-      || (scope === 'recent' && Number(record.id.replace('entity-', '')) % 9 === 0)
+      || (scope === 'recent' && records.slice(0, Math.min(3, records.length)).some((item) => item.id === record.id))
       || (scope === 'starred' && record.starred)
     return matchesSearch
+      && matchesTopScope
       && matchesScope
       && (selectedDomain === 'all' || record.domain === selectedDomain)
       && (selectedType === 'all' || record.type === selectedType)
-  }), [query, records, scope, selectedDomain, selectedType])
+  }), [query, records, scope, searchCategory, selectedDomain, selectedTopScope, selectedType])
 
-  const stats = useMemo(() => summarizeEntities(records, true), [records])
+  const stats = useMemo(() => summarizeEntities(records), [records])
   const filteredStats = useMemo(() => summarizeEntities(filtered), [filtered])
   const domainStats = useMemo(() => countBy(records, (record) => record.domain), [records])
   const typeStats = useMemo(() => countBy(records, (record) => record.type), [records])
+  const recentCatalogRecords = useMemo(() => records.slice(0, Math.min(3, records.length)), [records])
+  const recentCount = recentCatalogRecords.length
+  const starredCount = useMemo(() => records.filter((record) => record.starred).length, [records])
   const catalogApps = useMemo(() => {
     const entries = [
-      { key: 'apm', count: 14, kind: 'group' as const },
-      { key: 'AI 应用', count: TARGET_CONNECTED.aiApp, kind: 'app' as const },
-      { key: 'AI Agent', count: TARGET_CONNECTED.aiAgent, kind: 'app' as const },
-      ...countBy(records, (record) => record.app).filter((item) => item.key !== 'AI 应用' && item.key !== 'AI Agent').slice(0, 5).map((item) => ({ ...item, kind: 'app' as const })),
+      ...domainStats.slice(0, 4).map((item) => ({ ...item, kind: 'domain' as const })),
+      ...typeStats.slice(0, 6).map((item) => ({ ...item, kind: 'type' as const })),
     ]
     const search = catalogQuery.trim().toLowerCase()
     return search ? entries.filter((item) => item.key.toLowerCase().includes(search)) : entries
-  }, [catalogQuery, records])
+  }, [catalogQuery, domainStats, typeStats])
+  const catalogDomainGroups = useMemo(() => createCatalogDomainGroups(records, catalogQuery), [catalogQuery, records])
+  const recommendedDomainItems = useMemo<EntityDrilldown[]>(() => domainStats.slice(0, 7).map((item) => ({
+    label: item.key,
+    token: item.key,
+    count: item.count,
+    kind: 'domain',
+  })), [domainStats])
+  const recommendedEntityItems = useMemo<EntityDrilldown[]>(() => typeStats.slice(0, 10).map((item) => ({
+    label: stripSyntheticType(item.key),
+    token: item.key,
+    count: item.count,
+    kind: 'entity',
+  })), [typeStats])
+  const scopeTabs = useMemo(
+    () => createEntityScopeTabs(records),
+    [records],
+  )
+  const drilldownRecords = useMemo(() => filterRecordsForDrilldown(records, drilldown), [drilldown, records])
   const topologyTypes = useMemo(() => {
     if (selectedType !== 'all') return [stripSyntheticType(selectedType)]
     const values = [...new Set(filtered.slice(0, 12).map((record) => stripSyntheticType(record.type)))]
@@ -155,20 +247,26 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
     setQueryDraft('')
     setQuery('')
     setMainSuggestOpen(false)
+    setSearchCategoryOpen(false)
     setCatalogSuggestOpen(false)
   }
   const runQuery = () => {
     const nextQuery = queryDraft.trim()
     setQuery(nextQuery)
     setMainSuggestOpen(false)
-    if (nextQuery) {
-      openDrilldown({ label: nextQuery, token: nextQuery, count: 83, kind: 'entity' })
-    }
+    setSearchCategoryOpen(false)
+    setDrilldown(null)
+    setView('table')
   }
   const clearDrilldown = () => {
     setDrilldown(null)
     setQuery('')
     setQueryDraft('')
+  }
+  const selectDetailNode = (node: TopologyNode) => {
+    const match = records.find((record) => record.id === node.id)
+    if (match) setSelected(match)
+    setSelectedTopoNode(node)
   }
   const switchView = (nextView: EntityView) => {
     setView(nextView)
@@ -185,21 +283,110 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
             <Box size={18} />
             <strong>实体探索</strong>
           </div>
+          <div className="entity-scope-tabs" role="listbox" aria-label="实体范围">
+            {scopeTabs.map((tab, index) => (
+              <button
+                key={tab.key}
+                type="button"
+                role="option"
+                aria-selected={tab.key === selectedTopScope}
+                className={tab.key === selectedTopScope ? 'active' : ''}
+                onKeyDown={(event) => {
+                  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+                  event.preventDefault()
+                  const offset = event.key === 'ArrowRight' ? 1 : -1
+                  const nextTab = scopeTabs[(index + offset + scopeTabs.length) % scopeTabs.length]
+                  setSelectedTopScope(nextTab.key)
+                  setScope('all')
+                  setSelectedDomain('all')
+                  setSelectedType('all')
+                }}
+                onClick={() => {
+                  setDrilldown(null)
+                  setSelectedTopoNode(null)
+                  setSelected(null)
+                  setQuery('')
+                  setQueryDraft('')
+                  setSelectedTopScope(tab.key)
+                  setScope('all')
+                  setSelectedDomain('all')
+                  setSelectedType('all')
+                }}
+              >
+                <span>{tab.label}</span>
+                <b>{tab.count.toLocaleString()}</b>
+              </button>
+            ))}
+          </div>
+          <div className="entity-topline-actions">
+            <div className="entity-time-picker">
+              <span>15min</span>
+              <input aria-label="请输入时间" value="最近15分钟" readOnly />
+              <ChevronDown size={13} />
+            </div>
+            <button type="button" aria-label="刷新实体探索" onClick={() => void load()}>
+              <RefreshCw size={14} />
+            </button>
+            <button className="accent" type="button" aria-label="智能助手">
+              <Sparkles size={15} />
+            </button>
+          </div>
+          <div className="entity-toolbar-break" aria-hidden="true" />
           <div className="entity-query-tabs">
             <button className={queryMode === 'usearch' ? 'active' : ''} type="button" onClick={() => setQueryMode('usearch')}>USearch</button>
             <button className={queryMode === 'spl' ? 'active' : ''} type="button" onClick={() => setQueryMode('spl')}>SPL</button>
           </div>
-          <button className="entity-icon-button" type="button"><Grid2X2 size={15} /></button>
+          <div
+            className="entity-search-category"
+            onBlur={() => window.setTimeout(() => setSearchCategoryOpen(false), 120)}
+          >
+            <button
+              className={searchCategoryOpen ? 'entity-query-action active' : 'entity-query-action'}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={searchCategoryOpen}
+              onClick={() => setSearchCategoryOpen((value) => !value)}
+            >
+              <Grid2X2 size={14} />
+              <span>搜索分类</span>
+              <ChevronDown size={13} />
+            </button>
+            {searchCategoryOpen && (
+              <div className="entity-search-category-menu" role="menu">
+                {searchCategories.map((item) => (
+                  <button
+                    key={item.key}
+                    className={item.key === searchCategory ? 'active' : ''}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={item.key === searchCategory}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setSearchCategory(item.key)
+                      setSearchCategoryOpen(false)
+                    }}
+                  >
+                    <span>{item.label}</span>
+                    {item.key === searchCategory && <b>✓</b>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {drilldown && (
             <button className="entity-selected-filter" type="button" onClick={clearDrilldown}>
               <span>{drilldown.token}</span>
               <X size={14} />
             </button>
           )}
-          <button className="entity-icon-button" type="button"><Filter size={15} /></button>
-          <div className="entity-search entity-search-with-popover">
-            <Search size={15} />
+          <button className="entity-query-action" type="button" onClick={() => setFiltersOpen((value) => !value)}>
+            <Filter size={14} />
+            <span>筛选</span>
+          </button>
+          <code className="entity-query-editor entity-search-with-popover">
+            <span className="entity-query-line" aria-hidden="true">1</span>
             <input
+              aria-label="The editor is not accessible at this time."
               value={queryDraft}
               onFocus={() => setMainSuggestOpen(true)}
               onBlur={() => window.setTimeout(() => setMainSuggestOpen(false), 120)}
@@ -210,23 +397,34 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
               onKeyDown={(event) => {
                 if (event.key === 'Enter') runQuery()
               }}
-              placeholder={queryMode === 'spl' ? '输入 SPL，例如 * | where entity_type like Kubernetes' : '请输入实体名称、类型、IP...'}
+              placeholder={queryMode === 'spl' ? '输入 SPL，例如 * | where entity_type like Kubernetes' : '请输入实体关键词（至少 4 个字符）'}
             />
-            {mainSuggestOpen && (
-              <EntitySearchPopover compact onSelect={openDrilldown} />
+            {!queryDraft && (
+              <span className="entity-query-placeholder" aria-hidden="true">
+                {queryMode === 'spl' ? '输入 SPL，例如 * | where entity_type like Kubernetes' : '请输入实体关键词（至少 4 个字符）'}
+              </span>
             )}
-          </div>
+            <Search className="entity-query-search-icon" size={14} aria-hidden="true" />
+            {mainSuggestOpen && (
+              <EntitySearchPopover
+                compact
+                recommendedDomains={recommendedDomainItems}
+                recommendedEntities={recommendedEntityItems}
+                onSelect={openDrilldown}
+              />
+            )}
+          </code>
           <button className="entity-primary" type="button" onClick={runQuery}>查询</button>
-          <div className="entity-view-tabs">
-            <button className={view === 'table' ? 'active' : ''} type="button" onClick={() => switchView('table')}><Table2 size={14} />表格</button>
-            <button className={view === 'topology' ? 'active' : ''} type="button" onClick={() => switchView('topology')}><Network size={14} />拓扑</button>
-            <button className={view === 'health' ? 'active' : ''} type="button" onClick={() => switchView('health')}><HeartPulse size={14} />健康度</button>
+          <div className="entity-view-tabs" role="radiogroup" aria-label="实体视图">
+            <button className={view === 'table' ? 'active' : ''} type="button" role="radio" aria-checked={view === 'table'} onClick={() => switchView('table')}><i />表格</button>
+            <button className={view === 'topology' ? 'active' : ''} type="button" role="radio" aria-checked={view === 'topology'} onClick={() => switchView('topology')}><i />拓扑</button>
+            <button className={view === 'health' ? 'active' : ''} type="button" role="radio" aria-checked={view === 'health'} onClick={() => switchView('health')}><i />健康度</button>
           </div>
         </header>
 
         <section className="entity-content">
           {drilldown ? (
-            <EntityMetricsResult selection={drilldown} />
+            <EntityMetricsResult selection={drilldown} records={drilldownRecords} />
           ) : view === 'topology' ? (
             <EntityTopologyView
               data={data}
@@ -235,18 +433,24 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
               onSelectNode={(node) => {
                 setSelectedTopoNode(node)
                 if (node) {
-                  const match = filtered.find((record) => stripSyntheticType(record.type) === node.type || record.label.includes(node.label.replace(/\s+\d+$/, '')))
+                  const match = filtered.find((record) => record.id === node.id)
                   if (match) setSelected(match)
                 }
               }}
               onFocusType={(type) => {
                 const match = typeStats.find((item) => stripSyntheticType(item.key) === type)
-                if (match) setSelectedType(match.key)
+                if (match) {
+                  setSelectedTopScope('all')
+                  setSelectedType(match.key)
+                }
               }}
             />
           ) : (
             <>
-              <div className="entity-summary-grid">
+              {loading && <EntityFeedback message="正在加载后端实体数据..." />}
+              {!loading && error && <EntityFeedback tone="error" message="实体查询失败" detail={error} onRetry={() => void load()} />}
+              {!loading && !error && records.length === 0 && <EntityFeedback message={'\u5f53\u524d\u5de5\u4f5c\u7a7a\u95f4\u6682\u65e0\u5b9e\u4f53\u6570\u636e'} detail={'\u8bf7\u5148\u5bfc\u5165\u6837\u4f8b\u6216\u5199\u5165\u5b9e\u4f53\u540e\u518d\u67e5\u770b\u5b9e\u4f53\u63a2\u7d22\u3002'} />}
+              <div className="entity-summary-grid" role="region" aria-label="实体总览">
                 <EntityStatCard title="实体" items={[
                   { value: stats.total.toLocaleString(), label: '实体总数' },
                   { value: stats.domainCount.toLocaleString(), label: '实体Domain' },
@@ -265,13 +469,23 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
                   collapsed={!filtersOpen}
                   domains={domainStats}
                   types={typeStats}
+                  recentCount={recentCount}
+                  starredCount={starredCount}
                   onScopeChange={setScope}
-                  onDomainChange={setSelectedDomain}
-                  onTypeChange={setSelectedType}
+                  onDomainChange={(value) => {
+                    setSelectedTopScope('all')
+                    setSelectedDomain(value)
+                  }}
+                  onTypeChange={(value) => {
+                    setSelectedTopScope('all')
+                    setSelectedType(value)
+                  }}
                   onToggleCollapsed={() => setFiltersOpen((value) => !value)}
                 />
                 <EntityCatalog
                   apps={catalogApps}
+                  groups={catalogDomainGroups}
+                  recentRecords={recentCatalogRecords}
                   query={catalogQuery}
                   suggestOpen={catalogSuggestOpen}
                   onQueryChange={(value) => {
@@ -290,13 +504,14 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
                     </div>
                     <button type="button" onClick={() => {
                       setScope('all')
+                      setSelectedTopScope('all')
                       setSelectedDomain('all')
                       setSelectedType('all')
                       setQuery('')
                       setQueryDraft('')
                     }}>重置</button>
                   </div>
-                  {view === 'table' && <EntityTable records={filtered.slice(0, 80)} selected={selected} onSelect={setSelected} />}
+                  {view === 'table' && <EntityTable records={filtered} selected={selected} onSelect={setSelected} />}
                   {view === 'health' && <EntityHealthGrid records={filtered.slice(0, 80)} onSelect={setSelected} />}
                 </section>
               </div>
@@ -305,23 +520,48 @@ export function EntityExplorerPage({ refreshToken }: { refreshToken: number }) {
         </section>
       </main>
 
-      <EntityDetail record={view === 'topology' ? null : selected} onClose={() => setSelected(null)} />
+      <EntityDetail
+        record={view === 'topology' ? null : selected}
+        data={data}
+        onClose={() => setSelected(null)}
+        onSelectNode={selectDetailNode}
+      />
     </div>
   )
 }
 
 function EntityStatCard({ title, items }: { title: string; items: Array<{ value: string; label: string }> }) {
   return (
-    <section className="entity-card entity-stat-card">
+    <article className="entity-card entity-stat-card">
       <strong>{title}</strong>
-      <div>
+      <div className="entity-overview-metrics">
         {items.map((item) => (
-          <span key={item.label}>
+          <span className="entity-overview-metric" key={item.label}>
             <b>{item.value}</b>
             <small>{item.label}</small>
           </span>
         ))}
       </div>
+    </article>
+  )
+}
+
+function EntityFeedback({
+  message,
+  detail,
+  tone = 'info',
+  onRetry,
+}: {
+  message: string
+  detail?: string
+  tone?: 'info' | 'error'
+  onRetry?: () => void
+}) {
+  return (
+    <section className={`entity-feedback ${tone}`}>
+      <strong>{message}</strong>
+      {detail && <span>{detail}</span>}
+      {onRetry && <button type="button" onClick={onRetry}>重试</button>}
     </section>
   )
 }
@@ -329,15 +569,19 @@ function EntityStatCard({ title, items }: { title: string; items: Array<{ value:
 function EventCard({ stats }: { stats: ReturnType<typeof summarizeEntities> }) {
   const total = Math.max(1, stats.criticalEvents + stats.errorEvents + stats.warningEvents + stats.infoEvents)
   return (
-    <section className="entity-card entity-event-card">
-      <div>
+    <article className="entity-card entity-event-card">
+      <div className="entity-overview-card-head">
         <strong>事件</strong>
-        <b>{stats.openEvents.toLocaleString()}</b>
-        <small>未恢复事件</small>
       </div>
-      <div className="entity-change-count">
-        <b>{stats.changeEvents.toLocaleString()}</b>
-        <small>Change 事件</small>
+      <div className="entity-overview-metrics entity-event-totals">
+        <span className="entity-overview-metric">
+          <b>{stats.openEvents.toLocaleString()}</b>
+          <small>未恢复事件</small>
+        </span>
+        <span className="entity-overview-metric">
+          <b>{stats.changeEvents.toLocaleString()}</b>
+          <small>Change 事件</small>
+        </span>
       </div>
       <div className="entity-event-bar">
         <span style={{ flex: stats.criticalEvents / total, background: '#c94a4a' }} />
@@ -351,28 +595,49 @@ function EventCard({ stats }: { stats: ReturnType<typeof summarizeEntities> }) {
         <span><i style={{ background: '#f97316' }} />警告 {stats.warningEvents}</span>
         <span><i style={{ background: '#6559ff' }} />提示 {stats.infoEvents}</span>
       </div>
-    </section>
+    </article>
   )
 }
 
 function HealthCard({ stats }: { stats: ReturnType<typeof summarizeEntities> }) {
-  const abnormal = stats.warning + stats.critical
   const normalPercent = Math.round((stats.normal / Math.max(1, stats.total)) * 100)
+  const healthRows = [
+    { key: 'normal' as const, label: '正常', value: stats.normal.toLocaleString(), color: statusMeta.normal.color },
+    { key: 'warning' as const, label: '警告', value: stats.warning.toLocaleString(), color: statusMeta.warning.color },
+    { key: 'critical' as const, label: '严重', value: stats.critical.toLocaleString(), color: statusMeta.critical.color },
+    { key: 'total' as const, label: '总计', value: stats.total.toLocaleString(), color: '#94a3b8' },
+  ]
   return (
-    <section className="entity-card entity-health-card">
-      <strong>健康度</strong>
+    <article className="entity-card entity-health-card">
+      <div className="entity-overview-card-head">
+        <strong>健康度</strong>
+      </div>
       <div className="entity-health-body">
-        <div className="entity-health-ring" style={{ ['--health' as string]: `${normalPercent}%` }}>
-          <span>{abnormal === 0 ? '正常' : `${normalPercent}%`}</span>
+        <div className="entity-health-score">
+          <b>{normalPercent}%</b>
+          <small>正常</small>
         </div>
-        <div className="entity-health-legend">
-          <span><i style={{ background: statusMeta.normal.color }} />正常 {stats.normal.toLocaleString()}</span>
-          <span><i style={{ background: statusMeta.warning.color }} />警告 {stats.warning.toLocaleString()}</span>
-          <span><i style={{ background: statusMeta.critical.color }} />严重 {stats.critical.toLocaleString()}</span>
-          <span><i />总计 {stats.total.toLocaleString()}</span>
+        <div className="entity-health-breakdown">
+          {healthRows.map((item) => (
+            <span key={item.key}>
+              <i style={{ background: item.color }} />
+              <small>{item.label}</small>
+              {item.key === 'total' && (
+                <button
+                  className="entity-health-info-button"
+                  type="button"
+                  aria-label="目前仅 应用（apm@apm.service） 参与健康度计算"
+                  title="目前仅 应用（apm@apm.service） 参与健康度计算"
+                >
+                  ?
+                </button>
+              )}
+              <b>{item.value}</b>
+            </span>
+          ))}
         </div>
       </div>
-    </section>
+    </article>
   )
 }
 
@@ -384,6 +649,8 @@ function FilterPanel({
   collapsed,
   domains,
   types,
+  recentCount,
+  starredCount,
   onScopeChange,
   onDomainChange,
   onTypeChange,
@@ -396,11 +663,36 @@ function FilterPanel({
   collapsed: boolean
   domains: Array<{ key: string; count: number }>
   types: Array<{ key: string; count: number }>
+  recentCount: number
+  starredCount: number
   onScopeChange: (value: ScopeFilter) => void
   onDomainChange: (value: string) => void
   onTypeChange: (value: string) => void
   onToggleCollapsed: () => void
 }) {
+  const [catalogGroup, setCatalogGroup] = useState<'domain' | 'app'>('domain')
+  const filterRows = catalogGroup === 'domain'
+    ? [
+      { key: 'all', label: '全部实体域', count: total, active: selectedDomain === 'all', onClick: () => onDomainChange('all') },
+      ...domains.slice(0, 7).map((item) => ({
+        key: item.key,
+        label: item.key,
+        count: item.count,
+        active: selectedDomain === item.key,
+        onClick: () => onDomainChange(item.key),
+      })),
+    ]
+    : [
+      { key: 'all', label: '全部应用', count: total, active: selectedType === 'all', onClick: () => onTypeChange('all') },
+      ...types.slice(0, 7).map((item) => ({
+        key: item.key,
+        label: item.key,
+        count: item.count,
+        active: selectedType === item.key,
+        onClick: () => onTypeChange(item.key),
+      })),
+    ]
+
   return (
     <section className={`entity-card entity-filter-panel ${collapsed ? 'collapsed' : ''}`}>
       <div className="entity-panel-head">
@@ -408,33 +700,32 @@ function FilterPanel({
           <strong>过滤器</strong>
           <span>{total.toLocaleString()} 个实体</span>
         </div>
-        <button type="button" onClick={onToggleCollapsed}>{collapsed ? '展开' : '收起'}</button>
+        <button type="button" aria-label={collapsed ? '展开筛选' : '收起筛选'} onClick={onToggleCollapsed}>{collapsed ? '展开筛选' : '收起筛选'}</button>
       </div>
       {!collapsed && (
         <>
           <div className="entity-filter-section">
             <strong>实体范围</strong>
-            <FilterRow active={scope === 'all'} label="所有实体" count={total} onClick={() => onScopeChange('all')} />
-            <FilterRow active={scope === 'recent'} label="最近访问" count={Math.floor(total / 9)} onClick={() => onScopeChange('recent')} />
-            <FilterRow active={scope === 'starred'} label="关注实体" count={8} onClick={() => onScopeChange('starred')} />
+            <FilterRow active={scope === 'all'} label={'\u6240\u6709\u5b9e\u4f53'} count={total} onClick={() => onScopeChange('all')} />
+            <FilterRow active={scope === 'recent'} label={'\u6700\u8fd1\u8bbf\u95ee'} count={recentCount} onClick={() => onScopeChange('recent')} />
+            <FilterRow active={scope === 'starred'} label="关注实体" count={starredCount} onClick={() => onScopeChange('starred')} />
           </div>
           <div className="entity-filter-section">
-            <strong>实体Domain</strong>
-            <div className="entity-chip-grid">
-              <button className={selectedDomain === 'all' ? 'active' : ''} type="button" onClick={() => onDomainChange('all')}>全部</button>
-              {domains.slice(0, 7).map((item) => (
-                <button key={item.key} className={selectedDomain === item.key ? 'active' : ''} type="button" onClick={() => onDomainChange(item.key)}>
-                  {item.key}
+            <div className="entity-filter-section-title">
+              <strong>目录分组方式</strong>
+              <div className="entity-filter-segmented" role="group" aria-label="目录分组方式">
+                <button className={catalogGroup === 'domain' ? 'active' : ''} type="button" onClick={() => setCatalogGroup('domain')}>实体Domain</button>
+                <button className={catalogGroup === 'app' ? 'active' : ''} type="button" onClick={() => setCatalogGroup('app')}>应用</button>
+              </div>
+            </div>
+            <div className="entity-domain-list">
+              {filterRows.map((item) => (
+                <button key={item.key} className={item.active ? 'entity-domain-row active' : 'entity-domain-row'} type="button" onClick={item.onClick}>
+                  <span>{item.label}</span>
+                  <b>{item.count.toLocaleString()}</b>
                 </button>
               ))}
             </div>
-          </div>
-          <div className="entity-filter-section">
-            <strong>实体类型</strong>
-            <select value={selectedType} onChange={(event) => onTypeChange(event.target.value)}>
-              <option value="all">全部类型</option>
-              {types.slice(0, 16).map((item) => <option key={item.key} value={item.key}>{item.key} ({item.count})</option>)}
-            </select>
           </div>
         </>
       )}
@@ -444,6 +735,8 @@ function FilterPanel({
 
 function EntityCatalog({
   apps,
+  groups,
+  recentRecords,
   query,
   suggestOpen,
   onQueryChange,
@@ -451,7 +744,9 @@ function EntityCatalog({
   onBlurSearch,
   onSelect,
 }: {
-  apps: Array<{ key: string; count: number }>
+  apps: Array<{ key: string; count: number; kind: 'domain' | 'type' }>
+  groups: EntityCatalogDomainGroup[]
+  recentRecords: EntityRecord[]
   query: string
   suggestOpen: boolean
   onQueryChange: (value: string) => void
@@ -464,8 +759,10 @@ function EntityCatalog({
       <div className="entity-panel-head">
         <div>
           <strong>实体目录</strong>
-          <span>最近访问 0 条记录</span>
+          <span>最近访问 {recentRecords.length.toLocaleString()} 条记录</span>
         </div>
+      </div>
+      <div className="entity-catalog-search-row">
         <label
           className="entity-catalog-search"
           onMouseDown={onFocusSearch}
@@ -480,42 +777,121 @@ function EntityCatalog({
             placeholder="搜索实体目录"
           />
         </label>
-        {suggestOpen && <EntitySearchPopover onSelect={onSelect} />}
+        <button className="entity-catalog-search-button" type="button" disabled>搜索</button>
+        {suggestOpen && (
+          <EntitySearchPopover
+            recommendedDomains={apps.filter((item) => item.kind === 'domain').map((item) => ({
+              label: item.key,
+              token: item.key,
+              count: item.count,
+              kind: 'domain',
+            }))}
+            recommendedEntities={apps.filter((item) => item.kind === 'type').map((item) => ({
+              label: item.key,
+              token: item.key,
+              count: item.count,
+              kind: 'entity',
+            }))}
+            onSelect={onSelect}
+          />
+        )}
       </div>
       <div className="entity-app-list">
-        {apps.map((item, index) => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => onSelect({
-              label: item.key,
-              token: item.key === 'apm' ? 'apm@apm.genai.service' : item.key,
-              count: item.count,
-              kind: 'catalog',
-            })}
-          >
-            <span className="entity-app-icon"><Box size={14} /></span>
-            <span>
-              <b>{item.key}</b>
-              <small>{item.key === 'apm' ? `${item.count} 类实体` : `已接入 ${item.count}`}</small>
-            </span>
-            <Star size={13} className={index % 3 === 0 ? 'filled' : ''} />
-          </button>
+        {recentRecords.length > 0 && (
+          <div className="entity-catalog-recent">
+            <div className="entity-catalog-group-title">
+              <span>最近访问</span>
+              <small>{recentRecords.length.toLocaleString()} 条记录</small>
+            </div>
+            {recentRecords.map((record) => (
+              <button
+                key={record.id}
+                className="entity-catalog-recent-item"
+                type="button"
+                onClick={() => onSelect({
+                  label: stripSyntheticType(record.type),
+                  token: record.type,
+                  count: 1,
+                  kind: 'entity',
+                })}
+              >
+                <span className="entity-type-icon" style={{ color: record.color, borderColor: record.color }}>
+                  <TopologyPresetIcon preset={resolveEntityIconPreset(record)} label={record.type} size={14} />
+                </span>
+                <span>
+                  <b>{record.label}</b>
+                  <small>{record.lastSeen}</small>
+                  <em>{entityInstanceId(record)}</em>
+                  <em>{record.type}</em>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        {groups.map((group) => (
+          <div className="entity-catalog-group" key={group.key}>
+            <div className="entity-catalog-group-title">
+              <button
+                className="entity-catalog-domain-title"
+                type="button"
+                onClick={() => onSelect({
+                  label: group.title,
+                  token: group.title,
+                  count: group.count,
+                  kind: 'domain',
+                })}
+              >
+                {group.title}
+              </button>
+              <small>{group.summary}</small>
+            </div>
+            {group.items.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onSelect({
+                  label: item.label,
+                  token: item.key,
+                  count: item.count,
+                  kind: 'entity',
+                })}
+              >
+                <span className="entity-type-icon" style={{ color: item.color, borderColor: item.color }}>
+                  <TopologyPresetIcon preset={item.iconPreset} label={item.key} size={13} />
+                </span>
+                <span>
+                  <b>{item.label}</b>
+                  <small>已接入</small>
+                </span>
+                <strong>{item.count.toLocaleString()}</strong>
+              </button>
+            ))}
+          </div>
         ))}
       </div>
     </section>
   )
 }
 
-function EntitySearchPopover({ compact = false, onSelect }: { compact?: boolean; onSelect: (item: EntityDrilldown) => void }) {
+function EntitySearchPopover({
+  compact = false,
+  recommendedDomains,
+  recommendedEntities,
+  onSelect,
+}: {
+  compact?: boolean
+  recommendedDomains: EntityDrilldown[]
+  recommendedEntities: EntityDrilldown[]
+  onSelect: (item: EntityDrilldown) => void
+}) {
   return (
     <div className={compact ? 'entity-search-popover compact' : 'entity-search-popover'} onMouseDown={(event) => event.preventDefault()}>
       <div className="entity-search-popover-title">
         <Search size={14} />
         <strong>推荐搜索</strong>
       </div>
-      <EntityRecommendationGroup title="推荐域" items={recommendedDomains} onSelect={onSelect} />
-      <EntityRecommendationGroup title="推荐实体" items={recommendedEntities} onSelect={onSelect} />
+      <EntityRecommendationGroup title={'\u63a8\u8350\u57df'} items={recommendedDomains} onSelect={onSelect} />
+      <EntityRecommendationGroup title="推荐实体类型" items={recommendedEntities} onSelect={onSelect} />
       <p>点击固定标签可多选；输入关键词后搜索目录中的可见文字</p>
     </div>
   )
@@ -546,7 +922,8 @@ function EntityRecommendationGroup({
   )
 }
 
-function EntityMetricsResult({ selection }: { selection: EntityDrilldown }) {
+function EntityMetricsResult({ selection, records }: { selection: EntityDrilldown; records: EntityRecord[] }) {
+  const rows = createEntityMetricRows(records)
   return (
     <section className="entity-metrics-result">
       <div className="entity-metrics-table-wrap">
@@ -560,11 +937,11 @@ function EntityMetricsResult({ selection }: { selection: EntityDrilldown }) {
               <th>平均模型调用次数 <span>?</span></th>
               <th>平均模型调用错误次数 <span>?</span></th>
               <th>平均模型调用耗时 <span>?</span></th>
-              <th>每分钟平均token消耗</th>
+              <th>每分钟平均 Token 消耗</th>
             </tr>
           </thead>
           <tbody>
-            {appMetricsRows.map((row, index) => (
+            {rows.map((row, index) => (
               <tr key={row.name}>
                 <td><a href="#entity-result" onClick={(event) => event.preventDefault()}>{row.name}</a></td>
                 <td>{row.probe}</td>
@@ -582,7 +959,7 @@ function EntityMetricsResult({ selection }: { selection: EntityDrilldown }) {
       <div className="entity-metrics-footer">
         <span>每页显示：</span>
         <button type="button">10 <ChevronDown size={14} /></button>
-        <span>总数: {selection.count || 83}</span>
+        <span>总数: {records.length.toLocaleString()}</span>
         <button type="button" disabled>上一页</button>
         <button type="button" className="active">1</button>
         <button type="button">2</button>
@@ -591,7 +968,7 @@ function EntityMetricsResult({ selection }: { selection: EntityDrilldown }) {
         <span>...</span>
         <button type="button">9</button>
         <button type="button">下一页</button>
-        <span>1/9</span>
+        <span>1/{Math.max(1, Math.ceil(records.length / 10))}</span>
         <span>到第</span>
         <input aria-label="页码" />
         <span>页</span>
@@ -636,42 +1013,181 @@ function FilterRow({ active, label, count, onClick }: { active: boolean; label: 
 }
 
 function EntityTable({ records, selected, onSelect }: { records: EntityRecord[]; selected: EntityRecord | null; onSelect: (record: EntityRecord) => void }) {
+  const [sortKey, setSortKey] = useState<EntityTableSortKey>('name')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const sortedRecords = useMemo(() => [...records].sort((left, right) => {
+    const leftValue = entityTableSortValue(left, sortKey)
+    const rightValue = entityTableSortValue(right, sortKey)
+    const result = typeof leftValue === 'number' && typeof rightValue === 'number'
+      ? leftValue - rightValue
+      : String(leftValue).localeCompare(String(rightValue), 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
+    return sortDirection === 'asc' ? result : -result
+  }), [records, sortDirection, sortKey])
+  const visibleRows = sortedRecords.slice(0, 80)
+  const pageCount = Math.max(1, Math.ceil(records.length / 20))
+  const changeSort = (key: EntityTableSortKey) => {
+    setSortKey((currentKey) => {
+      if (currentKey === key) {
+        setSortDirection((currentDirection) => currentDirection === 'asc' ? 'desc' : 'asc')
+        return currentKey
+      }
+      setSortDirection('asc')
+      return key
+    })
+  }
+  const sortState = (key: EntityTableSortKey) => sortKey === key ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'
+  const sortClass = (key: EntityTableSortKey) => `entity-topology-sort ${sortKey === key ? sortDirection : ''}`
+
   return (
     <div className="entity-table-wrap">
-      <table className="entity-table">
-        <thead>
-          <tr>
-            <th>实体</th>
-            <th>Domain</th>
-            <th>应用</th>
-            <th>健康</th>
-            <th>事件</th>
-            <th>最近上报</th>
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((record) => (
-            <tr key={record.id} className={selected?.id === record.id ? 'active' : ''} onClick={() => onSelect(record)}>
-              <td>
-                <span className="entity-type-icon" style={{ color: record.color, borderColor: record.color }}>
-                  <TopologyPresetIcon preset={resolveEntityIconPreset(record)} label={record.type} size={15} />
-                </span>
-                <span>
-                  <b>{record.label}</b>
-                  <small>{record.type}</small>
-                </span>
-              </td>
-              <td>{record.domain}</td>
-              <td>{record.app}</td>
-              <td><StatusPill status={record.status} /></td>
-              <td>{record.events}</td>
-              <td>{record.lastSeen}</td>
+      <div className="entity-table-scroll">
+        <table className="entity-table">
+          <thead>
+            <tr>
+              <th aria-label="选择实体"><input type="checkbox" aria-label="选择全部实体" /></th>
+              <th aria-sort={sortState('name')}>
+                <button type="button" className="entity-table-sort-header" onClick={() => changeSort('name')}>
+                  实体名称 <span className={sortClass('name')} />
+                </button>
+              </th>
+              <th aria-sort={sortState('type')}>
+                <button type="button" className="entity-table-sort-header" onClick={() => changeSort('type')}>
+                  实体类型 <span className={sortClass('type')} />
+                </button>
+              </th>
+              <th aria-sort={sortState('instance')}>
+                <button type="button" className="entity-table-sort-header" onClick={() => changeSort('instance')}>
+                  实例 ID <span className={sortClass('instance')} />
+                </button>
+              </th>
+              <th aria-sort={sortState('domain')}>
+                <button type="button" className="entity-table-sort-header" onClick={() => changeSort('domain')}>
+                  Domain <span className={sortClass('domain')} />
+                </button>
+              </th>
+              <th aria-sort={sortState('tags')}>
+                <button type="button" className="entity-table-sort-header" onClick={() => changeSort('tags')}>
+                  标签 <span className={sortClass('tags')} />
+                </button>
+              </th>
+              <th aria-sort={sortState('health')}>
+                <button type="button" className="entity-table-sort-header" onClick={() => changeSort('health')}>
+                  健康度 <span className={sortClass('health')} />
+                </button>
+              </th>
+              <th aria-sort={sortState('events')}>
+                <button type="button" className="entity-table-sort-header" onClick={() => changeSort('events')}>
+                  未恢复事件 <span className={sortClass('events')} />
+                </button>
+              </th>
+              <th aria-sort={sortState('updated')}>
+                <button type="button" className="entity-table-sort-header" onClick={() => changeSort('updated')}>
+                  更新时间 <span className={sortClass('updated')} />
+                </button>
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visibleRows.length === 0 && (
+              <tr className="entity-table-empty-row">
+                <td colSpan={9}>暂无匹配实体</td>
+              </tr>
+            )}
+            {visibleRows.map((record) => (
+              <tr key={record.id} className={selected?.id === record.id ? 'active' : ''} onClick={() => onSelect(record)}>
+                <td onClick={(event) => event.stopPropagation()}>
+                  <input type="checkbox" aria-label={`选择 ${record.label}`} checked={selected?.id === record.id} readOnly />
+                </td>
+                <td>
+                  <div className="entity-row-title">
+                    <button
+                      className={record.starred ? 'entity-row-star active' : 'entity-row-star'}
+                      type="button"
+                      aria-label={record.starred ? '已关注实体' : '关注实体'}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <Star size={14} />
+                    </button>
+                    <span className="entity-type-icon" style={{ color: record.color, borderColor: record.color }}>
+                      <TopologyPresetIcon preset={resolveEntityIconPreset(record)} label={record.type} size={15} />
+                    </span>
+                    <span>
+                      <b>{record.label}</b>
+                      <small>{entityInstanceId(record)}</small>
+                    </span>
+                  </div>
+                </td>
+                <td><span className="entity-type-tag">{record.type}</span></td>
+                <td title={entityInstanceId(record)}>{entityInstanceId(record)}</td>
+                <td>{record.domain}</td>
+                <td><span className="entity-tag-count">{entityTagCountFromRecord(record)} 个标签</span></td>
+                <td><StatusPill status={record.status} /></td>
+                <td><span className={record.events > 0 ? 'entity-event-count warning' : 'entity-event-count'}>{record.events}</span></td>
+                <td>{record.lastSeen}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="entity-table-footer">
+        <span>每页显示:</span>
+        <button type="button">20 <ChevronDown size={14} /></button>
+        <span>总数: {records.length.toLocaleString()}</span>
+        <button type="button" disabled>‹ 上一页</button>
+        <button type="button" className="active">1</button>
+        {pageCount > 1 && <button type="button">2</button>}
+        {pageCount > 2 && <span>...</span>}
+        {pageCount > 2 && <button type="button">{pageCount}</button>}
+        <button type="button" disabled={pageCount <= 1}>下一页 ›</button>
+      </div>
     </div>
   )
+}
+
+function entityInstanceId(record: EntityRecord) {
+  return valueText(record.properties.instanceId)
+    || valueText(record.properties.instance_id)
+    || valueText(record.properties.id)
+    || record.id
+}
+
+function entityTableSortValue(record: EntityRecord, key: EntityTableSortKey) {
+  if (key === 'name') return record.label
+  if (key === 'type') return stripSyntheticType(record.type) || record.type
+  if (key === 'instance') return entityInstanceId(record)
+  if (key === 'domain') return record.domain
+  if (key === 'tags') return entityTagCountFromRecord(record)
+  if (key === 'health') return { critical: 3, warning: 2, normal: 1 }[record.status]
+  if (key === 'events') return record.events
+  return valueText(record.properties.__last_observed_time__)
+    || valueText(record.properties.updated_at)
+    || record.lastSeen
+}
+
+function entitySearchText(record: EntityRecord, category: SearchCategory) {
+  const fields = {
+    all: [
+      record.label,
+      record.type,
+      stripSyntheticType(record.type),
+      record.domain,
+      record.app,
+      entityInstanceId(record),
+      valueText(record.properties.ip),
+      valueText(record.properties.host),
+    ],
+    name: [record.label],
+    type: [record.type, stripSyntheticType(record.type)],
+    domain: [record.domain],
+    instance: [entityInstanceId(record)],
+  } satisfies Record<SearchCategory, string[]>
+  return fields[category].join(' ').toLowerCase()
+}
+
+function entityTagCountFromRecord(record: EntityRecord) {
+  return Object.entries(record.properties)
+    .filter(([key, value]) => !key.startsWith('__') && valueText(value))
+    .length
 }
 
 function EntityTopologyView({
@@ -681,27 +1197,51 @@ function EntityTopologyView({
   onSelectNode,
   onFocusType,
 }: {
-  data: ReturnType<typeof createAliyunLikeTopologyData>
+  data: TopologyExplorerData
   focusedTypes: string[]
   selectedNode: TopologyNode | null
   onSelectNode: (node: TopologyNode | null) => void
   onFocusType: (type: string) => void
 }) {
-  const referenceTopology = useMemo(() => createReferenceStyleTopology(data), [data])
+  const referenceTopology = useMemo(() => createReferenceStyleTopology(data, focusedTypes), [data, focusedTypes])
+  const [selectedAggregateId, setSelectedAggregateId] = useState<string>('')
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [hiddenDomains, setHiddenDomains] = useState<string[]>([])
+  const [hiddenRelations, setHiddenRelations] = useState<string[]>([])
+  const topologyDomains = useMemo(() => countTopologyOptions(referenceTopology.nodes, referenceNodeDomain), [referenceTopology.nodes])
+  const relationOptions = useMemo(() => countTopologyOptions(referenceTopology.edges, (edge) => edge.label), [referenceTopology.edges])
+  const visibleNodes = useMemo(() => referenceTopology.nodes.filter((item) => !hiddenDomains.includes(referenceNodeDomain(item))), [hiddenDomains, referenceTopology.nodes])
+  const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((item) => item.id)), [visibleNodes])
+  const visibleEdges = useMemo(() => referenceTopology.edges.filter((edge) => visibleNodeIds.has(edge.source.id) && visibleNodeIds.has(edge.target.id) && !hiddenRelations.includes(edge.label)), [hiddenRelations, referenceTopology.edges, visibleNodeIds])
   const selectedId = selectedNode?.id
-  const selectedReferenceItem = selectedId
-    ? referenceTopology.nodes.find((item) => item.node.id === selectedId) || null
+  const selectedInstanceItem = selectedId
+    ? visibleNodes.find((item) => item.instances.some((node) => node.id === selectedId)) || null
     : null
+  const selectedAggregateItem = selectedAggregateId
+    ? visibleNodes.find((item) => item.id === selectedAggregateId) || null
+    : null
+  const activePanelItem = selectedInstanceItem || selectedAggregateItem
+  const isInstanceDetailOpen = Boolean(selectedNode && selectedInstanceItem)
   const [zoom, setZoom] = useState(10)
   const zoomScale = zoom / 10
-  const focusedZoomScale = selectedReferenceItem ? zoomScale * 10.5 : zoomScale
+  const focusedZoomScale = activePanelItem ? zoomScale * 2.9 : zoomScale
   const zoomDisplay = Math.round(zoomScale * 98)
   const zoomProgress = (zoom - 10) / 36
-  const focusCenterX = selectedReferenceItem ? selectedReferenceItem.x + selectedReferenceItem.width / 2 : 0
-  const focusCenterY = selectedReferenceItem ? selectedReferenceItem.y + selectedReferenceItem.height / 2 : 0
-  const sceneX = selectedReferenceItem ? 1239 - focusCenterX * focusedZoomScale : -2550 * zoomProgress
-  const sceneY = selectedReferenceItem ? 619 - focusCenterY * focusedZoomScale : -425 * zoomProgress
+  const focusCenterX = activePanelItem ? activePanelItem.x + activePanelItem.width / 2 : 0
+  const focusCenterY = activePanelItem ? activePanelItem.y + activePanelItem.height / 2 : 0
+  const sceneX = activePanelItem ? 1239 - focusCenterX * focusedZoomScale : -2550 * zoomProgress
+  const sceneY = activePanelItem ? 619 - focusCenterY * focusedZoomScale : -425 * zoomProgress
   const sceneTransform = `translate(${sceneX} ${sceneY}) scale(${focusedZoomScale})`
+  const selectAggregate = (item: ReferenceTopologyNode) => {
+    setSelectedAggregateId(item.id)
+    onFocusType(item.type)
+    if (!item.instances.some((node) => node.id === selectedNode?.id)) onSelectNode(null)
+  }
+  const selectInstance = (node: TopologyNode) => {
+    setSelectedAggregateId('')
+    onSelectNode(node)
+    onFocusType(node.type)
+  }
   const changeZoom = (direction: 1 | -1) => {
     setZoom((value) => Math.max(10, Math.min(46, value + direction * 6)))
   }
@@ -711,9 +1251,21 @@ function EntityTopologyView({
     event.preventDefault()
     changeZoom(event.deltaY < 0 ? 1 : -1)
   }
+  const toggleDomainFilter = (domain: string) => {
+    setHiddenDomains((current) => current.includes(domain) ? current.filter((item) => item !== domain) : [...current, domain])
+    setSelectedAggregateId('')
+    onSelectNode(null)
+  }
+  const toggleRelationFilter = (relation: string) => {
+    setHiddenRelations((current) => current.includes(relation) ? current.filter((item) => item !== relation) : [...current, relation])
+  }
+  const resetTopologyFilters = () => {
+    setHiddenDomains([])
+    setHiddenRelations([])
+  }
 
   return (
-    <section className={selectedReferenceItem ? 'entity-topology-split has-detail' : 'entity-topology-split'}>
+    <section className={activePanelItem ? `entity-topology-split ${isInstanceDetailOpen ? 'has-instance-detail' : 'has-detail'}` : 'entity-topology-split'}>
       <div className="entity-topology-full" onWheel={handleWheelZoom}>
         <div className="entity-topology-zoom">
           <button className="entity-topology-zoom-action" type="button" data-zoom-action="out" aria-label="缩小拓扑" onClick={zoomOut}>−</button>
@@ -721,7 +1273,54 @@ function EntityTopologyView({
           <button className="entity-topology-zoom-action" type="button" data-zoom-action="in" aria-label="放大拓扑" onClick={zoomIn}>＋</button>
           <button className="entity-topology-zoom-action" type="button" data-zoom-action="fit" aria-label="适应画布" onClick={() => setZoom(10)}>⌖</button>
         </div>
-        <svg className="entity-cms-reference-graph" viewBox="0 0 2478 1238" preserveAspectRatio="xMinYMin meet" role="img" aria-label="实体拓扑关系图">
+        <button
+          className={filterOpen || hiddenDomains.length > 0 || hiddenRelations.length > 0 ? 'entity-topology-filter active' : 'entity-topology-filter'}
+          type="button"
+          aria-label="过滤拓扑"
+          aria-expanded={filterOpen}
+          onClick={() => setFilterOpen((open) => !open)}
+        >
+          <Filter size={25} />
+        </button>
+        {filterOpen && (
+          <div className="entity-topology-filter-panel" role="group" aria-label="拓扑过滤条件">
+            <header>
+              <strong>过滤拓扑</strong>
+              <button type="button" onClick={resetTopologyFilters} disabled={hiddenDomains.length === 0 && hiddenRelations.length === 0}>重置</button>
+            </header>
+            <section>
+              <span>实体Domain</span>
+              <div>
+                {topologyDomains.map((item) => {
+                  const active = !hiddenDomains.includes(item.key)
+                  const disabled = active && topologyDomains.length - hiddenDomains.length <= 1
+                  return (
+                    <button key={item.key} type="button" className={active ? 'active' : ''} disabled={disabled} onClick={() => toggleDomainFilter(item.key)}>
+                      {item.key} <b>{item.count}</b>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+            <section>
+              <span>关系类型</span>
+              <div>
+                {relationOptions.length === 0 && <em>暂无关系</em>}
+                {relationOptions.map((item) => {
+                  const active = !hiddenRelations.includes(item.key)
+                  const disabled = active && relationOptions.length - hiddenRelations.length <= 1
+                  return (
+                    <button key={item.key} type="button" className={active ? 'active' : ''} disabled={disabled} onClick={() => toggleRelationFilter(item.key)}>
+                      {item.key} <b>{item.count}</b>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+            <footer>{visibleNodes.length} / {referenceTopology.nodes.length} 类实体，{visibleEdges.length} / {referenceTopology.edges.length} 条关系</footer>
+          </div>
+        )}
+        <svg className="entity-cms-reference-graph" viewBox="0 0 2478 1238" preserveAspectRatio="xMinYMin meet" role="img" aria-label={'\u5b9e\u4f53\u62d3\u6251\u5173\u7cfb\u56fe'}>
           <defs>
             <pattern id="entity-reference-dot-grid" width="12" height="12" patternUnits="userSpaceOnUse">
               <circle cx="1.2" cy="1.2" r="1" fill="#e7ebf1" />
@@ -734,41 +1333,55 @@ function EntityTopologyView({
           <rect width="2478" height="1238" fill="url(#entity-reference-dot-grid)" opacity="0.52" />
           <g className="entity-reference-scene" transform={sceneTransform}>
             <g className="entity-reference-links">
-              {referenceTopology.edges.map((edge) => (
+              {visibleEdges.map((edge) => (
                 <g key={edge.id}>
                   <path d={referenceEdgePath(edge)} markerEnd="url(#entity-reference-arrow)" />
-                  {edge.showLabel && (
-                    <text x={(edge.source.x + edge.target.x) / 2} y={(edge.source.y + edge.target.y) / 2 - 4}>
-                      {edge.label}
-                    </text>
-                  )}
+                  {edge.showLabel && (() => {
+                    const labelX = (edge.source.x + edge.target.x) / 2
+                    const labelY = (edge.source.y + edge.target.y) / 2 - 4
+                    const labelWidth = Math.min(126, Math.max(74, edge.label.length * 12 + 28))
+                    return (
+                      <g className="entity-reference-link-label">
+                        <rect x={labelX - labelWidth / 2} y={labelY - 20} width={labelWidth} height="28" rx="3" />
+                        <text x={labelX} y={labelY}>{edge.label}</text>
+                      </g>
+                    )
+                  })()}
                 </g>
               ))}
             </g>
             <g className="entity-reference-nodes">
-              {referenceTopology.nodes.map((item, index) => (
+              {visibleNodes.map((item, index) => (
                 <g
-                  key={item.node.id}
-                  className={selectedId === item.node.id ? 'selected' : ''}
+                  key={item.id}
+                  className={activePanelItem?.id === item.id ? 'selected' : ''}
                   transform={`translate(${item.x} ${item.y})`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${item.title}，${item.instances.length} 个实例，点击查看实例列表`}
+                  aria-pressed={activePanelItem?.id === item.id}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return
+                    event.preventDefault()
+                    selectAggregate(item)
+                  }}
                   onClick={() => {
-                    onSelectNode(item.node)
-                    onFocusType(item.node.type)
+                    selectAggregate(item)
                   }}
                 >
                   <clipPath id={`entity-reference-title-clip-${index}`}>
-                    <rect x="7.6" y="3.2" width={Math.max(12, item.width - 26)} height="6.4" />
+                    <rect x="52" y="17" width={Math.max(112, item.width - 136)} height="30" />
                   </clipPath>
                   <clipPath id={`entity-reference-subtitle-clip-${index}`}>
-                    <rect x="7.6" y={item.height - 6.8} width={Math.max(17, item.width - 9)} height="5.4" />
+                    <rect x="52" y={item.height - 32} width={Math.max(120, item.width - 70)} height="24" />
                   </clipPath>
-                  <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx="1.8" fill={item.color} />
-                  <rect className="entity-reference-card" width={item.width} height={item.height} rx="1.8" fill="none" stroke={item.color} />
-                  <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="1.55" rx="0.78" fill={item.color} />
-                  <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(3.1 5.3) scale(0.17)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <text x="7.6" y="7.45" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
-                  <text x={item.width - 2} y="7.45" className="count" textAnchor="end">查询量: {item.access}</text>
-                  <text x="7.6" y={item.height - 2.8} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
+                  <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx="10" fill={item.color} />
+                  <rect className="entity-reference-card" width={item.width} height={item.height} rx="10" fill="none" stroke={item.color} />
+                  <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="6" rx="3" fill={item.color} />
+                  <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(18 23) scale(1.05)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <text x="52" y="35" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
+                  <text x={item.width - 18} y="35" className="count" textAnchor="end">数量: {item.instances.length}</text>
+                  <text x="52" y={item.height - 15} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>类型: {item.subtitle}</text>
                 </g>
               ))}
             </g>
@@ -778,41 +1391,194 @@ function EntityTopologyView({
           <svg viewBox="0 0 2478 1238">
             <rect width="2478" height="1238" fill="#fff" />
             <g transform="translate(0 0)">
-              {referenceTopology.nodes.map((item) => (
-                <rect key={item.node.id} x={item.x} y={item.y} width="12" height="4" fill="#cfd5dd" opacity="0.75" />
+              {visibleNodes.map((item) => (
+                <rect key={item.id} x={item.x} y={item.y} width="12" height="4" fill="#cfd5dd" opacity="0.75" />
               ))}
             </g>
             <rect x="430" y="80" width="1080" height="720" fill="none" stroke="#e0e5ec" strokeWidth="34" />
           </svg>
         </div>
       </div>
-      {selectedReferenceItem && <EntityTopologyMetricPanel item={selectedReferenceItem} />}
+      {activePanelItem && (
+        selectedNode && selectedInstanceItem
+          ? (
+            <EntityInstanceDetailPanel
+              data={data}
+              item={selectedInstanceItem}
+              node={selectedNode}
+              onBack={() => {
+                setSelectedAggregateId(selectedInstanceItem.id)
+                onSelectNode(null)
+              }}
+              onSelectNode={selectInstance}
+            />
+          )
+          : <EntityAggregatePanel item={activePanelItem} onSelectNode={selectInstance} />
+      )}
     </section>
   )
 }
 
-function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
-  const rows = topologyMetricRowsFor(item)
-  const total = topologyMetricTotalFor(item)
+function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyNode; onSelectNode: (node: TopologyNode) => void }) {
+  const [queryDraft, setQueryDraft] = useState('')
+  const [query, setQuery] = useState('')
+  const [tagFilterOpen, setTagFilterOpen] = useState(false)
+  const [selectedTagKeys, setSelectedTagKeys] = useState<string[]>([])
+  const [sortKey, setSortKey] = useState<EntityAggregateSortKey>('name')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const tagOptions = useMemo(() => createAggregateTagOptions(item.instances), [item.instances])
+  const filteredInstances = useMemo(() => {
+    const search = query.trim().toLowerCase()
+    return item.instances.filter((node) => {
+      const matchesSearch = !search || [
+        node.label,
+        node.id,
+        node.type,
+        valueText(node.properties.__domain__),
+        valueText(node.properties.instanceId),
+        valueText(node.properties.instance_id),
+        valueText(node.properties.region),
+      ].join(' ').toLowerCase().includes(search)
+      const matchesTags = selectedTagKeys.length === 0 || selectedTagKeys.every((key) => valueText(node.properties[key]))
+      return matchesSearch && matchesTags
+    })
+  }, [item.instances, query, selectedTagKeys])
+  const sortedInstances = useMemo(() => [...filteredInstances].sort((left, right) => {
+    const leftValue = aggregateSortValue(left, sortKey)
+    const rightValue = aggregateSortValue(right, sortKey)
+    const result = typeof leftValue === 'number' && typeof rightValue === 'number'
+      ? leftValue - rightValue
+      : String(leftValue).localeCompare(String(rightValue), 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
+    return sortDirection === 'asc' ? result : -result
+  }), [filteredInstances, sortDirection, sortKey])
+  const rows = sortedInstances.slice(0, 10)
+  const runInstanceQuery = () => setQuery(queryDraft)
+  const toggleTagFilter = (key: string) => setSelectedTagKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
+  const clearTagFilters = () => setSelectedTagKeys([])
+  const changeSort = (key: EntityAggregateSortKey) => {
+    setSortKey((currentKey) => {
+      if (currentKey === key) {
+        setSortDirection((currentDirection) => currentDirection === 'asc' ? 'desc' : 'asc')
+        return currentKey
+      }
+      setSortDirection('asc')
+      return key
+    })
+  }
+
+  useEffect(() => {
+    setQuery('')
+    setQueryDraft('')
+    setSelectedTagKeys([])
+    setTagFilterOpen(false)
+  }, [item.id])
+
   return (
-    <aside className="entity-topology-detail-panel" aria-label={`${item.title}拓扑明细`}>
+    <aside className="entity-topology-detail-panel" aria-label={`${item.title}实例列表`}>
+      <div className="entity-topology-panel-toolbar">
+        <button type="button" className="entity-type-filter">{item.subtitle}</button>
+        <label>
+          <Search size={15} />
+          <input
+            aria-label="请输入实体关键词（至少 4 个字符）"
+            value={queryDraft}
+            onChange={(event) => setQueryDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') runInstanceQuery()
+            }}
+            placeholder="请输入实体关键词（至少 4 个字符）"
+          />
+        </label>
+        <div className="entity-topology-tag-filter" onBlur={() => window.setTimeout(() => setTagFilterOpen(false), 120)}>
+          <button
+            type="button"
+            className={tagFilterOpen || selectedTagKeys.length > 0 ? 'active' : ''}
+            aria-haspopup="menu"
+            aria-expanded={tagFilterOpen}
+            onClick={() => setTagFilterOpen((open) => !open)}
+          >
+            标签过滤{selectedTagKeys.length > 0 && <b>{selectedTagKeys.length}</b>}
+          </button>
+          {tagFilterOpen && (
+            <div className="entity-topology-tag-menu" role="menu" aria-label="标签过滤">
+              <header>
+                <strong>标签过滤</strong>
+                <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={clearTagFilters} disabled={selectedTagKeys.length === 0}>清空</button>
+              </header>
+              {tagOptions.length === 0 && <p>暂无可过滤标签</p>}
+              {tagOptions.map((option) => {
+                const active = selectedTagKeys.includes(option.key)
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={active}
+                    className={active ? 'active' : ''}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => toggleTagFilter(option.key)}
+                  >
+                    <span>{option.label}</span>
+                    <b>{option.count}</b>
+                  </button>
+                )
+              })}
+              <footer>{filteredInstances.length} / {item.instances.length} 个实例</footer>
+            </div>
+          )}
+        </div>
+        <button type="button" className="primary" onClick={runInstanceQuery}>查询</button>
+      </div>
       <div className="entity-topology-detail-table-wrap">
         <table className="entity-topology-detail-table">
           <thead>
             <tr>
-              <th>{item.title}名称</th>
-              <th>平均请求次数 <span className="entity-topology-info">?</span><span className="entity-topology-sort" /></th>
-              <th>平均错误次数 <span className="entity-topology-info">?</span><span className="entity-topology-sort" /></th>
-              <th>平均延迟时间 <span className="entity-topology-sort" /></th>
+              <th aria-sort={sortKey === 'name' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('name')}>
+                  {item.title}名称 <span className={`entity-topology-sort ${sortKey === 'name' ? sortDirection : ''}`} />
+                </button>
+              </th>
+              <th aria-sort={sortKey === 'tags' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('tags')}>
+                  标签 <span className="entity-topology-info">?</span> <span className={`entity-topology-sort ${sortKey === 'tags' ? sortDirection : ''}`} />
+                </button>
+              </th>
+              <th aria-sort={sortKey === 'probe' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('probe')}>
+                  探针类型 <span className="entity-topology-info">?</span> <span className={`entity-topology-sort ${sortKey === 'probe' ? sortDirection : ''}`} />
+                </button>
+              </th>
+              <th aria-sort={sortKey === 'language' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('language')}>
+                  语言 <span className={`entity-topology-sort ${sortKey === 'language' ? sortDirection : ''}`} />
+                </button>
+              </th>
+              <th aria-sort={sortKey === 'region' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('region')}>
+                  区域 <span className={`entity-topology-sort ${sortKey === 'region' ? sortDirection : ''}`} />
+                </button>
+              </th>
+              <th aria-sort={sortKey === 'latency' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('latency')}>
+                  平均耗时 <span className={`entity-topology-sort ${sortKey === 'latency' ? sortDirection : ''}`} />
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
+            {rows.length === 0 && (
+              <tr className="entity-topology-empty-row">
+                <td colSpan={6}>暂无匹配实体</td>
+              </tr>
+            )}
             {rows.map((row) => (
-              <tr key={row.name}>
-                <td><a href="#entity-topology-detail" onClick={(event) => event.preventDefault()}>{row.name}</a></td>
-                <td>{row.requests}</td>
-                <td>{row.errors}</td>
-                <td>{row.latency}</td>
+              <tr key={row.id}>
+                <td><a href="#entity-topology-detail" onClick={(event) => { event.preventDefault(); onSelectNode(row) }}>{row.label}</a></td>
+                <td>{entityTagCount(row)}</td>
+                <td>{valueText(row.properties.__method__) || 'EntityStore'}</td>
+                <td>{valueText(row.properties.language) || '-'}</td>
+                <td>{valueText(row.properties.region) || valueText(row.properties.__domain__) || '-'}</td>
+                <td>{Number(row.properties.relationCount || 0) > 0 ? `${18 + Number(row.properties.relationCount || 0)} ms` : '-'}</td>
               </tr>
             ))}
           </tbody>
@@ -820,10 +1586,10 @@ function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
         <div className="entity-topology-detail-footer">
           <span>每页显示:</span>
           <button type="button">10 <ChevronDown size={14} /></button>
-          <span>总数: {total}</span>
+          <span>总数: {filteredInstances.length}</span>
           <button type="button" disabled>‹ 上一页</button>
           <button type="button" className="active">1</button>
-          <button type="button">2</button>
+          {filteredInstances.length > 10 && <button type="button">2</button>}
           <button type="button">下一页 ›</button>
         </div>
       </div>
@@ -831,82 +1597,994 @@ function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
   )
 }
 
-function topologyMetricRowsFor(item: ReferenceTopologyNode) {
-  if (item.title.includes('大模型')) {
-    return [
-      { name: 'qwen3.7-plus', requests: '', errors: '', latency: '' },
-      { name: 'wanx2.1-t2v-turbo', requests: '1', errors: '', latency: '' },
-      { name: 'qwen3-max', requests: '5', errors: '', latency: '' },
-      { name: 'ack-vercel-demo-agent', requests: '8', errors: '', latency: '' },
-      { name: 'wan2.7-image', requests: '2', errors: '', latency: '' },
-      { name: 'dashscope/qwen-plus', requests: '86', errors: '', latency: '' },
-      { name: 'auto', requests: '', errors: '', latency: '' },
-      { name: 'qwen3.6-plus', requests: '', errors: '', latency: '' },
-      { name: 'qwen3.5-flash', requests: '10', errors: '', latency: '' },
-      { name: 'cosyvoice-v1', requests: '1', errors: '', latency: '' },
-    ]
-  }
-
-  const baseName = item.subtitle.split('.').filter(Boolean).slice(-1)[0] || item.title.toLowerCase().replace(/\s+/g, '-')
-  const rows = Array.from({ length: 10 }, (_, index) => {
-    const value = index === 0 ? '' : String(((item.access + index * 7) % 96) || index)
-    return {
-      name: `${baseName}-${String(index + 1).padStart(2, '0')}`,
-      requests: value,
-      errors: index % 4 === 0 ? '0' : '',
-      latency: index % 3 === 0 ? `${18 + ((item.access + index) % 82)} ms` : '',
-    }
+function createAggregateTagOptions(nodes: TopologyNode[]) {
+  const counts = new Map<string, number>()
+  nodes.forEach((node) => {
+    Object.entries(node.properties).forEach(([key, value]) => {
+      if (key.startsWith('__') || !valueText(value)) return
+      counts.set(key, (counts.get(key) || 0) + 1)
+    })
   })
-  if (rows[0]) rows[0].name = item.title
+  return [...counts.entries()]
+    .map(([key, count]) => ({ key, label: key, count }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' }))
+    .slice(0, 12)
+}
+
+function aggregateSortValue(node: TopologyNode, key: EntityAggregateSortKey) {
+  if (key === 'name') return node.label
+  if (key === 'tags') return entityTagCount(node)
+  if (key === 'probe') return valueText(node.properties.__method__) || 'EntityStore'
+  if (key === 'language') return valueText(node.properties.language) || ''
+  if (key === 'region') return valueText(node.properties.region) || valueText(node.properties.__domain__) || ''
+  return Number(node.properties.relationCount || 0) > 0 ? 18 + Number(node.properties.relationCount || 0) : -1
+}
+
+function EntityInstanceDetailPanel({
+  data,
+  item,
+  node,
+  onBack,
+  onSelectNode,
+}: {
+  data: TopologyExplorerData
+  item: ReferenceTopologyNode
+  node: TopologyNode
+  onBack: () => void
+  onSelectNode: (node: TopologyNode) => void
+}) {
+  const [activeTab, setActiveTab] = useState<EntityInstanceTab>('detail')
+  const [relationFilter, setRelationFilter] = useState<EntityRelationFilter>('all')
+  const relatedLinks = useMemo(() => relatedLinksForInstance(data, node), [data, node])
+  const neighbors = relatedLinks.map((link) => link.neighbor)
+  const providedLinks = relatedLinks.filter((link) => link.direction === 'out')
+  const dependencyLinks = relatedLinks.filter((link) => link.direction === 'in')
+  const filteredRelationLinks = relationFilter === 'provided'
+    ? providedLinks
+    : relationFilter === 'dependency'
+      ? dependencyLinks
+      : relatedLinks
+  const relationTitle = relationFilter === 'provided' ? '提供服务' : relationFilter === 'dependency' ? '依赖服务' : '关联项'
+  const propertyRows = entityDetailProperties(node)
+  const tabs: Array<{ key: EntityInstanceTab; label: string; count?: number; dropdown?: boolean }> = [
+    { key: 'detail', label: '\u5b9e\u4f53\u8be6\u60c5' },
+    { key: 'topology', label: '\u5173\u8054\u62d3\u6251', dropdown: true },
+    { key: 'trace', label: '\u4f1a\u8bdd\u8ffd\u8e2a' },
+    { key: 'page', label: '\u9875\u9762\u8bbf\u95ee' },
+    { key: 'heatmap', label: '\u70ed\u529b\u56fe\u5206\u6790' },
+    { key: 'resource', label: '\u8d44\u6e90\u52a0\u8f7d' },
+    { key: 'api', label: 'API\u8bf7\u6c42' },
+    { key: 'exception', label: '\u5f02\u5e38\u7edf\u8ba1' },
+    { key: 'customEvent', label: '\u81ea\u5b9a\u4e49\u4e8b\u4ef6' },
+    { key: 'customLog', label: '\u81ea\u5b9a\u4e49\u65e5\u5fd7' },
+    { key: 'settings', label: '\u5e94\u7528\u8bbe\u7f6e', dropdown: true },
+    { key: 'logSearch', label: '\u65e5\u5fd7\u63a2\u7d22', count: relatedLinks.length, dropdown: true },
+    { key: 'related', label: '\u5173\u8054\u9879', dropdown: true },
+  ]
+
+  useEffect(() => {
+    setActiveTab('detail')
+    setRelationFilter('all')
+  }, [node.id])
+
+  return (
+    <aside className="entity-instance-detail-panel" aria-label={node.label + '\u5b9e\u4f53\u8be6\u60c5'}>
+      <header className="entity-instance-head reference-like">
+        <span className="entity-instance-kind-icon" style={{ color: node.color, borderColor: node.color }}>
+          <TopologyPresetIcon preset={resolveTopologyNodeIconPreset(node)} label={node.type} size={18} />
+        </span>
+        <div className="entity-instance-title-block">
+          <strong>{node.label}</strong>
+          <span className="entity-instance-type-pill">
+            {entityTypeDisplayName(node.type)}
+            <i aria-hidden="true" />
+          </span>
+        </div>
+        <button className="entity-instance-star" type="button" aria-label={'\u5173\u6ce8\u5b9e\u4f53'}>
+          <Star size={18} />
+        </button>
+        <div className="entity-instance-time-range" aria-label="time range">
+          <span>15min</span>
+          <b>{'\u6700\u8fd115\u5206\u949f'}</b>
+        </div>
+        <button className="entity-instance-icon-action" type="button" aria-label={'\u5237\u65b0'}>
+          <RefreshCw size={16} />
+        </button>
+        <button className="entity-instance-assistant" type="button" aria-label={'\u667a\u80fd\u52a9\u624b'}>
+          <Sparkles size={18} />
+        </button>
+        <button className="entity-instance-back" type="button" onClick={onBack} aria-label={'\u8fd4\u56de\u5217\u8868'} title={'\u8fd4\u56de\u5217\u8868'}>
+          <ArrowLeft size={16} />
+        </button>
+        <button className="entity-instance-close" type="button" onClick={onBack} aria-label={'\u5173\u95ed'}>
+          <X size={16} />
+        </button>
+      </header>
+      <nav className="entity-instance-tabs">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className={activeTab === tab.key ? 'active' : ''}
+            aria-label={typeof tab.count === 'number' ? `${tab.label}\uff08${tab.count}\uff09` : tab.label}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+            {typeof tab.count === 'number' && <em>{'\uff08'}{tab.count}{'\uff09'}</em>}
+            {tab.dropdown && <ChevronDown size={14} />}
+          </button>
+        ))}
+      </nav>
+      {activeTab === 'topology' && (
+        <div className="entity-instance-tab-menu entity-instance-topology-menu">
+          <button className="active" type="button">{'\u5173\u8054\u5b9e\u4f53\u62d3\u6251'}</button>
+          <button type="button">UModel {'\u63a2\u7d22'}</button>
+        </div>
+      )}
+      {activeTab === 'settings' && (
+        <div className="entity-instance-tab-menu entity-instance-settings-menu">
+          <button className="active" type="button">{'\u5e94\u7528\u8bbe\u7f6e'}</button>
+          <button type="button">{'\u91c7\u96c6\u914d\u7f6e'}</button>
+          <button type="button">{'\u544a\u8b66\u914d\u7f6e'}</button>
+        </div>
+      )}
+      {activeTab === 'logSearch' && (
+        <div className="entity-instance-tab-menu entity-instance-log-menu">
+          <button className="active" type="button">{'\u65e5\u5fd7\u63a2\u7d22'}</button>
+          <button type="button">{'\u539f\u59cb\u65e5\u5fd7'}</button>
+          <button type="button">{'\u5173\u8054\u65e5\u5fd7'}</button>
+        </div>
+      )}
+      {activeTab === 'related' && (
+        <div className="entity-instance-tab-menu entity-instance-related-menu">
+          <button className={relationFilter === 'all' ? 'active' : ''} type="button" onClick={() => setRelationFilter('all')}>{'\u5173\u8054\u9879'}</button>
+          <button className={relationFilter === 'provided' ? 'active' : ''} type="button" onClick={() => setRelationFilter('provided')}>{'\u63d0\u4f9b\u670d\u52a1'} {providedLinks.length}</button>
+          <button className={relationFilter === 'dependency' ? 'active' : ''} type="button" onClick={() => setRelationFilter('dependency')}>{'\u4f9d\u8d56\u670d\u52a1'} {dependencyLinks.length}</button>
+        </div>
+      )}
+      {activeTab === 'detail' && (
+        <section className="entity-instance-reference-properties">
+          <dl>
+            {propertyRows.map((row) => (
+              <div key={row.label}>
+                <dt>{row.label}</dt>
+                <dd title={row.value}>{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+      {activeTab === 'topology' && <EntityRelatedTopologyCanvas node={node} links={relatedLinks} onSelectNode={onSelectNode} />}
+      {activeTab === 'trace' && (
+        <EntityTracePanel node={node} links={relatedLinks} />
+      )}
+      {activeTab === 'exception' && (
+        <EntityInstanceHealthPanel node={node} links={relatedLinks} />
+      )}
+      {activeTab === 'related' && (
+        <EntityRelationList title={relationTitle} emptyText={relationFilter === 'provided' ? '暂无提供服务' : relationFilter === 'dependency' ? '暂无依赖服务' : '暂无关联项'} links={filteredRelationLinks} onSelectNode={onSelectNode} />
+      )}
+      {activeTab === 'page' && <EntityInstanceEmptyTab title={'\u9875\u9762\u8bbf\u95ee'} description={'\u5f53\u524d\u5b9e\u4f53\u6682\u65e0\u9875\u9762\u8bbf\u95ee\u6570\u636e'} />}
+      {activeTab === 'heatmap' && <EntityInstanceEmptyTab title={'\u70ed\u529b\u56fe\u5206\u6790'} description={'\u5f53\u524d\u5b9e\u4f53\u6682\u65e0\u70ed\u529b\u56fe\u6570\u636e'} />}
+      {activeTab === 'resource' && <EntityInstanceEmptyTab title={'\u8d44\u6e90\u52a0\u8f7d'} description={'\u5f53\u524d\u5b9e\u4f53\u6682\u65e0\u8d44\u6e90\u52a0\u8f7d\u660e\u7ec6'} />}
+      {activeTab === 'api' && <EntityInstanceEmptyTab title={'API\u8bf7\u6c42'} description={'\u5f53\u524d\u5b9e\u4f53\u6682\u65e0 API \u8bf7\u6c42\u660e\u7ec6'} />}
+      {activeTab === 'customEvent' && <EntityInstanceEmptyTab title={'\u81ea\u5b9a\u4e49\u4e8b\u4ef6'} description={'\u5f53\u524d\u5b9e\u4f53\u6682\u65e0\u81ea\u5b9a\u4e49\u4e8b\u4ef6'} />}
+      {activeTab === 'customLog' && <EntityInstanceEmptyTab title={'\u81ea\u5b9a\u4e49\u65e5\u5fd7'} description={'\u5f53\u524d\u5b9e\u4f53\u6682\u65e0\u81ea\u5b9a\u4e49\u65e5\u5fd7'} />}
+      {activeTab === 'settings' && <EntityInstanceEmptyTab title={'\u5e94\u7528\u8bbe\u7f6e'} description={'\u8bf7\u5728\u5de5\u4f5c\u7a7a\u95f4\u7ba1\u7406\u4e2d\u914d\u7f6e\u8be5\u5b9e\u4f53\u7684\u5e94\u7528\u8bbe\u7f6e'} />}
+      {activeTab === 'logSearch' && <EntityLogSearchPanel node={node} links={relatedLinks} />}
+    </aside>
+  )
+}
+
+function EntityLogSearchPanel({ node, links }: { node: TopologyNode; links: EntityRelatedLink[] }) {
+  const conditions = entityLogConditions(node)
+  const relatedConditions = links.slice(0, 6).map((link) => ({
+    label: `${link.direction === 'out' ? '下游' : '上游'}：${link.neighbor.label}`,
+    value: `__entity_id__="${link.neighbor.id}"`,
+    type: link.edge.type,
+  }))
+  const query = createEntityLogQuery(node)
+  return (
+    <section className="entity-log-search-panel">
+      <header>
+        <div>
+          <strong>日志探索</strong>
+          <span>基于当前实体属性生成查询条件</span>
+        </div>
+        <button type="button" onClick={() => navigator.clipboard?.writeText(query)}>复制 SPL</button>
+      </header>
+      <div className="entity-log-query-card">
+        <span>SPL</span>
+        <code>{query}</code>
+      </div>
+      <div className="entity-log-search-grid">
+        <section>
+          <h4>实体条件</h4>
+          {conditions.map((item) => (
+            <article key={item.key}>
+              <span>{item.label}</span>
+              <code>{item.value}</code>
+            </article>
+          ))}
+        </section>
+        <section>
+          <h4>关联实体</h4>
+          {relatedConditions.length === 0 && <p>暂无关联实体条件</p>}
+          {relatedConditions.map((item) => (
+            <article key={item.value}>
+              <span>{item.label}</span>
+              <code>{item.value}</code>
+              <em>{item.type}</em>
+            </article>
+          ))}
+        </section>
+      </div>
+    </section>
+  )
+}
+
+function EntityInstanceEmptyTab({ title, description }: { title: string; description: string }) {  return (
+    <section className="entity-instance-empty-tab">
+      <strong>{title}</strong>
+      <span>{description}</span>
+    </section>
+  )
+}
+
+function entityLogConditions(node: TopologyNode) {
+  const props = node.properties
+  const rows = [
+    { key: 'entityId', label: '实体 ID', value: `__entity_id__="${node.id}"` },
+    { key: 'domain', label: '实体Domain', value: `__domain__="${valueText(props.__domain__) || valueText(props.domain) || node.cluster || '-'}"` },
+    { key: 'type', label: '实体类型', value: `__entity_type__="${node.type}"` },
+  ]
+  const candidates = ['id', 'name', 'display_name', 'instanceId', 'instance_id', 'environment', 'region', 'namespace']
+  candidates.forEach((key) => {
+    const value = valueText(props[key])
+    if (value) rows.push({ key, label: key, value: `${key}="${value}"` })
+  })
   return rows
 }
 
-function topologyMetricTotalFor(item: ReferenceTopologyNode) {
-  if (item.title.includes('大模型')) return 15
-  return Math.max(10, item.access)
+function createEntityLogQuery(node: TopologyNode) {
+  const props = node.properties
+  const domain = valueText(props.__domain__) || valueText(props.domain) || node.cluster || '*'
+  const name = valueText(props.name) || valueText(props.display_name) || node.label
+  return `.entity with(domain='${escapeSplString(domain)}', name='${escapeSplString(node.type)}', query='${escapeSplString(name)}') | entity-call get_logs('${escapeSplString(domain)}', '${escapeSplString(domain)}.log.service', query='__entity_id__ = "${escapeSplString(node.id)}"')`
+}
+
+function escapeSplString(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"')
+}
+
+function entityDetailProperties(node: TopologyNode) {  const props = node.properties
+  const baseRows = [
+    { label: '\u5b9e\u4f53ID', value: node.id },
+    { label: '\u5b9e\u4f53Domain', value: valueText(props.__domain__) || valueText(props.domain) || node.cluster || '-' },
+    { label: '\u5b9e\u4f53\u7c7b\u578b', value: node.type },
+    { label: '\u5b9e\u4f8b ID', value: valueText(props.instanceId) || valueText(props.instance_id) || valueText(props.id) || node.id },
+    { label: '\u5b9e\u4f8b\u540d\u79f0', value: node.label },
+    { label: '\u533a\u57df', value: valueText(props.region) || valueText(props.zone) || '-' },
+    { label: '\u8d44\u6e90\u7ec4 ID', value: valueText(props.resourceGroupId) || valueText(props.resource_group_id) || '-' },
+    { label: '\u521b\u5efa\u65f6\u95f4', value: valueText(props.created_at) || valueText(props.createTime) || '-' },
+    { label: '\u5b9e\u4f8b\u72b6\u6001', value: valueText(props.status) || valueText(props.state) || 'Available' },
+    { label: '\u9996\u6b21\u89c2\u6d4b\u65f6\u95f4', value: formatLastSeen(props.__first_observed_time__) || '-' },
+    { label: '\u6700\u540e\u89c2\u6d4b\u65f6\u95f4', value: formatLastSeen(props.__last_observed_time__) || formatLastSeen(props.updated_at) || '-' },
+  ]
+  const seen = new Set(baseRows.map((row) => row.label))
+  const extraRows = Object.entries(props)
+    .filter(([key, value]) => !key.startsWith('__') && valueText(value))
+    .slice(0, 10)
+    .map(([key, value]) => ({ label: key, value: String(value) }))
+    .filter((row) => {
+      if (seen.has(row.label)) return false
+      seen.add(row.label)
+      return true
+    })
+  return [...baseRows, ...extraRows]
+}
+
+function EntityInstanceHealthPanel({ node, links }: { node: TopologyNode; links: EntityRelatedLink[] }) {
+  const health = entityStatus(node, entitySequence({ id: node.id } as EntityRecord))
+  const relatedNodes = links.map((link) => link.neighbor)
+  const relationCount = Number(node.properties.relationCount || links.length)
+  const warningCount = relatedNodes.filter((item, index) => entityStatus(item, index + 1) !== 'normal').length
+  const healthScore = health === 'critical' ? 42 : health === 'warning' ? 76 : Math.max(92, 99 - warningCount * 4)
+  const rows = [node, ...relatedNodes].slice(0, 8).map((item, index) => {
+    const status = index === 0 ? health : entityStatus(item, index + 1)
+    return {
+      id: item.id,
+      name: item.label,
+      type: item.type,
+      status,
+      events: status === 'critical' ? 2 : status === 'warning' ? 1 : 0,
+      lastSeen: formatLastSeen(item.properties.__last_observed_time__) || formatLastSeen(item.properties.updated_at) || '-',
+    }
+  })
+  const normalRows = rows.filter((row) => row.status === 'normal').length
+  const warningRows = rows.filter((row) => row.status === 'warning').length
+  const criticalRows = rows.filter((row) => row.status === 'critical').length
+  const distribution = [
+    { key: 'normal' as const, label: statusMeta.normal.label, count: normalRows },
+    { key: 'warning' as const, label: statusMeta.warning.label, count: warningRows },
+    { key: 'critical' as const, label: statusMeta.critical.label, count: criticalRows },
+  ]
+  const maxCount = Math.max(1, ...distribution.map((item) => item.count))
+
+  return (
+    <section className="entity-instance-health-panel">
+      <div className="entity-instance-health-summary">
+        <MetricSummaryCard title={'\u5065\u5eb7\u8bc4\u5206'} value={String(healthScore)} trend={statusMeta[health].label} tone={health === 'critical' ? 'danger' : 'normal'} />
+        <MetricSummaryCard title={'\u672a\u6062\u590d\u4e8b\u4ef6'} value={String(criticalRows * 2 + warningRows)} trend={warningRows || criticalRows ? '\u9700\u5173\u6ce8' : '\u6682\u65e0\u5f02\u5e38'} tone={criticalRows > 0 ? 'danger' : 'normal'} />
+        <MetricSummaryCard title={'\u76f4\u63a5\u5173\u7cfb'} value={String(relationCount)} trend={`${links.length} \u6761\u62d3\u6251\u5173\u7cfb`} />
+      </div>
+      <div className="entity-instance-health-bars">
+        {distribution.map((item) => (
+          <div key={item.key}>
+            <span><i style={{ background: statusMeta[item.key].color }} />{item.label}</span>
+            <b>{item.count}</b>
+            <em><i style={{ width: `${Math.max(6, (item.count / maxCount) * 100)}%`, background: statusMeta[item.key].color }} /></em>
+          </div>
+        ))}
+      </div>
+      <table className="entity-instance-health-table">
+        <thead>
+          <tr>
+            <th>{'\u5b9e\u4f53'}</th>
+            <th>Domain</th>
+            <th>{'\u5065\u5eb7'}</th>
+            <th>{'\u4e8b\u4ef6'}</th>
+            <th>{'\u6700\u8fd1\u4e0a\u62a5'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <td title={row.name}>
+                <b>{row.name}</b>
+                <small>{row.type}</small>
+              </td>
+              <td>{row.type.split('.')[0] || '-'}</td>
+              <td><span className="entity-status-pill" style={{ background: statusMeta[row.status].color }}>{statusMeta[row.status].label}</span></td>
+              <td>{row.events}</td>
+              <td>{row.lastSeen}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
+function EntityTracePanel({ node, links }: { node: TopologyNode; links: EntityRelatedLink[] }) {
+  const rows = createTraceRows(node, links)
+  const totalCalls = rows.reduce((sum, row) => sum + row.calls, 0)
+  const totalErrors = rows.reduce((sum, row) => sum + row.errors, 0)
+  const avgLatency = rows.length ? Math.round(rows.reduce((sum, row) => sum + row.latency, 0) / rows.length) : 0
+
+  return (
+    <section className="entity-trace-panel">
+      <div className="entity-trace-summary">
+        <MetricSummaryCard title={'\u8c03\u7528\u6b21\u6570'} value={String(totalCalls)} trend={'\u6700\u8fd115\u5206\u949f'} />
+        <MetricSummaryCard title={'\u9519\u8bef\u6570'} value={String(totalErrors)} trend={totalErrors ? '\u9700\u5173\u6ce8' : '\u6682\u65e0\u5f02\u5e38'} tone={totalErrors > 0 ? 'danger' : 'normal'} />
+        <MetricSummaryCard title={'\u5e73\u5747\u8017\u65f6'} value={`${avgLatency}ms`} trend={`${rows.length} \u6761\u8c03\u7528\u94fe`} />
+      </div>
+      <div className="entity-trace-flow" aria-label={'\u8c03\u7528\u94fe\u8def\u5f84'}>
+        {rows.length === 0 ? (
+          <div className="entity-trace-empty">{'\u6682\u65e0\u8c03\u7528\u94fe\u6570\u636e'}</div>
+        ) : (
+          rows.slice(0, 4).map((row, index) => (
+            <article key={row.id}>
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              <b>{row.source}</b>
+              <em>{row.operation}</em>
+              <b>{row.target}</b>
+              <small>{row.latency}ms</small>
+            </article>
+          ))
+        )}
+      </div>
+      <table className="entity-trace-table">
+        <thead>
+          <tr>
+            <th>{'\u8c03\u7528\u94fe'}</th>
+            <th>{'\u5173\u7cfb'}</th>
+            <th>{'\u8c03\u7528\u6b21\u6570'}</th>
+            <th>{'\u9519\u8bef'}</th>
+            <th>{'\u5e73\u5747\u8017\u65f6'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <td title={`${row.source} -> ${row.target}`}>
+                <b>{row.source}</b>
+                <small>{row.target}</small>
+              </td>
+              <td>{row.operation}</td>
+              <td>{row.calls}</td>
+              <td>{row.errors}</td>
+              <td>{row.latency}ms</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  )
+}
+
+function createTraceRows(node: TopologyNode, links: EntityRelatedLink[]) {
+  return links.slice(0, 8).map((link, index) => {
+    const source = link.direction === 'out' ? node : link.neighbor
+    const target = link.direction === 'out' ? link.neighbor : node
+    const edgeProps = edgeProperties(link.edge)
+    const calls = Math.max(1, Number(edgeProps.calls || edgeProps.count || source.properties.relationCount || 1))
+    const errors = Number(edgeProps.errors || 0)
+    const latency = Number(edgeProps.latency || edgeProps.duration || 18 + ((index + 1) * 7) + calls)
+    return {
+      id: link.edge.id,
+      source: source.label,
+      target: target.label,
+      operation: link.edge.type,
+      calls,
+      errors,
+      latency,
+    }
+  })
+}
+
+function edgeProperties(edge: TopologyEdge) {
+  return ((edge as unknown as { properties?: Record<string, unknown> }).properties || {}) as Record<string, unknown>
+}
+
+function EntityRelationList({
+  title,
+  emptyText,
+  links,
+  onSelectNode,
+}: {
+  title: string
+  emptyText: string
+  links: EntityRelatedLink[]
+  onSelectNode: (node: TopologyNode) => void
+}) {
+  const rows = links.map((link, index) => {
+    const edgeProps = edgeProperties(link.edge)
+    const calls = Math.max(1, Number(edgeProps.calls || edgeProps.count || link.neighbor.properties.relationCount || 1))
+    const errors = Number(edgeProps.errors || 0)
+    const latency = Number(edgeProps.latency || edgeProps.duration || 16 + (index + 1) * 9 + calls)
+    return { link, calls, errors, latency }
+  })
+  const totalCalls = rows.reduce((sum, row) => sum + row.calls, 0)
+  const totalErrors = rows.reduce((sum, row) => sum + row.errors, 0)
+  const avgLatency = rows.length ? Math.round(rows.reduce((sum, row) => sum + row.latency, 0) / rows.length) : 0
+
+  return (
+    <section className="entity-instance-relation-list">
+      <header>
+        <strong>{title}</strong>
+        <span>{links.length} {'\u4e2a\u5173\u8054\u5b9e\u4f53'}</span>
+      </header>
+      {links.length === 0 ? (
+        <p>{emptyText}</p>
+      ) : (
+        <>
+          <div className="entity-relation-summary">
+            <MetricSummaryCard title={'\u5173\u8054\u6570'} value={String(links.length)} trend={title} />
+            <MetricSummaryCard title={'\u8c03\u7528\u6b21\u6570'} value={String(totalCalls)} trend={'\u6700\u8fd115\u5206\u949f'} />
+            <MetricSummaryCard title={'\u5e73\u5747\u8017\u65f6'} value={`${avgLatency}ms`} trend={totalErrors ? `${totalErrors} \u4e2a\u9519\u8bef` : '\u6682\u65e0\u5f02\u5e38'} tone={totalErrors > 0 ? 'danger' : 'normal'} />
+          </div>
+          <table className="entity-relation-table">
+            <thead>
+              <tr>
+                <th>{'\u5b9e\u4f53'}</th>
+                <th>{'\u5173\u7cfb'}</th>
+                <th>{'\u8c03\u7528\u6b21\u6570'}</th>
+                <th>{'\u9519\u8bef'}</th>
+                <th>{'\u5e73\u5747\u8017\u65f6'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ link, calls, errors, latency }) => (
+                <tr key={link.edge.id} onClick={() => onSelectNode(link.neighbor)}>
+                  <td title={link.neighbor.label}>
+                    <span className="entity-type-icon" style={{ color: link.neighbor.color, borderColor: link.neighbor.color }}>
+                      <TopologyPresetIcon preset={resolveTopologyNodeIconPreset(link.neighbor)} label={link.neighbor.type} size={15} />
+                    </span>
+                    <b>{link.neighbor.label}</b>
+                    <small>{link.neighbor.type}</small>
+                  </td>
+                  <td><em>{link.edge.type}</em></td>
+                  <td>{calls}</td>
+                  <td>{errors}</td>
+                  <td>{latency}ms</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </section>
+  )
+}
+
+function EntityRelatedTopologyCanvas({
+  node,
+  links,
+  onSelectNode,
+}: {
+  node: TopologyNode
+  links: EntityRelatedLink[]
+  onSelectNode: (node: TopologyNode) => void
+}) {
+  const [zoom, setZoom] = useState(100)
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [showIncoming, setShowIncoming] = useState(true)
+  const [showOutgoing, setShowOutgoing] = useState(true)
+  const incomingTotal = links.filter((link) => link.direction === 'in').length
+  const outgoingTotal = links.filter((link) => link.direction === 'out').length
+  const filteredLinks = links.filter((link) => link.direction === 'in' ? showIncoming : showOutgoing)
+  const visibleLinks = filteredLinks.slice(0, 12)
+  const incoming = visibleLinks.filter((link) => link.direction === 'in')
+  const outgoing = visibleLinks.filter((link) => link.direction === 'out')
+  const width = 760
+  const height = 360
+  const centerX = incoming.length > 0 && outgoing.length === 0
+    ? width * 0.62
+    : outgoing.length > 0 && incoming.length === 0
+      ? width * 0.38
+      : width / 2
+  const center = { x: centerX, y: height / 2 }
+  const domainBand = { x: 42, y: center.y - 58, width: width - 84, height: 116 }
+  const upstreamLayout = layoutRelatedColumn(incoming, 150, height)
+  const downstreamLayout = layoutRelatedColumn(outgoing, width - 150, height)
+  const layout = [...upstreamLayout, ...downstreamLayout]
+  const legendItems = uniqueRelatedLegend([node, ...visibleLinks.map((link) => link.neighbor)])
+  const domain = valueText(node.properties.__domain__) || valueText(node.properties.domain) || 'domain'
+  const zoomScale = zoom / 100
+  const graphTransform = 'translate(' + center.x + ' ' + center.y + ') scale(' + zoomScale + ') translate(' + (-center.x) + ' ' + (-center.y) + ')'
+  const zoomOut = () => setZoom((current) => Math.max(50, current - 10))
+  const zoomIn = () => setZoom((current) => Math.min(160, current + 10))
+  const resetZoom = () => setZoom(100)
+  const fitCanvas = () => setZoom(90)
+
+  return (
+    <section className="entity-related-topology-tab">
+      <div className="entity-related-topology-head">
+        <strong>{'\u5173\u8054\u5b9e\u4f53\u62d3\u6251'}</strong>
+        <span>{filteredLinks.length} / {links.length} {'\u6761\u76f4\u63a5\u5173\u7cfb'}</span>
+      </div>
+      <div className="entity-related-topology-canvas">
+        {visibleLinks.length === 0 ? (
+          <div className="entity-related-topology-empty">{'\u6682\u65e0\u76f4\u63a5\u5173\u8054\u62d3\u6251'}</div>
+        ) : (
+          <>
+            <div className="entity-related-toolbar">
+              <button type="button" aria-label="缩小" onClick={zoomOut} disabled={zoom <= 50}>-</button>
+              <b aria-label={'当前缩放 ' + zoom + '%'}>{zoom}%</b>
+              <button type="button" aria-label="放大" onClick={zoomIn} disabled={zoom >= 160}>+</button>
+              <button type="button" aria-label="适应画布" onClick={fitCanvas}><Maximize2 size={13} /></button>
+              <button type="button" aria-label="回到中心" onClick={resetZoom}><Home size={13} /></button>
+              <button type="button" aria-label="重置布局" onClick={resetZoom}><RotateCcw size={13} /></button>
+              <button
+                type="button"
+                className={filterOpen ? 'active' : ''}
+                aria-label="筛选关系"
+                aria-expanded={filterOpen}
+                onClick={() => setFilterOpen((open) => !open)}
+              >
+                <SlidersHorizontal size={13} />
+              </button>
+            </div>
+            {filterOpen && (
+              <div className="entity-related-filter-panel" role="group" aria-label="关系筛选">
+                <button
+                  type="button"
+                  className={showIncoming && incomingTotal > 0 ? 'active' : ''}
+                  disabled={incomingTotal === 0 || (showIncoming && !showOutgoing)}
+                  onClick={() => setShowIncoming((current) => !current)}
+                >
+                  上游关系 <b>{incomingTotal}</b>
+                </button>
+                <button
+                  type="button"
+                  className={showOutgoing && outgoingTotal > 0 ? 'active' : ''}
+                  disabled={outgoingTotal === 0 || (showOutgoing && !showIncoming)}
+                  onClick={() => setShowOutgoing((current) => !current)}
+                >
+                  下游关系 <b>{outgoingTotal}</b>
+                </button>
+              </div>
+            )}
+            <svg viewBox={'0 0 ' + width + ' ' + height} role="img" aria-label={node.label + '\u5173\u8054\u62d3\u6251'}>
+              <defs>
+                <pattern id="entity-related-grid" width="16" height="16" patternUnits="userSpaceOnUse">
+                  <circle cx="1" cy="1" r="1" fill="#dfe7f1" />
+                </pattern>
+                <marker id="entity-related-arrow" markerWidth="9" markerHeight="9" refX="8.2" refY="4.5" orient="auto">
+                  <path d="M0,0 L9,4.5 L0,9 Z" fill="#7b8797" />
+                </marker>
+              </defs>
+              <rect width={width} height={height} fill="#fff" />
+              <rect width={width} height={height} fill="url(#entity-related-grid)" opacity="0.78" />
+              <g className="entity-related-viewport" transform={graphTransform} data-zoom={zoom}>
+              <rect className="entity-related-domain-band" x={domainBand.x} y={domainBand.y} width={domainBand.width} height={domainBand.height} />
+              <text className="entity-related-domain-label" x={domainBand.x + 14} y={domainBand.y + 24}>{domain}</text>
+              <g className="entity-related-edges">
+                {layout.map(({ link, x, y }) => {
+                  const source = link.direction === 'out' ? center : { x, y }
+                  const target = link.direction === 'out' ? { x, y } : center
+                  const elbowOffset = link.direction === 'out' ? 72 : -72
+                  const path = 'M ' + source.x + ' ' + source.y
+                    + ' C ' + (source.x + elbowOffset) + ' ' + source.y
+                    + ', ' + (target.x - elbowOffset) + ' ' + target.y
+                    + ', ' + target.x + ' ' + target.y
+                  const midX = (source.x + target.x) / 2
+                  const midY = (source.y + target.y) / 2
+                  const labelWidth = Math.min(64, Math.max(42, link.edge.type.length * 6 + 16))
+                  return (
+                    <g key={link.edge.id}>
+                      <path d={path} markerEnd="url(#entity-related-arrow)" />
+                      <rect x={midX - labelWidth / 2} y={midY - 10} width={labelWidth} height="20" rx="2" />
+                      <text x={midX} y={midY + 4}>{link.edge.type}</text>
+                    </g>
+                  )
+                })}
+              </g>
+              <g className="entity-related-nodes">
+                {layout.map(({ link, x, y }) => (
+                  <RelatedTopologyNodeCard key={link.edge.id} node={link.neighbor} x={x} y={y} onSelect={() => onSelectNode(link.neighbor)} />
+                ))}
+                <RelatedTopologyNodeCard node={node} x={center.x} y={center.y} current />
+              </g>
+              </g>
+            </svg>
+            <div className="entity-related-minimap" aria-hidden="true">
+              <svg viewBox={'0 0 ' + width + ' ' + height}>
+                <rect width={width} height={height} />
+                {layout.map(({ link, x, y }) => <rect key={link.edge.id} x={x - 20} y={y - 8} width="40" height="16" />)}
+                <rect className="current" x={center.x - 24} y={center.y - 10} width="48" height="20" />
+              </svg>
+            </div>
+            <div className="entity-related-legend">
+              {legendItems.map((item) => (
+                <span key={item.type}>
+                  <i style={{ background: item.color }} />
+                  {entityTypeDisplayName(item.type)}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+      {links.length > visibleLinks.length && (
+        <p className="entity-related-topology-more">{'\u5df2\u5c55\u793a\u524d'} {visibleLinks.length} {'\u6761\u76f4\u63a5\u5173\u7cfb\uff0c\u5171'} {links.length} {'\u6761\u3002'}</p>
+      )}
+    </section>
+  )
+}
+
+function RelatedTopologyNodeCard({
+  node,
+  x,
+  y,
+  current = false,
+  onSelect,
+}: {
+  node: TopologyNode
+  x: number
+  y: number
+  current?: boolean
+  onSelect?: () => void
+}) {
+  const width = current ? 184 : 158
+  const height = current ? 64 : 58
+  const relationCount = Number(node.properties.relationCount || 0)
+  const stackDepth = Math.min(2, Math.max(0, relationCount - 1))
+  return (
+    <g className={current ? 'current' : onSelect ? 'selectable' : ''} transform={'translate(' + (x - width / 2) + ' ' + (y - height / 2) + ')'} onClick={onSelect}>
+      {stackDepth > 1 && <rect className="stack" x="8" y="-8" width={width} height={height} rx="2" style={{ stroke: node.color }} />}
+      {stackDepth > 0 && <rect className="stack" x="4" y="-4" width={width} height={height} rx="2" style={{ stroke: node.color }} />}
+      <rect width={width} height={height} rx="2" style={{ stroke: node.color }} />
+      <rect className="accent" x="0" y="0" width={width} height="4" style={{ fill: node.color }} />
+      <circle cx="20" cy="21" r="8" fill={node.color} />
+      <text className="title" x="36" y="22">{truncateSvgText(node.label, current ? 18 : 15)}</text>
+      <text className="count" x={width - 12} y="22" textAnchor="end">{'\u6570\u91cf: '}{relationCount}</text>
+      <text className="type" x="14" y={height - 13}>{'\u7c7b\u578b: '}{truncateSvgText(node.type, current ? 24 : 20)}</text>
+    </g>
+  )
+}
+
+function layoutRelatedColumn(links: EntityRelatedLink[], x: number, height: number) {
+  const total = Math.max(links.length, 1)
+  const available = Math.min(260, Math.max(90, total * 70))
+  const startY = height / 2 - available / 2
+  return links.map((link, index) => ({
+    link,
+    x,
+    y: startY + ((index + 0.5) * available) / total,
+  }))
+}
+
+function uniqueRelatedLegend(nodes: TopologyNode[]) {
+  const byType = new Map<string, { type: string; color: string }>()
+  nodes.forEach((node) => {
+    if (!byType.has(node.type)) byType.set(node.type, { type: node.type, color: node.color })
+  })
+  return [...byType.values()].slice(0, 6)
+}
+
+function MetricSummaryCard({ title, value, trend, tone = 'normal' }: { title: string; value: string; trend: string; tone?: 'normal' | 'danger' }) {
+  return (
+    <article className={`entity-instance-metric-card ${tone}`}>
+      <span>{title}</span>
+      <b>{value}</b>
+      <small>{trend}</small>
+    </article>
+  )
 }
 
 function EntityHealthGrid({ records, onSelect }: { records: EntityRecord[]; onSelect: (record: EntityRecord) => void }) {
+  const [healthFilter, setHealthFilter] = useState<EntityStatus | 'all'>('all')
+  const stats = summarizeEntities(records)
+  const total = Math.max(records.length, 1)
+  const score = Math.round((stats.normal / total) * 100)
+  const buckets: Array<{ key: EntityStatus | 'all'; label: string; count: number; color: string }> = [
+    { key: 'all', label: '全部', count: records.length, color: '#94a3b8' },
+    { key: 'normal', label: '正常', count: stats.normal, color: statusMeta.normal.color },
+    { key: 'warning', label: '警告', count: stats.warning, color: statusMeta.warning.color },
+    { key: 'critical', label: '严重', count: stats.critical, color: statusMeta.critical.color },
+  ]
+  const maxBucket = Math.max(1, ...buckets.map((bucket) => bucket.count))
+  const visibleRecords = healthFilter === 'all' ? records : records.filter((record) => record.status === healthFilter)
   return (
     <div className="entity-health-grid">
-      {records.map((record) => (
-        <button key={record.id} type="button" className={`status-${record.status}`} onClick={() => onSelect(record)}>
-          <span className="entity-type-icon" style={{ color: record.color, borderColor: record.color }}>
-            <TopologyPresetIcon preset={resolveEntityIconPreset(record)} label={record.type} size={16} />
-          </span>
-          <b>{record.label.replace(/\s+\d+$/, '')}</b>
-          <small>{record.domain} · {record.events} 事件</small>
-          <StatusPill status={record.status} />
-        </button>
-      ))}
+      <div className="entity-health-overview">
+        <div>
+          <span>健康分</span>
+          <b>{score}</b>
+          <small>{stats.normal} / {records.length} 正常实体</small>
+        </div>
+        <div>
+          <span>未恢复事件</span>
+          <b>{stats.openEvents}</b>
+          <small>{stats.criticalEvents} 严重 · {stats.warningEvents} 警告</small>
+        </div>
+        <div>
+          <span>异常实体</span>
+          <b>{stats.warning + stats.critical}</b>
+          <small>{stats.critical} 严重 · {stats.warning} 警告</small>
+        </div>
+      </div>
+      <div className="entity-health-toolbar">
+        <div className="entity-health-bars">
+          {buckets.map((bucket) => (
+            <button
+              key={bucket.key}
+              type="button"
+              className={healthFilter === bucket.key ? 'active' : ''}
+              onClick={() => setHealthFilter(bucket.key)}
+            >
+              <span><i style={{ background: bucket.color }} />{bucket.label}</span>
+              <b>{bucket.count.toLocaleString()}</b>
+              <em><i style={{ width: `${Math.max(8, Math.round((bucket.count / maxBucket) * 100))}%`, background: bucket.color }} /></em>
+            </button>
+          ))}
+        </div>
+        <span>当前显示 {visibleRecords.length.toLocaleString()} 个实体 · 目前仅已接入实体参与健康度计算</span>
+      </div>
+      <table className="entity-health-table">
+        <thead>
+          <tr>
+            <th aria-label="选择实体"><input type="checkbox" aria-label="选择全部健康实体" /></th>
+            <th>实体</th>
+            <th>实体类型</th>
+            <th>实例 ID</th>
+            <th>健康度</th>
+            <th>未恢复事件</th>
+            <th>关联数</th>
+            <th>最近上报</th>
+          </tr>
+        </thead>
+        <tbody>
+          {visibleRecords.map((record) => (
+            <tr key={record.id} onClick={() => onSelect(record)}>
+              <td onClick={(event) => event.stopPropagation()}>
+                <input type="checkbox" aria-label={`选择 ${record.label}`} readOnly />
+              </td>
+              <td>
+                <div className="entity-row-title">
+                  <button
+                    className={record.starred ? 'entity-row-star active' : 'entity-row-star'}
+                    type="button"
+                    aria-label={record.starred ? '已关注实体' : '关注实体'}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Star size={14} />
+                  </button>
+                  <span className="entity-type-icon" style={{ color: record.color, borderColor: record.color }}>
+                    <TopologyPresetIcon preset={resolveEntityIconPreset(record)} label={record.type} size={16} />
+                  </span>
+                  <span>
+                    <b>{record.label}</b>
+                    <small>{record.domain}</small>
+                  </span>
+                </div>
+              </td>
+              <td><span className="entity-type-tag">{record.type}</span></td>
+              <td title={entityInstanceId(record)}>{entityInstanceId(record)}</td>
+              <td><StatusPill status={record.status} /></td>
+              <td><span className={record.events > 0 ? 'entity-event-count warning' : 'entity-event-count'}>{record.events}</span></td>
+              <td>{Number(record.properties.relationCount || 0)}</td>
+              <td>{record.lastSeen}</td>
+            </tr>
+          ))}
+          {visibleRecords.length === 0 && (
+            <tr className="entity-health-empty-row">
+              <td colSpan={8}>暂无{healthFilter === 'all' ? '' : statusMeta[healthFilter].label}实体</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   )
 }
 
-function EntityDetail({ record, onClose }: { record: EntityRecord | null; onClose: () => void }) {
+function EntityDetail({
+  record,
+  data,
+  onClose,
+  onSelectNode,
+}: {
+  record: EntityRecord | null
+  data: TopologyExplorerData
+  onClose: () => void
+  onSelectNode: (node: TopologyNode) => void
+}) {
+  const [activeTab, setActiveTab] = useState<EntityDetailTab>('detail')
+  const [relationFilter, setRelationFilter] = useState<EntityRelationFilter>('all')
+  const node = record ? data.nodesById.get(record.id) || null : null
+  const relatedLinks = useMemo(() => node ? relatedLinksForInstance(data, node) : [], [data, node])
+
+  useEffect(() => {
+    setActiveTab('detail')
+    setRelationFilter('all')
+  }, [record?.id])
+
   if (!record) return null
+
+  const providedLinks = relatedLinks.filter((link) => link.direction === 'out')
+  const dependencyLinks = relatedLinks.filter((link) => link.direction === 'in')
+  const filteredRelationLinks = relationFilter === 'provided'
+    ? providedLinks
+    : relationFilter === 'dependency'
+      ? dependencyLinks
+      : relatedLinks
+  const relationTitle = relationFilter === 'provided' ? '提供服务' : relationFilter === 'dependency' ? '依赖服务' : '关联项'
+  const tabs: Array<{ key: EntityDetailTab; label: string; count?: number; disabled?: boolean; dropdown?: boolean }> = [
+    { key: 'detail', label: '实体详情' },
+    { key: 'topology', label: '关联拓扑', count: relatedLinks.length, disabled: !node, dropdown: true },
+    { key: 'trace', label: '会话追踪', disabled: !node },
+    { key: 'page', label: '页面访问', disabled: !node },
+    { key: 'heatmap', label: '热力图分析', disabled: !node },
+    { key: 'resource', label: '资源加载', disabled: !node },
+    { key: 'api', label: 'API请求', disabled: !node },
+    { key: 'exception', label: '异常统计', disabled: !node },
+    { key: 'customEvent', label: '自定义事件', disabled: !node },
+    { key: 'customLog', label: '自定义日志', disabled: !node },
+    { key: 'settings', label: '应用设置', disabled: !node, dropdown: true },
+    { key: 'logSearch', label: '日志探索', count: relatedLinks.length, disabled: !node, dropdown: true },
+    { key: 'related', label: '关联项', count: relatedLinks.length, disabled: !node, dropdown: true },
+  ]
+
   return (
     <aside className="entity-detail">
-      <button className="entity-detail-close" type="button" onClick={onClose}>×</button>
       <div className="entity-detail-head">
         <span className="entity-type-icon" style={{ color: record.color, borderColor: record.color }}>
           <TopologyPresetIcon preset={resolveEntityIconPreset(record)} label={record.type} size={24} />
         </span>
-        <div>
+        <div className="entity-detail-title">
           <strong>{record.label}</strong>
           <span>{record.type}</span>
         </div>
+        <div className="entity-detail-actions">
+          <button className="entity-detail-time-range" type="button" aria-label="时间范围 最近15分钟">
+            <em>15min</em>
+            <b>最近15分钟</b>
+          </button>
+          <button className="entity-detail-icon-action" type="button" aria-label="刷新实体详情" title="刷新">
+            <RefreshCw size={16} />
+          </button>
+          <button className="entity-detail-assistant" type="button" aria-label="智能助手" title="智能助手">
+            <Sparkles size={17} />
+          </button>
+          <button className="entity-detail-close" type="button" onClick={onClose} aria-label="关闭实体详情" title="关闭">
+            <X size={16} />
+          </button>
+        </div>
       </div>
-      <StatusPill status={record.status} />
-      <dl>
-        <dt>Domain</dt><dd>{record.domain}</dd>
-        <dt>应用</dt><dd>{record.app}</dd>
-        <dt>IP</dt><dd>{record.properties.ip}</dd>
-        <dt>Host</dt><dd>{record.properties.host}</dd>
-        <dt>连接数</dt><dd>{record.properties.relationCount}</dd>
-        <dt>未恢复事件</dt><dd>{record.events}</dd>
-        <dt>最近上报</dt><dd>{record.lastSeen}</dd>
-      </dl>
+      <div className="entity-detail-meta">
+        <StatusPill status={record.status} />
+        <span>{relatedLinks.length} 条直接关系</span>
+      </div>
+      <nav className="entity-detail-tabs" aria-label="实体详情视图">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className={activeTab === tab.key ? 'active' : ''}
+            disabled={tab.disabled}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+            {typeof tab.count === 'number' && <em>{tab.count}</em>}
+            {tab.dropdown && <ChevronDown size={14} />}
+          </button>
+        ))}
+      </nav>
+      {activeTab === 'topology' && (
+        <div className="entity-detail-tab-menu">
+          <button className="active" type="button">关联实体拓扑</button>
+          <button type="button">UModel 探索</button>
+        </div>
+      )}
+      {activeTab === 'settings' && (
+        <div className="entity-detail-tab-menu">
+          <button className="active" type="button">应用设置</button>
+          <button type="button">采集配置</button>
+          <button type="button">告警配置</button>
+        </div>
+      )}
+      {activeTab === 'logSearch' && (
+        <div className="entity-detail-tab-menu">
+          <button className="active" type="button">日志探索</button>
+          <button type="button">原始日志</button>
+          <button type="button">关联日志</button>
+        </div>
+      )}
+      {activeTab === 'related' && (
+        <div className="entity-detail-tab-menu">
+          <button className={relationFilter === 'all' ? 'active' : ''} type="button" onClick={() => setRelationFilter('all')}>关联项</button>
+          <button className={relationFilter === 'provided' ? 'active' : ''} type="button" onClick={() => setRelationFilter('provided')}>提供服务 {providedLinks.length}</button>
+          <button className={relationFilter === 'dependency' ? 'active' : ''} type="button" onClick={() => setRelationFilter('dependency')}>依赖服务 {dependencyLinks.length}</button>
+        </div>
+      )}
+      <div className="entity-detail-body">
+        {activeTab === 'detail' && (
+          <dl>
+            <dt>Domain</dt><dd>{record.domain}</dd>
+            <dt>应用</dt><dd>{record.app}</dd>
+            <dt>IP</dt><dd>{record.properties.ip}</dd>
+            <dt>Host</dt><dd>{record.properties.host}</dd>
+            <dt>连接数</dt><dd>{record.properties.relationCount}</dd>
+            <dt>未恢复事件</dt><dd>{record.events}</dd>
+            <dt>最近上报</dt><dd>{record.lastSeen}</dd>
+          </dl>
+        )}
+        {activeTab === 'topology' && node && (
+          <EntityRelatedTopologyCanvas node={node} links={relatedLinks} onSelectNode={onSelectNode} />
+        )}
+        {activeTab === 'trace' && node && (
+          <EntityTracePanel node={node} links={relatedLinks} />
+        )}
+        {activeTab === 'exception' && node && (
+          <EntityInstanceHealthPanel node={node} links={relatedLinks} />
+        )}
+        {activeTab === 'related' && node && (
+          <EntityRelationList title={relationTitle} emptyText={relationFilter === 'provided' ? '暂无提供服务' : relationFilter === 'dependency' ? '暂无依赖服务' : '暂无关联项'} links={filteredRelationLinks} onSelectNode={onSelectNode} />
+        )}
+        {activeTab === 'page' && node && <EntityInstanceEmptyTab title="页面访问" description="当前实体暂无页面访问数据" />}
+        {activeTab === 'heatmap' && node && <EntityInstanceEmptyTab title="热力图分析" description="当前实体暂无热力图数据" />}
+        {activeTab === 'resource' && node && <EntityInstanceEmptyTab title="资源加载" description="当前实体暂无资源加载明细" />}
+        {activeTab === 'api' && node && <EntityInstanceEmptyTab title="API请求" description="当前实体暂无 API 请求明细" />}
+        {activeTab === 'customEvent' && node && <EntityInstanceEmptyTab title="自定义事件" description="当前实体暂无自定义事件" />}
+        {activeTab === 'customLog' && node && <EntityInstanceEmptyTab title="自定义日志" description="当前实体暂无自定义日志" />}
+        {activeTab === 'settings' && node && <EntityInstanceEmptyTab title="应用设置" description="请在工作空间管理中配置该实体的应用设置" />}
+        {activeTab === 'logSearch' && node && <EntityLogSearchPanel node={node} links={relatedLinks} />}
+        {activeTab !== 'detail' && !node && (
+          <EntityInstanceEmptyTab title="关联拓扑" description="当前实体暂未匹配到后端拓扑节点" />
+        )}
+      </div>
     </aside>
   )
 }
@@ -917,7 +2595,9 @@ function StatusPill({ status }: { status: EntityStatus }) {
 }
 
 interface ReferenceTopologyNode {
-  node: TopologyNode
+  id: string
+  type: string
+  instances: TopologyNode[]
   x: number
   y: number
   width: number
@@ -937,108 +2617,108 @@ interface ReferenceTopologyEdge {
   showLabel?: boolean
 }
 
-interface ReferenceTopologyTemplate {
-  title: string
-  subtitle: string
-  color: string
-  access: number
-  x: number
-  y: number
-  width?: number
-  height?: number
+interface EntityRelatedLink {
+  edge: TopologyEdge
+  neighbor: TopologyNode
+  direction: 'in' | 'out'
 }
 
-function createReferenceStyleTopology(data: ReturnType<typeof createAliyunLikeTopologyData>) {
-  const templates = referenceTopologyTemplates()
-  const nodes = templates.map((template, index) => {
-    const node = data.nodes[(index * 23 + 5) % data.nodes.length]
+function createReferenceStyleTopology(data: TopologyExplorerData, focusedTypes: string[]) {
+  const focused = new Set(focusedTypes)
+  const sourceNodes = focusedTypes.length > 0
+    ? data.nodes.filter((node) => focused.has(stripSyntheticType(node.type)))
+    : data.nodes
+  const grouped = new Map<string, TopologyNode[]>()
+  sourceNodes.forEach((node) => {
+    const instances = grouped.get(node.type) || []
+    instances.push(node)
+    grouped.set(node.type, instances)
+  })
+  const coordinates = referenceTopologyCoordinates()
+  const nodes = [...grouped.entries()].slice(0, 90).map(([type, instances], index) => {
+    const sample = instances[0]
+    const coordinate = coordinates[index] || fallbackReferenceCoordinate(index)
+    const width = Math.max(290, Math.min(380, (coordinate.width || 43) * 6.8, type.length * 9 + 150))
     return {
-      node,
-      x: template.x,
-      y: template.y,
-      width: template.width || 43,
-      height: template.height || 18,
-      title: template.title,
-      subtitle: template.subtitle,
-      color: template.color,
-      access: template.access,
-      barWidth: Math.max(16, Math.min(25, (template.width || 43) * 0.38)),
+      id: type,
+      type,
+      instances,
+      x: coordinate.x,
+      y: coordinate.y,
+      width,
+      height: Math.max(74, (coordinate.height || 18) * 4.4),
+      title: entityTypeDisplayName(type),
+      subtitle: type,
+      color: sample?.color || '#5b9df1',
+      access: instances.reduce((sum, node) => sum + Number(node.properties.relationCount || 0), 0),
+      barWidth: Math.max(86, Math.min(128, width * 0.42)),
     }
   })
   const edges: ReferenceTopologyEdge[] = []
-  const addEdge = (sourceIndex: number, targetIndex: number, label: string, showLabel = false) => {
-    const source = nodes[sourceIndex]
-    const target = nodes[targetIndex]
-    if (!source || !target) return
-    edges.push({ id: `reference-edge-${edges.length}`, source, target, label, showLabel })
-  }
-
-  referenceTopologyRelations().forEach(([source, target, label, showLabel]) => addEdge(source, target, label, showLabel))
+  const nodesByType = new Map(nodes.map((item) => [item.type, item]))
+  data.edges.forEach((edge) => {
+    const sourceNode = data.nodesById.get(edge.source)
+    const targetNode = data.nodesById.get(edge.target)
+    if (!sourceNode || !targetNode) return
+    const source = nodesByType.get(sourceNode.type)
+    const target = nodesByType.get(targetNode.type)
+    if (!source || !target || source.id === target.id) return
+    edges.push({ id: edge.id, source, target, label: edge.type, showLabel: edges.length < 4 })
+  })
   return { nodes, edges }
 }
 
-function referenceTopologyTemplates() {
-  const blue = '#5b9df1'
-  const red = '#f06b5f'
-  const green = '#7fae49'
-  const orange = '#f2a24c'
-  const purple = '#c36ad8'
-  const cyan = '#57bdb8'
-  const base = [
-    ['云原生API网关', 'acs.apig.instance', blue, 2], ['Kubernetes 集群', 'acs.cs.cluster', blue, 1],
-    ['云消息队列 Kafka', 'acs.alikafka.instance', red, 6], ['网关监听', 'acs.apig.listener', blue, 3],
-    ['容器服务 Kubernetes', 'k8s.cluster', blue, 5], ['云数据库 ClickHouse', 'acs.clickhouse.cluster', blue, 2],
-    ['ServerGroup', 'acs.slb.servergroup', blue, 9], ['Ingress', 'k8s.ingress', blue, 12],
-    ['Kafka Topic', 'acs.alikafka.topic', red, 3], ['负载均衡 SLB', 'acs.slb.instance', blue, 4],
-    ['Kubernetes Service', 'k8s.service', blue, 18], ['Kafka 版', 'acs.alikafka.instance', red, 4],
-    ['PolarDB 代理', 'acs.polardb.endpoint', blue, 10], ['云数据库 RDS', 'acs.rds.instance', purple, 16],
-    ['容器组 Pod', 'k8s.pod', blue, 22], ['无状态应用', 'k8s.deployment', blue, 16],
-    ['配置项', 'k8s.configmap', green, 8], ['云数据库 PolarDB', 'acs.polardb.cluster', orange, 1],
-    ['数据库', 'apm.external.database', purple, 4], ['Elasticsearch', 'acs.elasticsearch.instance', cyan, 2],
-    ['云数据库 Tair', 'acs.kvstore.instance', red, 32], ['节点', 'k8s.node', green, 59],
-    ['消息服务', 'apm.external.message', purple, 3], ['其他外部服务', 'apm.external.others', green, 1],
-    ['RPC 服务', 'apm.external.rpc_client', green, 18], ['NoSQL 数据库', 'apm.external.nosql', green, 9],
-    ['云原生API网关', 'acs.apig.gateway', orange, 9], ['大模型', 'apm.external.model', green, 12],
-    ['工具', 'apm.external.tool', green, 48], ['PAI 训练服务', 'acs.pai.eas.instance', orange, 9],
-    ['人工智能平台PAI', 'acs.pai.eas.instance', orange, 9], ['知识库', 'apm.external.knowledge', green, 4],
-    ['接口', 'apm.operation', orange, 164], ['调用链 Span', 'apm.span', blue, 28],
-    ['AI Agent', 'apm.genai.agent', blue, 20], ['任务', 'apm.genai.task', red, 5],
-    ['函数工具', 'apm.genai.tool_call', green, 15], ['百炼工作空间', 'acs.bailian.workspace', purple, 2],
-    ['PAI 工作空间', 'acs.pai.workspace', orange, 2], ['模型服务', 'apm.model_service', green, 7],
-    ['应用', 'apm.service', blue, 220], ['网关实例', 'acs.apig.instance', orange, 13],
-    ['AI 应用', 'apm.genai.app', blue, 82], ['K8s 节点', 'k8s.node', red, 32],
-    ['容器', 'k8s.container', blue, 77], ['GPU 节点池', 'acs.cs.nodepool', green, 5],
-    ['ECS 实例', 'acs.ecs.instance', blue, 19], ['云盘', 'acs.ecs.disk', blue, 16],
-    ['网络接口', 'acs.ecs.eni', blue, 12], ['安全组', 'acs.ecs.securitygroup', blue, 8],
-    ['VPC', 'acs.vpc', cyan, 4], ['日志库', 'acs.sls.logstore', orange, 6],
-    ['应用', 'apm.service', blue, 220], ['接口', 'apm.operation', orange, 164],
-    ['数据库', 'apm.external.database', purple, 4], ['NoSQL 数据库', 'apm.external.nosql', green, 9],
-    ['云原生API网关', 'acs.apig.aiapi', orange, 13], ['HTTP 请求', 'apm.http', orange, 27],
-    ['数据库调用', 'apm.db_call', purple, 11], ['模型调用', 'apm.llm_call', green, 35],
-    ['工具调用', 'apm.tool_call', green, 42], ['消息队列调用', 'apm.message_call', red, 6],
-    ['缓存调用', 'apm.cache_call', red, 13], ['RPC 调用', 'apm.rpc_call', green, 18],
-    ['服务调用', 'apm.service_call', blue, 31], ['链路入口', 'apm.entry', blue, 7],
-    ['节点', 'k8s.node', red, 18], ['任务', 'apm.task', blue, 6],
-    ['Pod', 'k8s.pod', blue, 46], ['容器组', 'k8s.pod', blue, 28],
-    ['告警', 'cms.alarm', red, 7], ['事件', 'cms.event', orange, 11],
-    ['指标', 'cms.metric', blue, 34], ['日志', 'sls.log', orange, 18],
-    ['Trace', 'xtrace.trace', purple, 21], ['变更', 'cms.change', green, 9],
-    ['SLO', 'cms.slo', cyan, 5], ['拨测', 'cms.synthetic', cyan, 4],
-    ['仪表盘', 'cms.dashboard', blue, 12], ['巡检', 'cms.check', green, 6],
-    ['根因分析', 'cms.rca', purple, 3], ['AI Agent', 'apm.genai.agent', blue, 20],
-    ['大模型', 'apm.external.model', green, 12], ['工具', 'apm.external.tool', green, 48],
-    ['节点', 'k8s.node', red, 6], ['任务', 'apm.genai.task', blue, 8],
-    ['日志任务', 'sls.task', orange, 4], ['函数', 'fc.function', green, 5],
-    ['插件', 'apm.plugin', purple, 7], ['配置', 'apm.config', blue, 9],
-  ] as const
-  const coordinates = referenceTopologyCoordinates()
-  return base.map(([title, subtitle, color, access], index): ReferenceTopologyTemplate => ({
-    title,
-    subtitle,
-    color,
-    access,
-    ...(coordinates[index] || coordinates[coordinates.length - 1]),
-  }))
+function relatedLinksForInstance(data: TopologyExplorerData, node: TopologyNode): EntityRelatedLink[] {
+  return data.edges.reduce<EntityRelatedLink[]>((links, edge) => {
+    if (edge.source === node.id) {
+      const neighbor = data.nodesById.get(edge.target)
+      if (neighbor) links.push({ edge, neighbor, direction: 'out' })
+    } else if (edge.target === node.id) {
+      const neighbor = data.nodesById.get(edge.source)
+      if (neighbor) links.push({ edge, neighbor, direction: 'in' })
+    }
+    return links
+  }, [])
+}
+
+function truncateSvgText(text: string, limit: number) {
+  return text.length > limit ? `${text.slice(0, Math.max(0, limit - 1))}...` : text
+}
+
+function entityTagCount(node: TopologyNode) {
+  return Object.keys(node.properties).filter((key) => !key.startsWith('__') && valueText(node.properties[key])).length
+}
+
+function referenceNodeDomain(node: ReferenceTopologyNode) {
+  return node.type.split('.')[0] || node.type
+}
+
+function countTopologyOptions<T>(items: T[], getKey: (item: T) => string) {
+  const counts = new Map<string, number>()
+  items.forEach((item) => {
+    const key = getKey(item) || '-'
+    counts.set(key, (counts.get(key) || 0) + 1)
+  })
+  return [...counts.entries()]
+    .map(([key, count]) => ({ key, count }))
+    .sort((left, right) => right.count - left.count || left.key.localeCompare(right.key, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' }))
+}
+
+function entityTypeDisplayName(type: string) {  const tail = type.split('.').filter(Boolean).slice(-1)[0] || type
+  return tail
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function fallbackReferenceCoordinate(index: number) {
+  const column = index % 10
+  const row = Math.floor(index / 10)
+  return {
+    x: 620 + column * 124,
+    y: 120 + row * 68,
+    width: 43,
+    height: 18,
+  }
 }
 
 function referenceTopologyCoordinates() {
@@ -1080,32 +2760,6 @@ function referenceTopologyCoordinates() {
   ]
 }
 
-function referenceTopologyRelations() {
-  return [
-    [0, 1, 'same_as', true], [0, 2, 'contains'], [2, 5, 'contains'], [5, 7, 'contains'],
-    [7, 9, 'contains', true], [9, 11, 'same_as'], [11, 18, 'calls'],
-    [3, 6, 'contains'], [4, 8, 'contains'], [6, 10, 'contains'], [8, 12, 'same_as'],
-    [10, 16, 'contains'], [12, 20, 'calls'], [13, 22, 'same_as'], [14, 24, 'contains'],
-    [15, 25, 'calls'], [16, 26, 'contains'], [17, 27, 'same_as'], [18, 30, 'calls'],
-    [19, 31, 'contains'], [20, 33, 'calls'], [21, 35, 'contains'], [22, 36, 'calls'],
-    [23, 40, 'calls'], [24, 40, 'calls', true], [25, 40, 'calls'], [26, 40, 'contains'],
-    [27, 40, 'same_as'], [28, 40, 'calls'], [29, 40, 'contains'], [30, 40, 'calls'],
-    [31, 40, 'calls'], [32, 40, 'calls', true], [33, 40, 'calls'], [34, 40, 'contains'],
-    [35, 40, 'calls'], [36, 40, 'same_as'], [37, 40, 'calls'], [38, 40, 'calls'],
-    [39, 40, 'contains'], [40, 52, 'contains', true], [40, 53, 'calls'], [40, 54, 'calls'],
-    [40, 55, 'same_as'], [40, 56, 'contains'], [40, 57, 'calls'], [40, 58, 'calls'],
-    [40, 59, 'calls', true], [40, 60, 'contains'], [52, 61, 'contains'], [53, 62, 'contains'],
-    [54, 63, 'same_as'], [55, 64, 'calls'], [56, 65, 'calls'], [57, 66, 'contains'],
-    [58, 67, 'same_as'], [59, 68, 'calls'], [60, 69, 'calls'], [70, 71, 'calls', true],
-    [71, 72, 'contains'], [72, 73, 'calls'], [73, 74, 'contains'], [74, 75, 'same_as'],
-    [76, 77, 'calls'], [77, 78, 'contains'], [78, 79, 'calls'], [79, 80, 'contains'],
-    [80, 81, 'same_as'], [81, 82, 'contains'], [2, 40, 'same_as', true],
-    [1, 40, 'same_as'], [5, 25, 'same_as'], [12, 40, 'same_as'], [20, 40, 'calls'],
-    [40, 76, 'contains'], [40, 83, 'same_as'], [83, 84, 'calls'], [84, 85, 'contains'],
-    [85, 86, 'calls'], [86, 87, 'contains'], [87, 88, 'calls'],
-  ] as Array<[number, number, string, boolean?]>
-}
-
 function referenceEdgePath(edge: ReferenceTopologyEdge) {
   const sourceCenterX = edge.source.x + edge.source.width / 2
   const sourceCenterY = edge.source.y + edge.source.height / 2
@@ -1126,7 +2780,7 @@ function referenceEdgePath(edge: ReferenceTopologyEdge) {
 }
 
 function referenceIconPath(type: string) {
-  if (type.includes('数据库') || type.includes('RDS') || type.includes('ClickHouse')) return 'M2 4 C2 2 14 2 14 4 V12 C14 14 2 14 2 12 Z M2 4 C2 6 14 6 14 4 M2 8 C2 10 14 10 14 8'
+  if (type.includes('database') || type.includes('Database') || type.includes('RDS') || type.includes('ClickHouse')) return 'M2 4 C2 2 14 2 14 4 V12 C14 14 2 14 2 12 Z M2 4 C2 6 14 6 14 4 M2 8 C2 10 14 10 14 8'
   if (type.includes('Kafka') || type.includes('消息')) return 'M8 2 L14 5.5 V12.5 L8 16 L2 12.5 V5.5 Z M8 2 V8 M2 5.5 L8 8 L14 5.5'
   if (type.includes('API') || type.includes('接口')) return 'M3 8 H13 M8 3 V13 M4 4 L12 12 M12 4 L4 12'
   if (type.includes('Agent') || type.includes('模型') || type.includes('工具')) return 'M3 12 C4 6 12 6 13 12 M5 12 H11 M8 3 V6 M5 15 L11 15'
@@ -1134,46 +2788,44 @@ function referenceIconPath(type: string) {
 }
 
 function createEntityRecords(nodes: TopologyNode[]): EntityRecord[] {
-  const records: EntityRecord[] = []
-  for (let index = 0; index < ENTITY_TOTAL; index += 1) {
-    const base = nodes[index % nodes.length]
-    const sequence = index + 1
-    const typeIndex = sequence % ENTITY_TYPE_TOTAL
-    const baseType = sequence <= nodes.length ? base.type : `${base.type} ${String(typeIndex + 1).padStart(3, '0')}`
-    records.push(toEntityRecord(base, sequence, baseType))
-  }
-  return records
+  return nodes.map((node, index) => toEntityRecord(node, index + 1))
 }
 
-function toEntityRecord(node: TopologyNode, sequence: number, type: string): EntityRecord {
-  const status: EntityStatus = sequence % 97 === 0 ? 'critical' : sequence % 17 === 0 ? 'warning' : 'normal'
-  const events = sequence <= OPEN_EVENT_TOTAL
-    ? status === 'critical' ? 2 : 1
-    : 0
-  const domain = domains[sequence % domains.length]
-  const app = sequence <= TARGET_CONNECTED.aiApp ? 'AI 应用' : sequence <= TARGET_CONNECTED.aiApp + TARGET_CONNECTED.aiAgent ? 'AI Agent' : apps[sequence % apps.length]
+function toEntityRecord(node: TopologyNode, sequence: number): EntityRecord {
+  const status = entityStatus(node, sequence)
+  const events = status === 'critical' ? 2 : status === 'warning' ? 1 : 0
+  const domain = valueText(node.properties.__domain__) || valueText(node.properties.domain) || 'unknown'
+  const app = valueText(node.properties.app)
+    || valueText(node.properties.application)
+    || valueText(node.properties.service)
+    || valueText(node.properties.namespace)
+    || valueText(node.properties.environment)
+    || '-'
+  const relationCount = Number(node.properties.relationCount || 0)
   return {
-    id: `entity-${sequence}`,
-    label: `${type.replace(/\s+\d{3}$/, '')} ${String(sequence).padStart(4, '0')}`,
-    type,
+    id: node.id,
+    label: node.label || node.id,
+    type: node.type,
     color: node.color,
     iconPreset: node.iconPreset,
     properties: {
       ...node.properties,
-      id: `entity-${sequence}`,
-      relationCount: Number(node.properties.relationCount || 0) + (sequence % 5),
+      id: node.id,
+      ip: valueText(node.properties.ip) || '-',
+      host: valueText(node.properties.host) || valueText(node.properties.hostname) || '-',
+      relationCount,
     },
     domain,
     app,
     status,
     events,
-    changeEvents: sequence <= CHANGE_EVENT_TOTAL ? 1 + (sequence % 2) : 0,
-    lastSeen: `${sequence % 24} 分钟前`,
-    starred: sequence <= TARGET_CONNECTED.starred,
+    changeEvents: Number(node.properties.changeEvents || node.properties.change_events || 0),
+    lastSeen: formatLastSeen(node.properties.__last_observed_time__) || formatLastSeen(node.properties.updated_at) || '-',
+    starred: booleanProperty(node.properties.starred) || booleanProperty(node.properties.favorite),
   }
 }
 
-function summarizeEntities(records: EntityRecord[], targetTotals = false) {
+function summarizeEntities(records: EntityRecord[]) {
   const domainsSeen = new Set(records.map((record) => record.domain))
   const typesSeen = new Set(records.map((record) => record.type))
   const critical = records.filter((record) => record.status === 'critical').length
@@ -1184,18 +2836,167 @@ function summarizeEntities(records: EntityRecord[], targetTotals = false) {
   const infoEvents = records.filter((record) => record.status === 'normal').reduce((sum, record) => sum + record.events, 0)
   return {
     total: records.length,
-    domainCount: targetTotals ? ENTITY_DOMAIN_TOTAL : domainsSeen.size,
-    typeCount: targetTotals ? ENTITY_TYPE_TOTAL : typesSeen.size,
+    domainCount: domainsSeen.size,
+    typeCount: typesSeen.size,
     critical,
     warning,
     normal,
-    criticalEvents: targetTotals ? TARGET_EVENT_BREAKDOWN.critical : criticalEvents,
-    errorEvents: targetTotals ? TARGET_EVENT_BREAKDOWN.error : 0,
-    warningEvents: targetTotals ? TARGET_EVENT_BREAKDOWN.warning : warningEvents,
-    infoEvents: targetTotals ? TARGET_EVENT_BREAKDOWN.info : infoEvents,
-    openEvents: targetTotals ? OPEN_EVENT_TOTAL : criticalEvents + warningEvents + infoEvents,
-    changeEvents: targetTotals ? CHANGE_EVENT_TOTAL : records.reduce((sum, record) => sum + record.changeEvents, 0),
+    criticalEvents,
+    errorEvents: 0,
+    warningEvents,
+    infoEvents,
+    openEvents: criticalEvents + warningEvents + infoEvents,
+    changeEvents: records.reduce((sum, record) => sum + record.changeEvents, 0),
   }
+}
+
+function filterRecordsForDrilldown(records: EntityRecord[], drilldown: EntityDrilldown | null) {
+  if (!drilldown) return records
+  const token = drilldown.token.toLowerCase()
+  return records.filter((record) => {
+    if (drilldown.kind === 'domain') return record.domain.toLowerCase() === token
+    return [record.type, record.label, record.domain, record.app].join(' ').toLowerCase().includes(token)
+  })
+}
+
+function createCatalogDomainGroups(records: EntityRecord[], query: string): EntityCatalogDomainGroup[] {
+  const grouped = new Map<string, { count: number; types: Map<string, EntityCatalogTypeItem> }>()
+  records.forEach((record) => {
+    const domain = record.domain || 'unknown'
+    const domainGroup = grouped.get(domain) || { count: 0, types: new Map<string, EntityCatalogTypeItem>() }
+    const typeItem = domainGroup.types.get(record.type) || {
+      key: record.type,
+      label: entityTypeDisplayName(record.type),
+      count: 0,
+      color: record.color,
+      iconPreset: resolveEntityIconPreset(record),
+    }
+    typeItem.count += 1
+    domainGroup.count += 1
+    domainGroup.types.set(record.type, typeItem)
+    grouped.set(domain, domainGroup)
+  })
+
+  const search = query.trim().toLowerCase()
+  return [...grouped.entries()]
+    .map(([domain, group]) => {
+      const items = [...group.types.values()]
+        .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
+      const visibleItems = search
+        ? items.filter((item) => [domain, item.key, item.label].join(' ').toLowerCase().includes(search))
+        : items
+      return {
+        key: domain,
+        title: domain,
+        summary: `${visibleItems.length.toLocaleString()} 类实体`,
+        count: group.count,
+        items: visibleItems,
+      }
+    })
+    .filter((group) => group.items.length > 0 || group.title.toLowerCase().includes(search))
+    .sort((left, right) => right.count - left.count || left.title.localeCompare(right.title))
+}
+
+function createEntityScopeTabs(records: EntityRecord[]): EntityScopeTab[] {
+  const presets: Array<{ key: EntityScopePreset; label: string }> = [
+    { key: 'all', label: '所有实体' },
+    { key: 'applications', label: '应用列表' },
+    { key: 'k8s', label: 'K8s集群' },
+    { key: 'ecs', label: 'ECS 列表' },
+    { key: 'rds', label: 'RDS 列表' },
+    { key: 'rum', label: 'RUM 应用' },
+  ]
+  return presets.map((preset) => {
+    if (preset.key === 'all') return { ...preset, count: records.length }
+    return {
+      ...preset,
+      count: records.filter((record) => matchesEntityScopePreset(record, preset.key)).length,
+    }
+  })
+}
+
+function matchesEntityScopePreset(record: EntityRecord, preset: EntityScopePreset) {
+  if (preset === 'all') return true
+  const text = [
+    record.label,
+    record.type,
+    stripSyntheticType(record.type),
+    record.domain,
+    record.app,
+  ].join(' ').toLowerCase()
+  if (preset === 'applications') return ['service', 'application', ' app', 'apm', '应用'].some((keyword) => text.includes(keyword))
+  if (preset === 'k8s') return ['k8s', 'kubernetes', 'cluster', 'workload', 'pod'].some((keyword) => text.includes(keyword))
+  if (preset === 'ecs') return ['ecs', 'compute', 'host', 'vm', 'server'].some((keyword) => text.includes(keyword))
+  if (preset === 'rds') return ['rds', 'database', 'mysql', 'postgres', 'redis', 'mongodb'].some((keyword) => text.includes(keyword))
+  return ['rum', 'browser', 'frontend', 'webapp'].some((keyword) => text.includes(keyword))
+}
+
+function createEntityMetricRows(records: EntityRecord[]) {
+  return records.slice(0, 10).map((record, index) => {
+    const sequence = entitySequence(record)
+    const relationCount = Number(record.properties.relationCount || 0)
+    const active = record.status !== 'normal' || relationCount > 0
+    return {
+      name: record.label,
+      probe: valueText(record.properties.__method__) || 'EntityStore',
+      language: valueText(record.properties.language) || '-',
+      region: valueText(record.properties.region) || record.domain,
+      calls: relationCount ? String(relationCount) : String(Math.max(0, sequence % 7)),
+      errors: record.status === 'critical' ? '1' : '0',
+      latency: active ? `${18 + ((sequence + index) % 82)} ms` : '0',
+      tokens: active ? `${Math.max(1, (sequence + relationCount) % 99)}K` : '0',
+      active,
+    }
+  })
+}
+
+function entitySequence(record: EntityRecord) {
+  let hash = 0
+  for (let index = 0; index < record.id.length; index += 1) {
+    hash = ((hash << 5) - hash) + record.id.charCodeAt(index)
+    hash |= 0
+  }
+  return Math.abs(hash) + 1
+}
+
+function entityStatus(node: TopologyNode, sequence: number): EntityStatus {
+  const explicit = valueText(node.properties.status || node.properties.health || node.properties.state).toLowerCase()
+  if (['critical', 'severe', 'error', 'failed'].includes(explicit)) return 'critical'
+  if (['warning', 'warn', 'degraded'].includes(explicit)) return 'warning'
+  if (Number(node.properties.events || 0) > 1) return 'warning'
+  if (sequence % 97 === 0) return 'critical'
+  if (sequence % 17 === 0) return 'warning'
+  return 'normal'
+}
+
+function formatLastSeen(value: unknown) {
+  const text = valueText(value)
+  if (!text) return ''
+  const numeric = Number(text)
+  if (Number.isFinite(numeric) && numeric > 0) {
+    const timestamp = numeric > 1_000_000_000_000 ? numeric : numeric * 1000
+    const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60000))
+    if (minutes < 1) return '刚刚'
+    if (minutes < 60) return `${minutes} \u5206\u949f\u524d`
+    const hours = Math.round(minutes / 60)
+    if (hours < 24) return `${hours} \u5c0f\u65f6\u524d`
+    const days = Math.round(hours / 24)
+    if (days < 30) return `${days} \u5929\u524d`
+    const months = Math.round(days / 30)
+    return `${months} \u4e2a\u6708\u524d`
+  }
+  return text
+}
+
+function valueText(value: unknown) {
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : ''
+}
+
+function booleanProperty(value: unknown) {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') return ['true', '1', 'yes'].includes(value.toLowerCase())
+  if (typeof value === 'number') return value !== 0
+  return false
 }
 
 function countBy(records: EntityRecord[], getKey: (record: EntityRecord) => string) {
@@ -1208,7 +3009,7 @@ function countBy(records: EntityRecord[], getKey: (record: EntityRecord) => stri
 
 function viewTitle(view: EntityView) {
   if (view === 'topology') return '拓扑视图'
-  if (view === 'health') return '健康度视图'
+  if (view === 'health') return '\u5065\u5eb7\u5ea6\u89c6\u56fe'
   return '实体表格'
 }
 
