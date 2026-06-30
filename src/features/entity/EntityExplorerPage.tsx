@@ -387,10 +387,6 @@ export function EntityExplorerPage({
                 <X size={14} />
               </button>
             )}
-            <button className="entity-query-action" type="button" onClick={() => setFiltersOpen((value) => !value)}>
-              <Filter size={14} />
-              <span>筛选</span>
-            </button>
             <code className="entity-query-editor entity-search-with-popover">
               <span className="entity-query-line" aria-hidden="true">1</span>
               <input
@@ -469,7 +465,7 @@ export function EntityExplorerPage({
                 <HealthCard stats={stats} />
               </div>
 
-              <div className="entity-lower-grid">
+              <div className={view === 'health' ? 'entity-lower-grid with-result-panel' : 'entity-lower-grid'}>
                 <FilterPanel
                   total={filtered.length}
                   scope={scope}
@@ -612,6 +608,8 @@ function EventCard({ stats }: { stats: ReturnType<typeof summarizeEntities> }) {
 
 function HealthCard({ stats }: { stats: ReturnType<typeof summarizeEntities> }) {
   const normalPercent = Math.round((stats.normal / Math.max(1, stats.total)) * 100)
+  const warningPercent = Math.round((stats.warning / Math.max(1, stats.total)) * 100)
+  const criticalPercent = Math.round((stats.critical / Math.max(1, stats.total)) * 100)
   const healthRows = [
     { key: 'normal' as const, label: '正常', value: stats.normal.toLocaleString(), color: statusMeta.normal.color },
     { key: 'warning' as const, label: '警告', value: stats.warning.toLocaleString(), color: statusMeta.warning.color },
@@ -624,9 +622,13 @@ function HealthCard({ stats }: { stats: ReturnType<typeof summarizeEntities> }) 
         <strong>健康度</strong>
       </div>
       <div className="entity-health-body">
-        <div className="entity-health-score">
+        <div
+          className="entity-health-score"
+          style={{
+            background: `conic-gradient(${statusMeta.normal.color} 0 ${normalPercent}%, ${statusMeta.warning.color} ${normalPercent}% ${normalPercent + warningPercent}%, ${statusMeta.critical.color} ${normalPercent + warningPercent}% ${normalPercent + warningPercent + criticalPercent}%, #edf1f7 0)`,
+          }}
+        >
           <b>{normalPercent}%</b>
-          <small>正常</small>
         </div>
         <div className="entity-health-breakdown">
           {healthRows.map((item) => (
@@ -828,14 +830,13 @@ function EntityCatalog({
                   kind: 'entity',
                 })}
               >
-                <span className="entity-type-icon" style={{ color: record.color, borderColor: record.color }}>
-                  <TopologyPresetIcon preset={resolveEntityIconPreset(record)} label={record.type} size={14} />
+                <span className="entity-catalog-recent-meta">
+                  <em>{entityTypeDisplayName(record.type)}</em>
+                  <small>{record.lastSeen || '-'}</small>
                 </span>
-                <span>
+                <span className="entity-catalog-recent-body">
                   <b>{record.label}</b>
-                  <small>{record.lastSeen}</small>
-                  <em>{entityInstanceId(record)}</em>
-                  <em>{record.type}</em>
+                  <small>{entityInstanceId(record)}</small>
                 </span>
               </button>
             ))}
@@ -844,6 +845,9 @@ function EntityCatalog({
         {groups.map((group) => (
           <div className="entity-catalog-group" key={group.key}>
             <div className="entity-catalog-group-title">
+              <span className="entity-catalog-domain-icon">
+                <Box size={14} />
+              </span>
               <button
                 className="entity-catalog-domain-title"
                 type="button"
@@ -869,14 +873,12 @@ function EntityCatalog({
                   kind: 'entity',
                 })}
               >
-                <span className="entity-type-icon" style={{ color: item.color, borderColor: item.color }}>
-                  <TopologyPresetIcon preset={item.iconPreset} label={item.key} size={13} />
-                </span>
-                <span>
+                <span className="entity-catalog-type-dot" style={{ background: item.color }} />
+                <span className="entity-catalog-type-text">
                   <b>{item.label}</b>
-                  <small>已接入</small>
+                  <small>{'\u5df2\u63a5\u5165'} {item.count.toLocaleString()}</small>
                 </span>
-                <strong>{item.count.toLocaleString()}</strong>
+                <Star className={item.count > 1 ? 'filled' : ''} size={15} />
               </button>
             ))}
           </div>
