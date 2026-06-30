@@ -21,10 +21,16 @@ const storageKeys = {
 
 type StandaloneSection = 'umodel' | 'entity' | 'topology'
 
+function getInitialQueryValue(key: string) {
+  return new URLSearchParams(window.location.search).get(key)?.trim() ?? undefined
+}
+
 export function StandaloneExplorerApp() {
   const { t } = useI18n()
-  const [apiBase, setApiBase] = useLocalStorageState(storageKeys.apiBase, '')
-  const [workspaceId, setWorkspaceId] = useLocalStorageState(storageKeys.workspace, 'demo')
+  const initialApiBase = getInitialQueryValue('apiBase')
+  const initialWorkspaceId = getInitialQueryValue('workspace')
+  const [apiBase, setApiBase] = useLocalStorageState(storageKeys.apiBase, '', initialApiBase)
+  const [workspaceId, setWorkspaceId] = useLocalStorageState(storageKeys.workspace, 'demo', initialWorkspaceId || undefined)
   const [activeWorkspaceId, setActiveWorkspaceId] = useLocalStorageState(storageKeys.activeWorkspace, '')
   const [workspace, setWorkspace] = useState<WorkspaceMetadata | null>(null)
   const [error, setError] = useState('')

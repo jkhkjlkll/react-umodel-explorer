@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 
-export function useLocalStorageState<T>(key: string, initialValue: T) {
+export function useLocalStorageState<T>(key: string, initialValue: T, preferredValue?: T) {
   const [value, setValue] = useState<T>(() => {
+    if (preferredValue !== undefined) return preferredValue
     const raw = window.localStorage.getItem(key)
     if (!raw) return initialValue
     try {

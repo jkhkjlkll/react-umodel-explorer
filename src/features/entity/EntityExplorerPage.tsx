@@ -4,6 +4,7 @@ import {
   Box,
   ChevronDown,
   Filter,
+  Filter as FilterIcon,
   Grid2X2,
   Home,
   Maximize2,
@@ -279,146 +280,154 @@ export function EntityExplorerPage({
     <div className="entity-page">
       <main className="entity-main">
         <header className="entity-toolbar">
-          <div className="entity-title">
-            <Box size={18} />
-            <strong>实体探索</strong>
-          </div>
-          <div className="entity-scope-tabs" role="listbox" aria-label="实体范围">
-            {scopeTabs.map((tab, index) => (
-              <button
-                key={tab.key}
-                type="button"
-                role="option"
-                aria-selected={tab.key === selectedTopScope}
-                className={tab.key === selectedTopScope ? 'active' : ''}
-                onKeyDown={(event) => {
-                  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-                  event.preventDefault()
-                  const offset = event.key === 'ArrowRight' ? 1 : -1
-                  const nextTab = scopeTabs[(index + offset + scopeTabs.length) % scopeTabs.length]
-                  setSelectedTopScope(nextTab.key)
-                  setScope('all')
-                  setSelectedDomain('all')
-                  setSelectedType('all')
-                }}
-                onClick={() => {
-                  setDrilldown(null)
-                  setSelectedTopoNode(null)
-                  setSelected(null)
-                  setQuery('')
-                  setQueryDraft('')
-                  setSelectedTopScope(tab.key)
-                  setScope('all')
-                  setSelectedDomain('all')
-                  setSelectedType('all')
-                }}
-              >
-                <span>{tab.label}</span>
-                <b>{tab.count.toLocaleString()}</b>
-              </button>
-            ))}
-          </div>
-          <div className="entity-topline-actions">
-            <div className="entity-time-picker">
-              <span>15min</span>
-              <input aria-label="请输入时间" value="最近15分钟" readOnly />
-              <ChevronDown size={13} />
+          <div className="entity-toolbar-top">
+            <div className="entity-title">
+              <Box size={18} />
+              <strong>实体探索</strong>
             </div>
-            <button type="button" aria-label="刷新实体探索" onClick={() => void load()}>
-              <RefreshCw size={14} />
-            </button>
-            <button className="accent" type="button" aria-label="智能助手">
-              <Sparkles size={15} />
-            </button>
-          </div>
-          <div className="entity-toolbar-break" aria-hidden="true" />
-          <div className="entity-query-tabs">
-            <button className={queryMode === 'usearch' ? 'active' : ''} type="button" onClick={() => setQueryMode('usearch')}>USearch</button>
-            <button className={queryMode === 'spl' ? 'active' : ''} type="button" onClick={() => setQueryMode('spl')}>SPL</button>
-          </div>
-          <div
-            className="entity-search-category"
-            onBlur={() => window.setTimeout(() => setSearchCategoryOpen(false), 120)}
-          >
-            <button
-              className={searchCategoryOpen ? 'entity-query-action active' : 'entity-query-action'}
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={searchCategoryOpen}
-              onClick={() => setSearchCategoryOpen((value) => !value)}
-            >
-              <Grid2X2 size={14} />
-              <span>搜索分类</span>
-              <ChevronDown size={13} />
-            </button>
-            {searchCategoryOpen && (
-              <div className="entity-search-category-menu" role="menu">
-                {searchCategories.map((item) => (
-                  <button
-                    key={item.key}
-                    className={item.key === searchCategory ? 'active' : ''}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={item.key === searchCategory}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => {
-                      setSearchCategory(item.key)
-                      setSearchCategoryOpen(false)
-                    }}
-                  >
-                    <span>{item.label}</span>
-                    {item.key === searchCategory && <b>✓</b>}
-                  </button>
-                ))}
+            <div className="entity-scope-tabs" role="listbox" aria-label="实体范围">
+              {scopeTabs.map((tab, index) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="option"
+                  aria-selected={tab.key === selectedTopScope}
+                  className={tab.key === selectedTopScope ? 'active' : ''}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+                    event.preventDefault()
+                    const offset = event.key === 'ArrowRight' ? 1 : -1
+                    const nextTab = scopeTabs[(index + offset + scopeTabs.length) % scopeTabs.length]
+                    setSelectedTopScope(nextTab.key)
+                    setScope('all')
+                    setSelectedDomain('all')
+                    setSelectedType('all')
+                  }}
+                  onClick={() => {
+                    setDrilldown(null)
+                    setSelectedTopoNode(null)
+                    setSelected(null)
+                    setQuery('')
+                    setQueryDraft('')
+                    setSelectedTopScope(tab.key)
+                    setScope('all')
+                    setSelectedDomain('all')
+                    setSelectedType('all')
+                  }}
+                >
+                  <span>{tab.label}</span>
+                  <b>{tab.count.toLocaleString()}</b>
+                </button>
+              ))}
+            </div>
+            <div className="entity-topline-actions">
+              <div className="entity-time-picker">
+                <span>15min</span>
+                <input aria-label="请输入时间" value="最近15分钟" readOnly />
+                <ChevronDown size={13} />
               </div>
-            )}
+              <button type="button" aria-label="刷新实体探索" onClick={() => void load()}>
+                <RefreshCw size={14} />
+              </button>
+              <button className="accent" type="button" aria-label="智能助手">
+                <Sparkles size={15} />
+              </button>
+            </div>
           </div>
-          {drilldown && (
-            <button className="entity-selected-filter" type="button" onClick={clearDrilldown}>
-              <span>{drilldown.token}</span>
-              <X size={14} />
+          <div className="entity-toolbar-bottom">
+            <div className="entity-query-tabs">
+              <button className={queryMode === 'usearch' ? 'active' : ''} type="button" onClick={() => setQueryMode('usearch')}>USearch</button>
+              <button className={queryMode === 'spl' ? 'active' : ''} type="button" onClick={() => setQueryMode('spl')}>SPL</button>
+            </div>
+            <div
+              className="entity-search-category"
+              onBlur={() => window.setTimeout(() => setSearchCategoryOpen(false), 120)}
+            >
+              <button
+                className={searchCategoryOpen ? 'entity-query-action entity-search-category-split active' : 'entity-query-action entity-search-category-split'}
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={searchCategoryOpen}
+                onClick={() => setSearchCategoryOpen((value) => !value)}
+                title={`搜索分类：${searchCategories.find((item) => item.key === searchCategory)?.label || '全部'}`}
+              >
+                <span className="entity-search-category-split-main">
+                  <Grid2X2 size={15} />
+                </span>
+                <span className="entity-search-category-split-divider" aria-hidden="true" />
+                <span className="entity-search-category-split-sub">
+                  <FilterIcon size={14} />
+                </span>
+              </button>
+              {searchCategoryOpen && (
+                <div className="entity-search-category-menu" role="menu">
+                  {searchCategories.map((item) => (
+                    <button
+                      key={item.key}
+                      className={item.key === searchCategory ? 'active' : ''}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={item.key === searchCategory}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setSearchCategory(item.key)
+                        setSearchCategoryOpen(false)
+                      }}
+                    >
+                      <span>{item.label}</span>
+                      {item.key === searchCategory && <b>✓</b>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {drilldown && (
+              <button className="entity-selected-filter" type="button" onClick={clearDrilldown}>
+                <span>{drilldown.token}</span>
+                <X size={14} />
+              </button>
+            )}
+            <button className="entity-query-action" type="button" onClick={() => setFiltersOpen((value) => !value)}>
+              <Filter size={14} />
+              <span>筛选</span>
             </button>
-          )}
-          <button className="entity-query-action" type="button" onClick={() => setFiltersOpen((value) => !value)}>
-            <Filter size={14} />
-            <span>筛选</span>
-          </button>
-          <code className="entity-query-editor entity-search-with-popover">
-            <span className="entity-query-line" aria-hidden="true">1</span>
-            <input
-              aria-label="The editor is not accessible at this time."
-              value={queryDraft}
-              onFocus={() => setMainSuggestOpen(true)}
-              onBlur={() => window.setTimeout(() => setMainSuggestOpen(false), 120)}
-              onChange={(event) => {
-                setQueryDraft(event.target.value)
-                setMainSuggestOpen(true)
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') runQuery()
-              }}
-              placeholder={queryMode === 'spl' ? '输入 SPL，例如 * | where entity_type like Kubernetes' : '请输入实体关键词（至少 4 个字符）'}
-            />
-            {!queryDraft && (
-              <span className="entity-query-placeholder" aria-hidden="true">
-                {queryMode === 'spl' ? '输入 SPL，例如 * | where entity_type like Kubernetes' : '请输入实体关键词（至少 4 个字符）'}
-              </span>
-            )}
-            <Search className="entity-query-search-icon" size={14} aria-hidden="true" />
-            {mainSuggestOpen && (
-              <EntitySearchPopover
-                compact
-                recommendedDomains={recommendedDomainItems}
-                recommendedEntities={recommendedEntityItems}
-                onSelect={openDrilldown}
+            <code className="entity-query-editor entity-search-with-popover">
+              <span className="entity-query-line" aria-hidden="true">1</span>
+              <input
+                aria-label="The editor is not accessible at this time."
+                value={queryDraft}
+                onFocus={() => setMainSuggestOpen(true)}
+                onBlur={() => window.setTimeout(() => setMainSuggestOpen(false), 120)}
+                onChange={(event) => {
+                  setQueryDraft(event.target.value)
+                  setMainSuggestOpen(true)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') runQuery()
+                }}
+                placeholder={queryMode === 'spl' ? '输入 SPL，例如 * | where entity_type like Kubernetes' : '请输入实体关键词（至少 4 个字符）'}
               />
-            )}
-          </code>
-          <button className="entity-primary" type="button" onClick={runQuery}>查询</button>
-          <div className="entity-view-tabs" role="radiogroup" aria-label="实体视图">
-            <button className={view === 'table' ? 'active' : ''} type="button" role="radio" aria-checked={view === 'table'} onClick={() => switchView('table')}><i />表格</button>
-            <button className={view === 'topology' ? 'active' : ''} type="button" role="radio" aria-checked={view === 'topology'} onClick={() => switchView('topology')}><i />拓扑</button>
-            <button className={view === 'health' ? 'active' : ''} type="button" role="radio" aria-checked={view === 'health'} onClick={() => switchView('health')}><i />健康度</button>
+              {!queryDraft && (
+                <span className="entity-query-placeholder" aria-hidden="true">
+                  {queryMode === 'spl' ? '输入 SPL，例如 * | where entity_type like Kubernetes' : '请输入实体关键词（至少 4 个字符）'}
+                </span>
+              )}
+              <Search className="entity-query-search-icon" size={14} aria-hidden="true" />
+              {mainSuggestOpen && (
+                <EntitySearchPopover
+                  compact
+                  recommendedDomains={recommendedDomainItems}
+                  recommendedEntities={recommendedEntityItems}
+                  onSelect={openDrilldown}
+                />
+              )}
+            </code>
+            <button className="entity-primary" type="button" onClick={runQuery}>查询</button>
+            <div className="entity-view-tabs" role="radiogroup" aria-label="实体视图">
+              <button className={view === 'table' ? 'active' : ''} type="button" role="radio" aria-checked={view === 'table'} onClick={() => switchView('table')}><i />表格</button>
+              <button className={view === 'topology' ? 'active' : ''} type="button" role="radio" aria-checked={view === 'topology'} onClick={() => switchView('topology')}><i />拓扑</button>
+              <button className={view === 'health' ? 'active' : ''} type="button" role="radio" aria-checked={view === 'health'} onClick={() => switchView('health')}><i />健康度</button>
+            </div>
           </div>
         </header>
 
@@ -486,6 +495,7 @@ export function EntityExplorerPage({
                   apps={catalogApps}
                   groups={catalogDomainGroups}
                   recentRecords={recentCatalogRecords}
+                  total={filtered.length}
                   query={catalogQuery}
                   suggestOpen={catalogSuggestOpen}
                   onQueryChange={(value) => {
@@ -496,24 +506,25 @@ export function EntityExplorerPage({
                   onBlurSearch={() => window.setTimeout(() => setCatalogSuggestOpen(false), 120)}
                   onSelect={openDrilldown}
                 />
-                <section className="entity-result-panel">
-                  <div className="entity-panel-head">
-                    <div>
-                      <strong>{viewTitle(view)}</strong>
-                      <span>当前 {filteredStats.total.toLocaleString()} 个实体</span>
+                {view === 'health' && (
+                  <section className="entity-result-panel">
+                    <div className="entity-panel-head">
+                      <div>
+                        <strong>{viewTitle(view)}</strong>
+                        <span>当前 {filteredStats.total.toLocaleString()} 个实体</span>
+                      </div>
+                      <button type="button" onClick={() => {
+                        setScope('all')
+                        setSelectedTopScope('all')
+                        setSelectedDomain('all')
+                        setSelectedType('all')
+                        setQuery('')
+                        setQueryDraft('')
+                      }}>重置</button>
                     </div>
-                    <button type="button" onClick={() => {
-                      setScope('all')
-                      setSelectedTopScope('all')
-                      setSelectedDomain('all')
-                      setSelectedType('all')
-                      setQuery('')
-                      setQueryDraft('')
-                    }}>重置</button>
-                  </div>
-                  {view === 'table' && <EntityTable records={filtered} selected={selected} onSelect={setSelected} />}
-                  {view === 'health' && <EntityHealthGrid records={filtered.slice(0, 80)} onSelect={setSelected} />}
-                </section>
+                    <EntityHealthGrid records={filtered.slice(0, 80)} onSelect={setSelected} />
+                  </section>
+                )}
               </div>
             </>
           )}
@@ -737,6 +748,7 @@ function EntityCatalog({
   apps,
   groups,
   recentRecords,
+  total,
   query,
   suggestOpen,
   onQueryChange,
@@ -747,6 +759,7 @@ function EntityCatalog({
   apps: Array<{ key: string; count: number; kind: 'domain' | 'type' }>
   groups: EntityCatalogDomainGroup[]
   recentRecords: EntityRecord[]
+  total: number
   query: string
   suggestOpen: boolean
   onQueryChange: (value: string) => void
@@ -759,42 +772,42 @@ function EntityCatalog({
       <div className="entity-panel-head">
         <div>
           <strong>实体目录</strong>
-          <span>最近访问 {recentRecords.length.toLocaleString()} 条记录</span>
+          <span>{total.toLocaleString()} 个实体</span>
         </div>
-      </div>
-      <div className="entity-catalog-search-row">
-        <label
-          className="entity-catalog-search"
-          onMouseDown={onFocusSearch}
-          onFocus={onFocusSearch}
-        >
-          <Search size={13} />
-          <input
-            value={query}
+        <div className="entity-catalog-search-row">
+          <label
+            className="entity-catalog-search"
+            onMouseDown={onFocusSearch}
             onFocus={onFocusSearch}
-            onBlur={onBlurSearch}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="搜索实体目录"
-          />
-        </label>
-        <button className="entity-catalog-search-button" type="button" disabled>搜索</button>
-        {suggestOpen && (
-          <EntitySearchPopover
-            recommendedDomains={apps.filter((item) => item.kind === 'domain').map((item) => ({
-              label: item.key,
-              token: item.key,
-              count: item.count,
-              kind: 'domain',
-            }))}
-            recommendedEntities={apps.filter((item) => item.kind === 'type').map((item) => ({
-              label: item.key,
-              token: item.key,
-              count: item.count,
-              kind: 'entity',
-            }))}
-            onSelect={onSelect}
-          />
-        )}
+          >
+            <Search size={13} />
+            <input
+              value={query}
+              onFocus={onFocusSearch}
+              onBlur={onBlurSearch}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="搜索实体目录"
+            />
+          </label>
+          <button className="entity-catalog-search-button" type="button" disabled>搜索</button>
+          {suggestOpen && (
+            <EntitySearchPopover
+              recommendedDomains={apps.filter((item) => item.kind === 'domain').map((item) => ({
+                label: item.key,
+                token: item.key,
+                count: item.count,
+                kind: 'domain',
+              }))}
+              recommendedEntities={apps.filter((item) => item.kind === 'type').map((item) => ({
+                label: item.key,
+                token: item.key,
+                count: item.count,
+                kind: 'entity',
+              }))}
+              onSelect={onSelect}
+            />
+          )}
+        </div>
       </div>
       <div className="entity-app-list">
         {recentRecords.length > 0 && (
