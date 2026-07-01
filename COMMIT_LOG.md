@@ -6,13 +6,147 @@ Repository: `react-umodel-explorer`
 
 Branch when generated: `codex/opentopox-experiment`
 
-Generated at: `2026-06-25 15:43 +0800`
+Generated at: `2026-07-01 17:15 +0800`
 
 ## Summary
 
-There are 9 commits after `2026-06-18 00:00:00 +0800` on the current branch.
+There are 12 commits after `2026-06-18 00:00:00 +0800` on the current branch.
 
 ## Commits
+
+### c442a72 - Fix OModel draft diff detection
+
+- Full hash: `c442a728cb12a641c71bdff044e3ac8e191d4afe`
+- Author: `jkhkjlkll <jkhkjlkll@users.noreply.github.com>`
+- Date: `2026-06-30 17:01:42 +0800`
+- Full patch: `patches/0001-Fix-OModel-draft-diff-detection.patch`
+
+#### Changed Files
+
+| Status | File |
+| --- | --- |
+| M | `src/features/umodel/model.ts` |
+
+#### Change Notes For AI Review
+
+- Fixed a false-positive dirty draft state on the OModel page.
+- Ignored `undefined` object properties during stable diff serialization so server data and cloned draft data compare consistently.
+- Prevented the OModel page from showing an unnecessary unsaved draft banner or enabling submit when no user-visible change exists.
+- Verified the standalone UI after the fix with page-level browser smoke checks across OModel, Entity Explorer, Topology Explorer, Query, Imports, Settings, and API Debugger.
+
+#### Diff Stat
+
+```text
+src/features/umodel/model.ts | 1 +
+1 file changed, 1 insertion(+)
+```
+
+### 12f3abb - Add root workbench pages to standalone explorer
+
+- Full hash: `12f3abb99791be673ff64d8eb24a69b2b7a004a2`
+- Author: `jkhkjlkll <jkhkjlkll@users.noreply.github.com>`
+- Date: `2026-06-26 15:58:48 +0800`
+- Full patch: `patches/0001-Add-root-workbench-pages-to-standalone-explorer.patch`
+
+#### Changed Files
+
+| Status | File |
+| --- | --- |
+| A | `commit.md` |
+| A | `patches/0001-Add-root-workbench-pages-to-standalone-explorer.patch` |
+| M | `src/StandaloneExplorerApp.tsx` |
+| M | `src/api/client.ts` |
+| M | `src/api/mockClient.ts` |
+| M | `src/api/types.ts` |
+| A | `src/features/entityTopo/EntityTopoGraphView.tsx` |
+| A | `src/features/entityTopo/EntityTopoPage.tsx` |
+| A | `src/features/entityTopo/cosmosTopo/cosmosEngine.ts` |
+| A | `src/features/entityTopo/cosmosTopo/cosmosLabels.tsx` |
+| A | `src/features/entityTopo/cosmosTopo/cosmosTopoGraph.tsx` |
+| A | `src/features/entityTopo/cosmosTopo/graphvizLayout.ts` |
+| A | `src/features/entityTopo/cosmosTopo/topoVisualIdentity.ts` |
+| A | `src/features/entityTopo/cosmosTopo/types.ts` |
+| A | `src/features/entityTopo/entityTopo.css` |
+| A | `src/features/entityTopo/entityTopoModel.ts` |
+| A | `src/features/imports/ImportsPage.tsx` |
+| A | `src/features/imports/imports.css` |
+| A | `src/features/query/QueryPage.tsx` |
+| A | `src/features/query/query.css` |
+| A | `src/features/settings/ApiMapPage.tsx` |
+| A | `src/features/settings/SettingsPage.tsx` |
+| A | `src/features/settings/apiDebugger.css` |
+| A | `src/features/settings/settings.css` |
+| M | `src/i18n/locales/en-US/query.ts` |
+| M | `src/i18n/locales/zh-CN/query.ts` |
+| A | `src/lib/preloadMonaco.ts` |
+
+#### Change Notes For AI Review
+
+- Added the root project Query page to the standalone subproject and wired it into the sidebar as `查询`.
+- Added the root project Imports page to the standalone subproject and wired it into the sidebar as `导入与写入`.
+- Added the root project Workspace Settings page and API Debugger page to the standalone subproject sidebar.
+- Preserved the existing `OModel 探索`, `实体探索`, and `拓扑探索` pages while adding the new entries.
+- Expanded the standalone API client and mock client so imported root pages can run offline or against a real API base.
+- Added Query i18n keys and Monaco preload support needed by the imported workbench pages.
+
+#### Diff Stat
+
+```text
+commit.md                                          |    44 +
+patches/0001-Add-root-workbench-pages-to-standalone-explorer.patch | 15955 +++++++++++++++++++
+src/StandaloneExplorerApp.tsx                      |    40 +-
+src/api/client.ts                                  |    17 +-
+src/api/mockClient.ts                              |   450 +-
+src/api/types.ts                                   |     9 +
+src/features/entityTopo/EntityTopoGraphView.tsx    |   234 +
+src/features/entityTopo/EntityTopoPage.tsx         |  1142 ++
+src/features/entityTopo/cosmosTopo/cosmosEngine.ts |  3134 ++++
+src/features/entityTopo/cosmosTopo/cosmosLabels.tsx |   436 +
+src/features/entityTopo/cosmosTopo/cosmosTopoGraph.tsx |  1446 ++
+src/features/entityTopo/cosmosTopo/graphvizLayout.ts |    48 +
+src/features/entityTopo/cosmosTopo/topoVisualIdentity.ts |   145 +
+src/features/entityTopo/cosmosTopo/types.ts        |   276 +
+src/features/entityTopo/entityTopo.css             |  1855 +++
+src/features/entityTopo/entityTopoModel.ts         |   862 +
+src/features/imports/ImportsPage.tsx               |   353 +
+src/features/imports/imports.css                   |   298 +
+src/features/query/QueryPage.tsx                   |  1248 ++
+src/features/query/query.css                       |  1095 ++
+src/features/settings/ApiMapPage.tsx               |  1200 ++
+src/features/settings/SettingsPage.tsx             |   349 +
+src/features/settings/apiDebugger.css              |   560 +
+src/features/settings/settings.css                 |   346 +
+src/i18n/locales/en-US/query.ts                    |     8 +
+src/i18n/locales/zh-CN/query.ts                    |     8 +
+src/lib/preloadMonaco.ts                           |    45 +
+27 files changed, 31566 insertions(+), 37 deletions(-)
+```
+
+### ea39ede - Add explorer interaction patch log
+
+- Full hash: `ea39ede825b2dc97e7a9379505bf90b106cca224`
+- Author: `jkhkjlkll <jkhkjlkll@users.noreply.github.com>`
+- Date: `2026-06-25 16:52:47 +0800`
+
+#### Changed Files
+
+| Status | File |
+| --- | --- |
+| M | `COMMIT_LOG.md` |
+| A | `patches/0001-Fix-explorer-interaction-controls.patch` |
+
+#### Change Notes For AI Review
+
+- Added the full patch file for `7d8dcaa` so ZIP-based handoff can inspect the exact explorer interaction-control diff.
+- Updated the offline commit log with time control, pagination, filtering, and read-only control context.
+
+#### Diff Stat
+
+```text
+COMMIT_LOG.md                                    |  71 +-
+patches/0001-Fix-explorer-interaction-controls.patch | 807 +++++++++++++++++++++
+2 files changed, 876 insertions(+), 2 deletions(-)
+```
 
 ### 7d8dcaa - Fix explorer interaction controls
 
