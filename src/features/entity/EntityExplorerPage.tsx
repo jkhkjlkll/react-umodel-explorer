@@ -1,4 +1,4 @@
-import { type WheelEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { type CSSProperties, type MouseEvent, type PointerEvent, type WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   Box,
@@ -239,9 +239,8 @@ export function EntityExplorerPage({
   const drilldownRecords = useMemo(() => filterRecordsForDrilldown(records, drilldown), [drilldown, records])
   const topologyTypes = useMemo(() => {
     if (selectedType !== 'all') return [stripSyntheticType(selectedType)]
-    const values = [...new Set(filtered.slice(0, 12).map((record) => stripSyntheticType(record.type)))]
-    return values
-  }, [filtered, selectedType])
+    return []
+  }, [selectedType])
   const openDrilldown = (item: EntityDrilldown) => {
     setDrilldown(item)
     setView('table')
@@ -429,7 +428,17 @@ export function EntityExplorerPage({
 
         <section className="entity-content">
           {drilldown ? (
-            <EntityMetricsResult selection={drilldown} records={drilldownRecords} />
+            <EntityDrilldownResult
+              data={data}
+              selection={drilldown}
+              records={drilldownRecords}
+              selected={selected}
+              onBack={clearDrilldown}
+              onSelect={(record) => {
+                setSelected(record)
+                setSelectedTopoNode(data.nodesById.get(record.id) || null)
+              }}
+            />
           ) : view === 'topology' ? (
             <EntityTopologyView
               data={data}
@@ -448,6 +457,11 @@ export function EntityExplorerPage({
                   setSelectedTopScope('all')
                   setSelectedType(match.key)
                 }
+              }}
+              onResetFocus={() => {
+                setSelectedTopScope('all')
+                setSelectedDomain('all')
+                setSelectedType('all')
               }}
             />
           ) : (
@@ -628,7 +642,10 @@ function HealthCard({ stats }: { stats: ReturnType<typeof summarizeEntities> }) 
             background: `conic-gradient(${statusMeta.normal.color} 0 ${normalPercent}%, ${statusMeta.warning.color} ${normalPercent}% ${normalPercent + warningPercent}%, ${statusMeta.critical.color} ${normalPercent + warningPercent}% ${normalPercent + warningPercent + criticalPercent}%, #edf1f7 0)`,
           }}
         >
-          <b>{normalPercent}%</b>
+          <span className="entity-health-score-inner">
+            <b>{normalPercent}%</b>
+            <small>正常</small>
+          </span>
         </div>
         <div className="entity-health-breakdown">
           {healthRows.map((item) => (
@@ -937,84 +954,163 @@ function EntityRecommendationGroup({
   )
 }
 
-function EntityMetricsResult({ selection, records }: { selection: EntityDrilldown; records: EntityRecord[] }) {
-  const rows = createEntityMetricRows(records)
+function EntityDrilldownResult({
+  data,
+  selection,
+  records,
+  selected,
+  onBack,
+  onSelect,
+}: {
+  data: TopologyExplorerData
+  selection: EntityDrilldown
+  records: EntityRecord[]
+  selected: EntityRecord | null
+  onBack: () => void
+  onSelect: (record: EntityRecord) => void
+}) {
+  const [sortKey, setSortKey] = useState<EntityAggregateSortKey>('name')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const sortedRecords = useMemo(() => [...records].sort((left, right) => {
+    const leftNode = data.nodesById.get(left.id)
+    const rightNode = data.nodesById.get(right.id)
+    const leftValue = aggregateRecordSortValue(left, leftNode, sortKey)
+    const rightValue = aggregateRecordSortValue(right, rightNode, sortKey)
+    const result = typeof leftValue === 'number' && typeof rightValue === 'number'
+      ? leftValue - rightValue
+      : String(leftValue).localeCompare(String(rightValue), 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
+    return sortDirection === 'asc' ? result : -result
+  }), [data.nodesById, records, sortDirection, sortKey])
+  const visibleRows = sortedRecords.slice(0, 20)
+  const normalCount = records.filter((record) => record.status === 'normal').length
+  const warningCount = records.filter((record) => record.status === 'warning').length
+  const criticalCount = records.filter((record) => record.status === 'critical').length
+  const relationCount = records.reduce((sum, record) => {
+    const node = data.nodesById.get(record.id)
+    return sum + (node ? relatedLinksForInstance(data, node).length : Number(record.properties.relationCount || 0))
+  }, 0)
+  const changeSort = (key: EntityAggregateSortKey) => {
+    setSortKey((currentKey) => {
+      if (currentKey === key) {
+        setSortDirection((currentDirection) => currentDirection === 'asc' ? 'desc' : 'asc')
+        return currentKey
+      }
+      setSortDirection('asc')
+      return key
+    })
+  }
+  const sortState = (key: EntityAggregateSortKey) => sortKey === key ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'
+  const sortClass = (key: EntityAggregateSortKey) => `entity-topology-sort ${sortKey === key ? sortDirection : ''}`
+
   return (
-    <section className="entity-metrics-result">
-      <div className="entity-metrics-table-wrap">
-        <table className="entity-metrics-table">
+    <section className="entity-drilldown-result">
+      <header className="entity-drilldown-head">
+        <button type="button" onClick={onBack}>
+          <ArrowLeft size={15} />
+          实体目录
+        </button>
+        <div>
+          <strong>{selection.label}</strong>
+          <span>{selection.kind === 'domain' ? '实体 Domain 聚合' : '实体类型聚合'} · {records.length.toLocaleString()} 个实例</span>
+        </div>
+      </header>
+      <div className="entity-drilldown-summary">
+        <article>
+          <span>实例总数</span>
+          <b>{records.length.toLocaleString()}</b>
+          <small>{selection.token}</small>
+        </article>
+        <article>
+          <span>健康分布</span>
+          <b>{normalCount.toLocaleString()}</b>
+          <small>{warningCount} 警告 / {criticalCount} 严重</small>
+        </article>
+        <article>
+          <span>直接关系</span>
+          <b>{relationCount.toLocaleString()}</b>
+          <small>点击实例查看关联拓扑</small>
+        </article>
+      </div>
+      <div className="entity-drilldown-table-wrap">
+        <table className="entity-drilldown-table">
           <thead>
             <tr>
-              <th>应用名称</th>
-              <th>探针类型</th>
-              <th>语言</th>
-              <th>区域</th>
-              <th>平均模型调用次数 <span>?</span></th>
-              <th>平均模型调用错误次数 <span>?</span></th>
-              <th>平均模型调用耗时 <span>?</span></th>
-              <th>每分钟平均 Token 消耗</th>
+              <th aria-sort={sortState('name')}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('name')}>
+                  实例名称 <span className={sortClass('name')} />
+                </button>
+              </th>
+              <th>实体类型</th>
+              <th aria-sort={sortState('tags')}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('tags')}>
+                  标签 <span className="entity-topology-info">?</span> <span className={sortClass('tags')} />
+                </button>
+              </th>
+              <th aria-sort={sortState('probe')}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('probe')}>
+                  采集方式 <span className={sortClass('probe')} />
+                </button>
+              </th>
+              <th aria-sort={sortState('region')}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('region')}>
+                  区域/Domain <span className={sortClass('region')} />
+                </button>
+              </th>
+              <th>健康度</th>
+              <th aria-sort={sortState('latency')}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('latency')}>
+                  直接关系 <span className={sortClass('latency')} />
+                </button>
+              </th>
+              <th>最近上报</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, index) => (
-              <tr key={row.name}>
-                <td><a href="#entity-result" onClick={(event) => event.preventDefault()}>{row.name}</a></td>
-                <td>{row.probe}</td>
-                <td>{row.language}</td>
-                <td>{row.region}</td>
-                <MetricCell color="#7069ff" value={row.calls} active={row.active} seed={index} />
-                <MetricCell color="#ef4444" value={row.errors} active={false} seed={index + 2} />
-                <MetricCell color="#5cbdb9" value={row.latency} active={row.active} seed={index + 4} />
-                <MetricCell color="#ff9a3d" value={row.tokens} active={row.active} seed={index + 6} />
+            {visibleRows.length === 0 && (
+              <tr className="entity-drilldown-empty-row">
+                <td colSpan={8}>暂无匹配实体实例</td>
               </tr>
-            ))}
+            )}
+            {visibleRows.map((record) => {
+              const node = data.nodesById.get(record.id)
+              const links = node ? relatedLinksForInstance(data, node) : []
+              return (
+                <tr key={record.id} className={selected?.id === record.id ? 'active' : ''} onClick={() => onSelect(record)}>
+                  <td>
+                    <span className="entity-drilldown-name">
+                      <span className="entity-type-icon" style={{ color: record.color, borderColor: record.color }}>
+                        <TopologyPresetIcon preset={resolveEntityIconPreset(record)} label={record.type} size={15} />
+                      </span>
+                      <span>
+                        <b>{record.label}</b>
+                        <small>{entityInstanceId(record)}</small>
+                      </span>
+                    </span>
+                  </td>
+                  <td><span className="entity-type-tag">{record.type}</span></td>
+                  <td>{node ? entityTagCount(node) : 0}</td>
+                  <td>{valueText(record.properties.__method__) || 'EntityStore'}</td>
+                  <td>{entityLocationText(record.properties) || record.domain}</td>
+                  <td><StatusPill status={record.status} /></td>
+                  <td>{links.length || Number(record.properties.relationCount || 0)}</td>
+                  <td>{record.lastSeen}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
-      <div className="entity-metrics-footer">
+      <div className="entity-drilldown-footer">
         <span>每页显示：</span>
-        <button type="button">10 <ChevronDown size={14} /></button>
+        <button type="button">20 <ChevronDown size={14} /></button>
         <span>总数: {records.length.toLocaleString()}</span>
         <button type="button" disabled>上一页</button>
         <button type="button" className="active">1</button>
-        <button type="button">2</button>
-        <button type="button">3</button>
-        <button type="button">4</button>
-        <span>...</span>
-        <button type="button">9</button>
-        <button type="button">下一页</button>
-        <span>1/{Math.max(1, Math.ceil(records.length / 10))}</span>
-        <span>到第</span>
-        <input aria-label="页码" />
-        <span>页</span>
-        <button type="button">确定</button>
+        {records.length > 20 && <button type="button">2</button>}
+        <button type="button" disabled={records.length <= 20}>下一页</button>
+        <span>点击实例打开实体详情，可在右侧查看关联拓扑</span>
       </div>
     </section>
-  )
-}
-
-function MetricCell({ color, value, active, seed }: { color: string; value: string; active: boolean; seed: number }) {
-  return (
-    <td className="entity-metric-cell">
-      <Sparkline color={color} active={active} seed={seed} />
-      <b>{value}</b>
-    </td>
-  )
-}
-
-function Sparkline({ color, active, seed }: { color: string; active: boolean; seed: number }) {
-  const points = active
-    ? Array.from({ length: 18 }, (_, index) => {
-      const x = 4 + index * 5
-      const wave = Math.sin((index + seed) * 1.3) * 11
-      const jitter = ((index * 7 + seed * 5) % 13) - 6
-      return `${x},${Math.max(8, Math.min(38, 24 + wave + jitter))}`
-    }).join(' ')
-    : '4,25 89,25'
-  return (
-    <svg className="entity-sparkline" viewBox="0 0 94 44" aria-hidden="true">
-      <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   )
 }
 
@@ -1211,23 +1307,67 @@ function EntityTopologyView({
   selectedNode,
   onSelectNode,
   onFocusType,
+  onResetFocus,
 }: {
   data: TopologyExplorerData
   focusedTypes: string[]
   selectedNode: TopologyNode | null
   onSelectNode: (node: TopologyNode | null) => void
   onFocusType: (type: string) => void
+  onResetFocus: () => void
 }) {
-  const referenceTopology = useMemo(() => createReferenceStyleTopology(data, focusedTypes), [data, focusedTypes])
+  const [selectedRegions, setSelectedRegions] = useState<string[]>([])
+  const referenceTopology = useMemo(() => createReferenceStyleTopology(data, focusedTypes, selectedRegions), [data, focusedTypes, selectedRegions])
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const sceneRef = useRef<SVGGElement | null>(null)
+  const dragStateRef = useRef<{
+    nodeId: string
+    pointerId: number
+    startX: number
+    startY: number
+    nodeX: number
+    nodeY: number
+    moved: boolean
+  } | null>(null)
+  const dragCaptureRef = useRef<SVGGElement | null>(null)
+  const panStateRef = useRef<{ pointerId: number; clientX: number; clientY: number; moved: boolean } | null>(null)
+  const suppressClickRef = useRef(false)
   const [selectedAggregateId, setSelectedAggregateId] = useState<string>('')
   const [filterOpen, setFilterOpen] = useState(false)
   const [hiddenDomains, setHiddenDomains] = useState<string[]>([])
   const [hiddenRelations, setHiddenRelations] = useState<string[]>([])
-  const topologyDomains = useMemo(() => countTopologyOptions(referenceTopology.nodes, referenceNodeDomain), [referenceTopology.nodes])
-  const relationOptions = useMemo(() => countTopologyOptions(referenceTopology.edges, (edge) => edge.label), [referenceTopology.edges])
-  const visibleNodes = useMemo(() => referenceTopology.nodes.filter((item) => !hiddenDomains.includes(referenceNodeDomain(item))), [hiddenDomains, referenceTopology.nodes])
+  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
+  const [draggingNodeId, setDraggingNodeId] = useState('')
+  const [dragSceneTransform, setDragSceneTransform] = useState<string | null>(null)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState(false)
+  useEffect(() => {
+    const availableIds = new Set(referenceTopology.nodes.map((item) => item.id))
+    setNodePositions((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([id]) => availableIds.has(id)))
+      return Object.keys(next).length === Object.keys(current).length ? current : next
+    })
+  }, [referenceTopology.nodes])
+  const positionedNodes = useMemo(() => referenceTopology.nodes.map((item) => {
+    const position = nodePositions[item.id]
+    return position ? { ...item, x: position.x, y: position.y } : item
+  }), [nodePositions, referenceTopology.nodes])
+  const positionedNodeById = useMemo(() => new Map(positionedNodes.map((item) => [item.id, item])), [positionedNodes])
+  const positionedEdges = useMemo<ReferenceTopologyEdge[]>(() => referenceTopology.edges.flatMap((edge) => {
+    const source = positionedNodeById.get(edge.source.id)
+    const target = positionedNodeById.get(edge.target.id)
+    return source && target ? [{ ...edge, source, target }] : []
+  }), [positionedNodeById, referenceTopology.edges])
+  const topologyDomains = useMemo(() => countTopologyOptions(positionedNodes, referenceNodeDomain), [positionedNodes])
+  const topologyRegions = useMemo(() => countTopologyOptions(
+    data.nodes.filter((node) => focusedTypes.length === 0 || focusedTypes.includes(stripSyntheticType(node.type))),
+    topologyNodeRegineCode,
+  ).filter((item) => item.key !== '-'), [data.nodes, focusedTypes])
+  const relationOptions = useMemo(() => countTopologyOptions(positionedEdges, (edge) => edge.label), [positionedEdges])
+  const visibleNodes = useMemo(() => positionedNodes.filter((item) => !hiddenDomains.includes(referenceNodeDomain(item))), [hiddenDomains, positionedNodes])
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((item) => item.id)), [visibleNodes])
-  const visibleEdges = useMemo(() => referenceTopology.edges.filter((edge) => visibleNodeIds.has(edge.source.id) && visibleNodeIds.has(edge.target.id) && !hiddenRelations.includes(edge.label)), [hiddenRelations, referenceTopology.edges, visibleNodeIds])
+  const visibleEdges = useMemo(() => positionedEdges.filter((edge) => visibleNodeIds.has(edge.source.id) && visibleNodeIds.has(edge.target.id) && !hiddenRelations.includes(edge.label)), [hiddenRelations, positionedEdges, visibleNodeIds])
+  const regionBoxes = useMemo(() => selectedRegions.length > 0 ? createTopologyRegionBoxes(visibleNodes) : [], [selectedRegions.length, visibleNodes])
   const selectedId = selectedNode?.id
   const selectedInstanceItem = selectedId
     ? visibleNodes.find((item) => item.instances.some((node) => node.id === selectedId)) || null
@@ -1246,7 +1386,60 @@ function EntityTopologyView({
   const focusCenterY = activePanelItem ? activePanelItem.y + activePanelItem.height / 2 : 0
   const sceneX = activePanelItem ? 1239 - focusCenterX * focusedZoomScale : -2550 * zoomProgress
   const sceneY = activePanelItem ? 619 - focusCenterY * focusedZoomScale : -425 * zoomProgress
-  const sceneTransform = `translate(${sceneX} ${sceneY}) scale(${focusedZoomScale})`
+  const sceneTranslateX = sceneX + pan.x
+  const sceneTranslateY = sceneY + pan.y
+  const sceneTransform = `translate(${sceneTranslateX} ${sceneTranslateY}) scale(${focusedZoomScale})`
+  const effectiveSceneTransform = dragSceneTransform || sceneTransform
+  const minimapViewport = useMemo(() => {
+    const width = 2478 / focusedZoomScale
+    const height = 1238 / focusedZoomScale
+    const x = -sceneTranslateX / focusedZoomScale
+    const y = -sceneTranslateY / focusedZoomScale
+    return { x, y, width, height }
+  }, [focusedZoomScale, sceneTranslateX, sceneTranslateY])
+  const minimap = useMemo(() => {
+    const width = 220
+    const height = 150
+    const padding = 10
+    const bounds = visibleNodes.reduce((box, node) => ({
+      minX: Math.min(box.minX, node.x),
+      minY: Math.min(box.minY, node.y),
+      maxX: Math.max(box.maxX, node.x + node.width),
+      maxY: Math.max(box.maxY, node.y + node.height),
+    }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity })
+    if (!Number.isFinite(bounds.minX)) {
+      return { width, height, scale: 1, offsetX: 0, offsetY: 0, nodes: [], edges: [], viewport: { x: 0, y: 0, width, height } }
+    }
+    const graphWidth = Math.max(1, bounds.maxX - bounds.minX)
+    const graphHeight = Math.max(1, bounds.maxY - bounds.minY)
+    const scale = Math.min((width - padding * 2) / graphWidth, (height - padding * 2) / graphHeight)
+    const offsetX = (width - graphWidth * scale) / 2 - bounds.minX * scale
+    const offsetY = (height - graphHeight * scale) / 2 - bounds.minY * scale
+    const mapX = (value: number) => value * scale + offsetX
+    const mapY = (value: number) => value * scale + offsetY
+    const nodes = visibleNodes.map((node) => ({
+      id: node.id,
+      x: mapX(node.x),
+      y: mapY(node.y),
+      width: Math.max(16, node.width * scale),
+      height: Math.max(6, node.height * scale),
+      color: node.color,
+    }))
+    const edges = visibleEdges.map((edge) => ({
+      id: edge.id,
+      x1: mapX(edge.source.x + edge.source.width / 2),
+      y1: mapY(edge.source.y + edge.source.height / 2),
+      x2: mapX(edge.target.x + edge.target.width / 2),
+      y2: mapY(edge.target.y + edge.target.height / 2),
+    }))
+    const viewport = {
+      x: mapX(minimapViewport.x),
+      y: mapY(minimapViewport.y),
+      width: minimapViewport.width * scale,
+      height: minimapViewport.height * scale,
+    }
+    return { width, height, scale, offsetX, offsetY, nodes, edges, viewport }
+  }, [minimapViewport, visibleEdges, visibleNodes])
   const selectAggregate = (item: ReferenceTopologyNode) => {
     setSelectedAggregateId(item.id)
     onFocusType(item.type)
@@ -1262,9 +1455,90 @@ function EntityTopologyView({
   }
   const zoomOut = () => changeZoom(-1)
   const zoomIn = () => changeZoom(1)
+  const resetViewport = () => {
+    setZoom(10)
+    setPan({ x: 0, y: 0 })
+  }
+  const finishZoomAction = (event: MouseEvent<HTMLButtonElement>, action: () => void) => {
+    action()
+    event.currentTarget.blur()
+  }
   const handleWheelZoom = (event: WheelEvent<HTMLElement>) => {
     event.preventDefault()
     changeZoom(event.deltaY < 0 ? 1 : -1)
+  }
+  const toGraphDelta = (deltaX: number, deltaY: number) => {
+    const rect = svgRef.current?.getBoundingClientRect()
+    if (!rect || rect.width <= 0 || rect.height <= 0) return { x: deltaX, y: deltaY }
+    return {
+      x: deltaX * (2478 / rect.width),
+      y: deltaY * (1238 / rect.height),
+    }
+  }
+  const isTopologyInteractiveTarget = (target: EventTarget | null) => (
+    target instanceof Element
+    && Boolean(target.closest('.entity-topology-zoom, .entity-topology-filter, .entity-topology-filter-panel, .entity-cms-minimap, .entity-reference-nodes g'))
+  )
+  const blurTopologyControls = () => {
+    const activeElement = document.activeElement
+    if (activeElement instanceof HTMLElement && activeElement.closest('.entity-topology-zoom, .entity-topology-filter')) {
+      activeElement.blur()
+    }
+  }
+  const startCanvasPan = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    if (isTopologyInteractiveTarget(event.target)) return
+    blurTopologyControls()
+    suppressClickRef.current = false
+    panStateRef.current = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, moved: false }
+    setIsPanning(true)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+  const moveCanvasPan = (event: PointerEvent<HTMLDivElement>) => {
+    const panState = panStateRef.current
+    if (!panState || panState.pointerId !== event.pointerId) return
+    event.preventDefault()
+    const deltaX = event.clientX - panState.clientX
+    const deltaY = event.clientY - panState.clientY
+    if (!panState.moved && Math.hypot(deltaX, deltaY) > 3) panState.moved = true
+    const graphDelta = toGraphDelta(deltaX, deltaY)
+    setPan((current) => ({ x: current.x + graphDelta.x, y: current.y + graphDelta.y }))
+    panStateRef.current = { ...panState, clientX: event.clientX, clientY: event.clientY }
+  }
+  const stopCanvasPan = (event: PointerEvent<HTMLDivElement>) => {
+    const panState = panStateRef.current
+    if (!panState || panState.pointerId !== event.pointerId) return
+    suppressClickRef.current = panState.moved
+    panStateRef.current = null
+    setIsPanning(false)
+    event.currentTarget.releasePointerCapture?.(event.pointerId)
+  }
+  const handleCanvasClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (isTopologyInteractiveTarget(event.target)) return
+    blurTopologyControls()
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      return
+    }
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    setSelectedAggregateId('')
+    onSelectNode(null)
+    onResetFocus()
+    resetViewport()
+  }
+  const focusMinimapPoint = (event: PointerEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    const miniX = (event.clientX - rect.left) * (minimap.width / rect.width)
+    const miniY = (event.clientY - rect.top) * (minimap.height / rect.height)
+    const graphX = (miniX - minimap.offsetX) / minimap.scale
+    const graphY = (miniY - minimap.offsetY) / minimap.scale
+    setPan({
+      x: 1239 - graphX * focusedZoomScale - sceneX,
+      y: 619 - graphY * focusedZoomScale - sceneY,
+    })
   }
   const toggleDomainFilter = (domain: string) => {
     setHiddenDomains((current) => current.includes(domain) ? current.filter((item) => item !== domain) : [...current, domain])
@@ -1274,22 +1548,98 @@ function EntityTopologyView({
   const toggleRelationFilter = (relation: string) => {
     setHiddenRelations((current) => current.includes(relation) ? current.filter((item) => item !== relation) : [...current, relation])
   }
+  const toggleRegionFilter = (region: string) => {
+    setSelectedRegions((current) => current.includes(region) ? current.filter((item) => item !== region) : [...current, region])
+    setSelectedAggregateId('')
+    onSelectNode(null)
+  }
   const resetTopologyFilters = () => {
+    setSelectedRegions([])
     setHiddenDomains([])
     setHiddenRelations([])
+  }
+  const scenePointFromEvent = <T extends Element>(event: PointerEvent<T>) => {
+    const svg = svgRef.current
+    const scene = sceneRef.current
+    const matrix = scene?.getScreenCTM()
+    if (!svg || !matrix) return null
+    const point = svg.createSVGPoint()
+    point.x = event.clientX
+    point.y = event.clientY
+    const scenePoint = point.matrixTransform(matrix.inverse())
+    return { x: scenePoint.x, y: scenePoint.y }
+  }
+  const handleNodePointerDown = (event: PointerEvent<SVGGElement>, item: ReferenceTopologyNode) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    const startPoint = scenePointFromEvent(event)
+    if (!startPoint) return
+    event.preventDefault()
+    event.stopPropagation()
+    suppressClickRef.current = false
+    dragStateRef.current = {
+      nodeId: item.id,
+      pointerId: event.pointerId,
+      startX: startPoint.x,
+      startY: startPoint.y,
+      nodeX: item.x,
+      nodeY: item.y,
+      moved: false,
+    }
+    dragCaptureRef.current = event.currentTarget
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    setDragSceneTransform(sceneTransform)
+    setDraggingNodeId(item.id)
+  }
+  const handleTopologyPointerMove = (event: PointerEvent<SVGSVGElement>) => {
+    const dragState = dragStateRef.current
+    if (!dragState) return
+    const point = scenePointFromEvent(event)
+    if (!point) return
+    event.preventDefault()
+    const dx = point.x - dragState.startX
+    const dy = point.y - dragState.startY
+    if (!dragState.moved && Math.hypot(dx, dy) > 4) dragState.moved = true
+    const node = positionedNodeById.get(dragState.nodeId)
+    const nextX = Math.max(24, Math.min(2454 - (node?.width || 320), dragState.nodeX + dx))
+    const nextY = Math.max(24, Math.min(1214 - (node?.height || 82), dragState.nodeY + dy))
+    setNodePositions((current) => {
+      const currentPosition = current[dragState.nodeId]
+      if (currentPosition && Math.abs(currentPosition.x - nextX) < 0.5 && Math.abs(currentPosition.y - nextY) < 0.5) return current
+      return { ...current, [dragState.nodeId]: { x: nextX, y: nextY } }
+    })
+  }
+  const finishTopologyDrag = () => {
+    const dragState = dragStateRef.current
+    if (!dragState) return
+    suppressClickRef.current = dragState.moved
+    if (dragCaptureRef.current?.hasPointerCapture(dragState.pointerId)) {
+      dragCaptureRef.current.releasePointerCapture(dragState.pointerId)
+    }
+    dragStateRef.current = null
+    dragCaptureRef.current = null
+    setDraggingNodeId('')
+    setDragSceneTransform(null)
   }
 
   return (
     <section className={activePanelItem ? `entity-topology-split ${isInstanceDetailOpen ? 'has-instance-detail' : 'has-detail'}` : 'entity-topology-split'}>
-      <div className="entity-topology-full" onWheel={handleWheelZoom}>
+      <div
+        className={`entity-topology-full ${isPanning ? 'is-panning' : ''}`}
+        onPointerDown={startCanvasPan}
+        onPointerMove={moveCanvasPan}
+        onPointerUp={stopCanvasPan}
+        onPointerCancel={stopCanvasPan}
+        onClick={handleCanvasClick}
+        onWheel={handleWheelZoom}
+      >
         <div className="entity-topology-zoom">
-          <button className="entity-topology-zoom-action" type="button" data-zoom-action="out" aria-label="缩小拓扑" onClick={zoomOut}>−</button>
+          <button className="entity-topology-zoom-action" type="button" data-zoom-action="out" aria-label="缩小拓扑" onClick={(event) => finishZoomAction(event, zoomOut)}>−</button>
           <b>{zoomDisplay}%</b>
-          <button className="entity-topology-zoom-action" type="button" data-zoom-action="in" aria-label="放大拓扑" onClick={zoomIn}>＋</button>
-          <button className="entity-topology-zoom-action" type="button" data-zoom-action="fit" aria-label="适应画布" onClick={() => setZoom(10)}>⌖</button>
+          <button className="entity-topology-zoom-action" type="button" data-zoom-action="in" aria-label="放大拓扑" onClick={(event) => finishZoomAction(event, zoomIn)}>＋</button>
+          <button className="entity-topology-zoom-action" type="button" data-zoom-action="fit" aria-label="适应画布" onClick={(event) => finishZoomAction(event, resetViewport)}>⌖</button>
         </div>
         <button
-          className={filterOpen || hiddenDomains.length > 0 || hiddenRelations.length > 0 ? 'entity-topology-filter active' : 'entity-topology-filter'}
+          className={filterOpen || selectedRegions.length > 0 || hiddenDomains.length > 0 || hiddenRelations.length > 0 ? 'entity-topology-filter active' : 'entity-topology-filter'}
           type="button"
           aria-label="过滤拓扑"
           aria-expanded={filterOpen}
@@ -1301,8 +1651,22 @@ function EntityTopologyView({
           <div className="entity-topology-filter-panel" role="group" aria-label="拓扑过滤条件">
             <header>
               <strong>过滤拓扑</strong>
-              <button type="button" onClick={resetTopologyFilters} disabled={hiddenDomains.length === 0 && hiddenRelations.length === 0}>重置</button>
+              <button type="button" onClick={resetTopologyFilters} disabled={selectedRegions.length === 0 && hiddenDomains.length === 0 && hiddenRelations.length === 0}>重置</button>
             </header>
+            <section>
+              <span>regine_code 区域</span>
+              <div>
+                {topologyRegions.length === 0 && <em>暂无区域</em>}
+                {topologyRegions.map((item) => {
+                  const active = selectedRegions.includes(item.key)
+                  return (
+                    <button key={item.key} type="button" className={active ? 'active' : ''} onClick={() => toggleRegionFilter(item.key)}>
+                      {item.key} <b>{item.count}</b>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
             <section>
               <span>实体Domain</span>
               <div>
@@ -1335,7 +1699,17 @@ function EntityTopologyView({
             <footer>{visibleNodes.length} / {referenceTopology.nodes.length} 类实体，{visibleEdges.length} / {referenceTopology.edges.length} 条关系</footer>
           </div>
         )}
-        <svg className="entity-cms-reference-graph" viewBox="0 0 2478 1238" preserveAspectRatio="xMinYMin meet" role="img" aria-label={'\u5b9e\u4f53\u62d3\u6251\u5173\u7cfb\u56fe'}>
+        <svg
+          ref={svgRef}
+          className="entity-cms-reference-graph"
+          viewBox="0 0 2478 1238"
+          preserveAspectRatio="xMinYMin meet"
+          role="img"
+          aria-label={'\u5b9e\u4f53\u62d3\u6251\u5173\u7cfb\u56fe'}
+          onPointerMove={handleTopologyPointerMove}
+          onPointerUp={finishTopologyDrag}
+          onPointerCancel={finishTopologyDrag}
+        >
           <defs>
             <pattern id="entity-reference-dot-grid" width="12" height="12" patternUnits="userSpaceOnUse">
               <circle cx="1.2" cy="1.2" r="1" fill="#e7ebf1" />
@@ -1346,30 +1720,49 @@ function EntityTopologyView({
           </defs>
           <rect width="2478" height="1238" fill="#fff" />
           <rect width="2478" height="1238" fill="url(#entity-reference-dot-grid)" opacity="0.52" />
-          <g className="entity-reference-scene" transform={sceneTransform}>
-            <g className="entity-reference-links">
-              {visibleEdges.map((edge) => (
-                <g key={edge.id}>
-                  <path d={referenceEdgePath(edge)} markerEnd="url(#entity-reference-arrow)" />
-                  {edge.showLabel && (() => {
-                    const labelX = (edge.source.x + edge.target.x) / 2
-                    const labelY = (edge.source.y + edge.target.y) / 2 - 4
-                    const labelWidth = Math.min(126, Math.max(74, edge.label.length * 12 + 28))
-                    return (
-                      <g className="entity-reference-link-label">
-                        <rect x={labelX - labelWidth / 2} y={labelY - 20} width={labelWidth} height="28" rx="3" />
-                        <text x={labelX} y={labelY}>{edge.label}</text>
+          <g ref={sceneRef} className="entity-reference-scene" transform={effectiveSceneTransform}>
+            {regionBoxes.length > 0 && (
+              <g className="entity-reference-region-boxes">
+                {regionBoxes.map((region) => (
+                  <g key={region.key} className="entity-reference-region-box">
+                    <rect x={region.x} y={region.y} width={region.width} height={region.height} rx="10" />
+                    <g className="entity-reference-region-title" transform={`translate(${region.x + 16} ${region.y + 17})`}>
+                      <rect x="0" y="-13" width={Math.max(156, region.label.length * 9 + 58)} height="28" rx="4" />
+                      <text x="38" y="1">Region {region.label}</text>
+                      <path d="M14 -7 H24 M14 -1 H24 M14 5 H22 M10 -10 H28 V10 H10 Z" />
+                    </g>
+                    {region.azBoxes.map((az) => (
+                      <g key={az.key} className="entity-reference-az-box">
+                        <rect x={az.x} y={az.y} width={az.width} height={az.height} rx="8" />
+                        <text x={az.x + az.width / 2} y={az.y + 24}>AZ {az.label}</text>
                       </g>
-                    )
-                  })()}
-                </g>
-              ))}
+                    ))}
+                  </g>
+                ))}
+              </g>
+            )}
+            <g className="entity-reference-links">
+              {visibleEdges.map((edge, index) => {
+                const label = referenceEdgeLabel(edge, index)
+                return (
+                  <g key={edge.id}>
+                    <path d={referenceEdgePath(edge)} markerEnd="url(#entity-reference-arrow)" />
+                    <g className="entity-reference-link-label" transform={`translate(${label.x} ${label.y})`}>
+                      <rect x={-label.width / 2} y="-16" width={label.width} height="24" rx="3" />
+                      <text y="0">{edge.label}</text>
+                    </g>
+                  </g>
+                )
+              })}
             </g>
             <g className="entity-reference-nodes">
-              {visibleNodes.map((item, index) => (
+              {visibleNodes.map((item) => (
                 <g
                   key={item.id}
-                  className={activePanelItem?.id === item.id ? 'selected' : ''}
+                  className={[
+                    activePanelItem?.id === item.id ? 'selected' : '',
+                    draggingNodeId === item.id ? 'dragging' : '',
+                  ].filter(Boolean).join(' ')}
                   transform={`translate(${item.x} ${item.y})`}
                   role="button"
                   tabIndex={0}
@@ -1380,37 +1773,77 @@ function EntityTopologyView({
                     event.preventDefault()
                     selectAggregate(item)
                   }}
+                  onPointerDown={(event) => handleNodePointerDown(event, item)}
                   onClick={() => {
+                    if (suppressClickRef.current) {
+                      suppressClickRef.current = false
+                      return
+                    }
                     selectAggregate(item)
                   }}
                 >
-                  <clipPath id={`entity-reference-title-clip-${index}`}>
-                    <rect x="52" y="17" width={Math.max(112, item.width - 136)} height="30" />
-                  </clipPath>
-                  <clipPath id={`entity-reference-subtitle-clip-${index}`}>
-                    <rect x="52" y={item.height - 32} width={Math.max(120, item.width - 70)} height="24" />
-                  </clipPath>
-                  <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx="10" fill={item.color} />
-                  <rect className="entity-reference-card" width={item.width} height={item.height} rx="10" fill="none" stroke={item.color} />
-                  <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="6" rx="3" fill={item.color} />
-                  <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(18 23) scale(1.05)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <text x="52" y="35" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
-                  <text x={item.width - 18} y="35" className="count" textAnchor="end">数量: {item.instances.length}</text>
-                  <text x="52" y={item.height - 15} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>类型: {item.subtitle}</text>
+                  <foreignObject className="entity-reference-node-foreign" width={item.width} height={item.height}>
+                    <div
+                      className="entity-reference-node-card"
+                      style={{ '--node-color': item.color } as CSSProperties}
+                    >
+                      <div className="entity-reference-node-body">
+                        <div className="entity-reference-node-stripe" />
+                        <div className="entity-reference-node-content">
+                          <div className="entity-reference-node-meta">
+                            <span>实体</span>
+                            <code>{referenceNodeLocationLabel(item) || referenceNodeDomain(item)}</code>
+                          </div>
+                          <strong>{item.title}</strong>
+                          <p>{item.subtitle}</p>
+                        </div>
+                        <div className="entity-reference-node-count">
+                          <b>{item.instances.length}</b>
+                          <span>实例</span>
+                        </div>
+                      </div>
+                    </div>
+                  </foreignObject>
                 </g>
               ))}
             </g>
           </g>
         </svg>
-        <div className="entity-cms-minimap" aria-hidden="true">
-          <svg viewBox="0 0 2478 1238">
-            <rect width="2478" height="1238" fill="#fff" />
-            <g transform="translate(0 0)">
-              {visibleNodes.map((item) => (
-                <rect key={item.id} x={item.x} y={item.y} width="12" height="4" fill="#cfd5dd" opacity="0.75" />
+        <div className="topo-minimap entity-cms-minimap" aria-hidden="true">
+          <svg className="topo-minimap-svg" viewBox={`0 0 ${minimap.width} ${minimap.height}`} onPointerDown={focusMinimapPoint}>
+            <defs>
+              <filter id="entity-minimap-soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="1" stdDeviation="1.2" floodColor="#0f172a" floodOpacity="0.12" />
+              </filter>
+            </defs>
+            <g className="topo-minimap-edges">
+              {minimap.edges.map((edge) => (
+                <line key={edge.id} className="topo-minimap-edge" x1={edge.x1} y1={edge.y1} x2={edge.x2} y2={edge.y2} />
               ))}
             </g>
-            <rect x="430" y="80" width="1080" height="720" fill="none" stroke="#e0e5ec" strokeWidth="34" />
+            <g className="topo-minimap-nodes">
+              {minimap.nodes.map((item) => (
+                <rect
+                  key={item.id}
+                  className="topo-minimap-node"
+                  x={item.x}
+                  y={item.y}
+                  width={item.width}
+                  height={item.height}
+                  rx="1.5"
+                  fill={item.color}
+                  filter="url(#entity-minimap-soft-shadow)"
+                />
+              ))}
+            </g>
+            <rect
+              className="topo-minimap-viewport"
+              x={minimap.viewport.x}
+              y={minimap.viewport.y}
+              width={minimap.viewport.width}
+              height={minimap.viewport.height}
+              rx="2.5"
+            />
           </svg>
         </div>
       </div>
@@ -1452,6 +1885,8 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
         valueText(node.properties.__domain__),
         valueText(node.properties.instanceId),
         valueText(node.properties.instance_id),
+        valueText(node.properties.regine_code),
+        valueText(node.properties.az_code),
         valueText(node.properties.region),
       ].join(' ').toLowerCase().includes(search)
       const matchesTags = selectedTagKeys.length === 0 || selectedTagKeys.every((key) => valueText(node.properties[key]))
@@ -1592,7 +2027,7 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
                 <td>{entityTagCount(row)}</td>
                 <td>{valueText(row.properties.__method__) || 'EntityStore'}</td>
                 <td>{valueText(row.properties.language) || '-'}</td>
-                <td>{valueText(row.properties.region) || valueText(row.properties.__domain__) || '-'}</td>
+                <td>{entityLocationText(row.properties) || valueText(row.properties.__domain__) || '-'}</td>
                 <td>{Number(row.properties.relationCount || 0) > 0 ? `${18 + Number(row.properties.relationCount || 0)} ms` : '-'}</td>
               </tr>
             ))}
@@ -1631,7 +2066,7 @@ function aggregateSortValue(node: TopologyNode, key: EntityAggregateSortKey) {
   if (key === 'tags') return entityTagCount(node)
   if (key === 'probe') return valueText(node.properties.__method__) || 'EntityStore'
   if (key === 'language') return valueText(node.properties.language) || ''
-  if (key === 'region') return valueText(node.properties.region) || valueText(node.properties.__domain__) || ''
+  if (key === 'region') return entityLocationText(node.properties) || valueText(node.properties.__domain__) || ''
   return Number(node.properties.relationCount || 0) > 0 ? 18 + Number(node.properties.relationCount || 0) : -1
 }
 
@@ -1879,7 +2314,7 @@ function entityDetailProperties(node: TopologyNode) {  const props = node.proper
     { label: '\u5b9e\u4f53\u7c7b\u578b', value: node.type },
     { label: '\u5b9e\u4f8b ID', value: valueText(props.instanceId) || valueText(props.instance_id) || valueText(props.id) || node.id },
     { label: '\u5b9e\u4f8b\u540d\u79f0', value: node.label },
-    { label: '\u533a\u57df', value: valueText(props.region) || valueText(props.zone) || '-' },
+    { label: '\u533a\u57df', value: entityLocationText(props) || '-' },
     { label: '\u8d44\u6e90\u7ec4 ID', value: valueText(props.resourceGroupId) || valueText(props.resource_group_id) || '-' },
     { label: '\u521b\u5efa\u65f6\u95f4', value: valueText(props.created_at) || valueText(props.createTime) || '-' },
     { label: '\u5b9e\u4f8b\u72b6\u6001', value: valueText(props.status) || valueText(props.state) || 'Available' },
@@ -2612,6 +3047,8 @@ function StatusPill({ status }: { status: EntityStatus }) {
 interface ReferenceTopologyNode {
   id: string
   type: string
+  regineCode: string
+  azCode: string
   instances: TopologyNode[]
   x: number
   y: number
@@ -2621,7 +3058,6 @@ interface ReferenceTopologyNode {
   subtitle: string
   color: string
   access: number
-  barWidth: number
 }
 
 interface ReferenceTopologyEdge {
@@ -2629,7 +3065,23 @@ interface ReferenceTopologyEdge {
   source: ReferenceTopologyNode
   target: ReferenceTopologyNode
   label: string
-  showLabel?: boolean
+}
+
+interface TopologyRegionBox {
+  key: string
+  label: string
+  x: number
+  y: number
+  width: number
+  height: number
+  azBoxes: Array<{
+    key: string
+    label: string
+    x: number
+    y: number
+    width: number
+    height: number
+  }>
 }
 
 interface EntityRelatedLink {
@@ -2638,47 +3090,67 @@ interface EntityRelatedLink {
   direction: 'in' | 'out'
 }
 
-function createReferenceStyleTopology(data: TopologyExplorerData, focusedTypes: string[]) {
+function createReferenceStyleTopology(data: TopologyExplorerData, focusedTypes: string[], selectedRegions: string[]) {
   const focused = new Set(focusedTypes)
-  const sourceNodes = focusedTypes.length > 0
+  const regionFocused = new Set(selectedRegions)
+  const groupByRegion = selectedRegions.length > 0
+  const sourceNodes = (focusedTypes.length > 0
     ? data.nodes.filter((node) => focused.has(stripSyntheticType(node.type)))
-    : data.nodes
+    : data.nodes)
+    .filter((node) => !groupByRegion || regionFocused.has(topologyNodeRegineCode(node)))
+  const groupIdForNode = (node: TopologyNode) => groupByRegion
+    ? `${node.type}::${topologyNodeRegineCode(node)}::${topologyNodeAzCode(node)}`
+    : node.type
   const grouped = new Map<string, TopologyNode[]>()
   sourceNodes.forEach((node) => {
-    const instances = grouped.get(node.type) || []
+    const groupId = groupIdForNode(node)
+    const instances = grouped.get(groupId) || []
     instances.push(node)
-    grouped.set(node.type, instances)
+    grouped.set(groupId, instances)
   })
-  const coordinates = referenceTopologyCoordinates()
-  const nodes = [...grouped.entries()].slice(0, 90).map(([type, instances], index) => {
+  const topologyGroups = [...grouped.entries()].slice(0, 90)
+  const layoutEdges = createTypeLevelEdges(data, new Set(topologyGroups.map(([groupId]) => groupId)), groupIdForNode)
+  const layoutByType = createLayeredTypeLayout(topologyGroups, layoutEdges)
+  const nodes = topologyGroups.map(([groupId, instances]) => {
     const sample = instances[0]
-    const coordinate = coordinates[index] || fallbackReferenceCoordinate(index)
-    const width = Math.max(290, Math.min(380, (coordinate.width || 43) * 6.8, type.length * 9 + 150))
+    const type = sample?.type || groupId
+    const regineCode = commonTopologyValue(instances, topologyNodeRegineCode)
+    const azCode = commonTopologyValue(instances, topologyNodeAzCode)
+    const coordinate = layoutByType.get(groupId) || fallbackReferenceCoordinate(0)
+    const title = entityTypeDisplayName(type)
+    const subtitle = groupByRegion
+      ? [type, regineCode, azCode].filter(Boolean).join(' · ')
+      : type
     return {
-      id: type,
+      id: groupId,
       type,
+      regineCode,
+      azCode,
       instances,
       x: coordinate.x,
       y: coordinate.y,
-      width,
-      height: Math.max(74, (coordinate.height || 18) * 4.4),
-      title: entityTypeDisplayName(type),
-      subtitle: type,
+      width: coordinate.width,
+      height: coordinate.height,
+      title,
+      subtitle,
       color: sample?.color || '#5b9df1',
       access: instances.reduce((sum, node) => sum + Number(node.properties.relationCount || 0), 0),
-      barWidth: Math.max(86, Math.min(128, width * 0.42)),
     }
   })
   const edges: ReferenceTopologyEdge[] = []
-  const nodesByType = new Map(nodes.map((item) => [item.type, item]))
+  const edgeKeys = new Set<string>()
+  const nodesByGroupId = new Map(nodes.map((item) => [item.id, item]))
   data.edges.forEach((edge) => {
     const sourceNode = data.nodesById.get(edge.source)
     const targetNode = data.nodesById.get(edge.target)
     if (!sourceNode || !targetNode) return
-    const source = nodesByType.get(sourceNode.type)
-    const target = nodesByType.get(targetNode.type)
+    const source = nodesByGroupId.get(groupIdForNode(sourceNode))
+    const target = nodesByGroupId.get(groupIdForNode(targetNode))
     if (!source || !target || source.id === target.id) return
-    edges.push({ id: edge.id, source, target, label: edge.type, showLabel: edges.length < 4 })
+    const edgeKey = `${source.id}->${target.id}:${edge.type}`
+    if (edgeKeys.has(edgeKey)) return
+    edgeKeys.add(edgeKey)
+    edges.push({ id: edgeKey, source, target, label: edge.type })
   })
   return { nodes, edges }
 }
@@ -2708,6 +3180,41 @@ function referenceNodeDomain(node: ReferenceTopologyNode) {
   return node.type.split('.')[0] || node.type
 }
 
+function referenceNodeLocationLabel(node: ReferenceTopologyNode) {
+  if (!node.regineCode) return ''
+  return node.azCode ? `${node.regineCode} / ${node.azCode}` : node.regineCode
+}
+
+function topologyNodeRegineCode(node: TopologyNode) {
+  return valueText(node.properties.regine_code) || valueText(node.properties.region) || simulatedTopologyLocation(node)[0]
+}
+
+function topologyNodeAzCode(node: TopologyNode) {
+  return valueText(node.properties.az_code) || valueText(node.properties.zone) || simulatedTopologyLocation(node)[1]
+}
+
+function simulatedTopologyLocation(node: TopologyNode): [string, string] {
+  const text = [
+    node.id,
+    node.label,
+    node.type,
+    valueText(node.properties.name),
+    valueText(node.properties.display_name),
+    valueText(node.properties.namespace),
+    valueText(node.properties.cluster),
+  ].join(' ').toLowerCase()
+  if (text.includes('payment') || text.includes('redis') || text.includes('profile')) return ['cn-shanghai', 'cn-shanghai-b']
+  if (text.includes('inventory') || text.includes('sync') || text.includes('kafka') || text.includes('topic')) return ['cn-beijing', 'cn-beijing-a']
+  if (text.includes('notification') || text.includes('catalog')) return ['cn-shanghai', 'cn-shanghai-a']
+  if (text.includes('order') || text.includes('mysql') || text.includes('rds')) return ['cn-hangzhou', 'cn-hangzhou-b']
+  return ['cn-hangzhou', 'cn-hangzhou-a']
+}
+
+function commonTopologyValue(nodes: TopologyNode[], getValue: (node: TopologyNode) => string) {
+  const values = [...new Set(nodes.map(getValue).filter((value) => value && value !== '-'))]
+  return values.length === 1 ? values[0] : ''
+}
+
 function countTopologyOptions<T>(items: T[], getKey: (item: T) => string) {
   const counts = new Map<string, number>()
   items.forEach((item) => {
@@ -2725,73 +3232,259 @@ function entityTypeDisplayName(type: string) {  const tail = type.split('.').fil
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
+function createTypeLevelEdges(
+  data: TopologyExplorerData,
+  visibleGroups: Set<string>,
+  getGroupId: (node: TopologyNode) => string = (node) => node.type,
+) {
+  const edgeKeys = new Set<string>()
+  const edges: Array<{ source: string; target: string }> = []
+  data.edges.forEach((edge) => {
+    const sourceNode = data.nodesById.get(edge.source)
+    const targetNode = data.nodesById.get(edge.target)
+    const source = sourceNode ? getGroupId(sourceNode) : ''
+    const target = targetNode ? getGroupId(targetNode) : ''
+    if (!source || !target || source === target || !visibleGroups.has(source) || !visibleGroups.has(target)) return
+    const key = `${source}->${target}`
+    if (edgeKeys.has(key)) return
+    edgeKeys.add(key)
+    edges.push({ source, target })
+  })
+  return edges
+}
+
+function createLayeredTypeLayout(
+  groups: Array<[string, TopologyNode[]]>,
+  edges: Array<{ source: string; target: string }>,
+) {
+  const types = groups.map(([type]) => type)
+  const typeSet = new Set(types)
+  const incoming = new Map(types.map((type) => [type, 0]))
+  const outgoing = new Map(types.map((type) => [type, 0]))
+  const adjacency = new Map(types.map((type) => [type, [] as string[]]))
+  edges.forEach((edge) => {
+    if (!typeSet.has(edge.source) || !typeSet.has(edge.target)) return
+    incoming.set(edge.target, (incoming.get(edge.target) || 0) + 1)
+    outgoing.set(edge.source, (outgoing.get(edge.source) || 0) + 1)
+    adjacency.get(edge.source)?.push(edge.target)
+  })
+
+  const sortByTopologyWeight = (left: string, right: string) => {
+    const leftScore = (outgoing.get(left) || 0) - (incoming.get(left) || 0)
+    const rightScore = (outgoing.get(right) || 0) - (incoming.get(right) || 0)
+    return rightScore - leftScore
+      || (outgoing.get(right) || 0) - (outgoing.get(left) || 0)
+      || left.localeCompare(right, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
+  }
+
+  const indegree = new Map(incoming)
+  const queue = types.filter((type) => (indegree.get(type) || 0) === 0).sort(sortByTopologyWeight)
+  if (queue.length === 0 && types.length > 0) queue.push([...types].sort(sortByTopologyWeight)[0])
+
+  const levels = new Map<string, number>()
+  const visited = new Set<string>()
+  queue.forEach((type) => levels.set(type, 0))
+  while (queue.length > 0) {
+    const type = queue.shift()
+    if (!type || visited.has(type)) continue
+    visited.add(type)
+    const nextLevel = (levels.get(type) || 0) + 1
+    ;(adjacency.get(type) || []).sort(sortByTopologyWeight).forEach((target) => {
+      levels.set(target, Math.max(levels.get(target) || 0, nextLevel))
+      indegree.set(target, Math.max(0, (indegree.get(target) || 0) - 1))
+      if ((indegree.get(target) || 0) === 0 && !visited.has(target) && !queue.includes(target)) queue.push(target)
+    })
+  }
+
+  types.filter((type) => !levels.has(type)).sort(sortByTopologyWeight).forEach((type) => {
+    const upstreamLevels = edges
+      .filter((edge) => edge.target === type && levels.has(edge.source))
+      .map((edge) => (levels.get(edge.source) || 0) + 1)
+    levels.set(type, upstreamLevels.length > 0 ? Math.max(...upstreamLevels) : 0)
+  })
+
+  edges
+    .slice()
+    .sort((left, right) => (levels.get(left.source) || 0) - (levels.get(right.source) || 0))
+    .forEach((edge) => {
+      const sourceLevel = levels.get(edge.source) || 0
+      const targetLevel = levels.get(edge.target) || 0
+      if (targetLevel <= sourceLevel && (outgoing.get(edge.source) || 0) >= (outgoing.get(edge.target) || 0)) {
+        levels.set(edge.target, sourceLevel + 1)
+      }
+    })
+
+  const normalizedLevels = [...new Set(types.map((type) => levels.get(type) || 0))].sort((left, right) => left - right)
+  const levelIndex = new Map(normalizedLevels.map((level, index) => [level, index]))
+  const layers = new Map<number, string[]>()
+  types.forEach((type) => {
+    const layer = levelIndex.get(levels.get(type) || 0) || 0
+    const list = layers.get(layer) || []
+    list.push(type)
+    layers.set(layer, list)
+  })
+
+  const canvasWidth = 2478
+  const layerTop = 120
+  const layerGap = 148
+  const sidePadding = 120
+  const layout = new Map<string, { x: number; y: number; width: number; height: number }>()
+  const regionMode = groups.some(([groupId]) => groupId.includes('::'))
+  if (regionMode) {
+    const groupRegion = new Map(groups.map(([groupId, instances]) => [
+      groupId,
+      commonTopologyValue(instances, topologyNodeRegineCode) || 'unknown',
+    ]))
+    const regions = [...new Set(groups.map(([groupId]) => groupRegion.get(groupId) || 'unknown'))]
+      .sort((left, right) => left.localeCompare(right, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' }))
+    const regionGap = 54
+    const regionSidePadding = 72
+    const regionWidth = Math.max(420, (canvasWidth - regionSidePadding * 2 - regionGap * Math.max(0, regions.length - 1)) / Math.max(1, regions.length))
+    const regionX = new Map(regions.map((region, index) => [region, regionSidePadding + index * (regionWidth + regionGap)]))
+    ;[...layers.entries()].sort(([left], [right]) => left - right).forEach(([layer, layerTypes]) => {
+      regions.forEach((region) => {
+        const ordered = layerTypes
+          .filter((groupId) => groupRegion.get(groupId) === region)
+          .sort(sortByTopologyWeight)
+        if (ordered.length === 0) return
+        const innerPadding = 42
+        const available = regionWidth - innerPadding * 2
+        const gap = ordered.length <= 1 ? 0 : Math.max(18, Math.min(52, available / ordered.length * 0.16))
+        const nodeWidth = Math.max(220, Math.min(300, Math.floor((available - gap * Math.max(0, ordered.length - 1)) / ordered.length)))
+        const rowWidth = ordered.length * nodeWidth + gap * Math.max(0, ordered.length - 1)
+        const startX = (regionX.get(region) || 0) + (regionWidth - rowWidth) / 2
+        ordered.forEach((groupId, index) => {
+          const instances = groups.find(([item]) => item === groupId)?.[1] || []
+          const height = 82
+          layout.set(groupId, {
+            x: startX + index * (nodeWidth + gap),
+            y: layerTop + layer * layerGap,
+            width: nodeWidth,
+            height: height + Math.min(16, Math.max(0, instances.length - 1) * 2),
+          })
+        })
+      })
+    })
+    return layout
+  }
+  ;[...layers.entries()].sort(([left], [right]) => left - right).forEach(([layer, layerTypes]) => {
+    const ordered = layerTypes.sort(sortByTopologyWeight)
+    const gap = ordered.length <= 1 ? 0 : Math.max(28, Math.min(118, (canvasWidth - sidePadding * 2) / Math.max(1, ordered.length) * 0.22))
+    const availableWidth = canvasWidth - sidePadding * 2 - gap * Math.max(0, ordered.length - 1)
+    const layerNodeWidth = Math.max(220, Math.min(340, Math.floor(availableWidth / Math.max(1, ordered.length))))
+    const layerWidth = ordered.length * layerNodeWidth + Math.max(0, ordered.length - 1) * gap
+    const startX = (canvasWidth - layerWidth) / 2
+    ordered.forEach((type, index) => {
+      const instances = groups.find(([groupType]) => groupType === type)?.[1] || []
+      const height = 82
+      const x = startX + index * (layerNodeWidth + gap)
+      const y = layerTop + layer * layerGap
+      layout.set(type, { x, y, width: layerNodeWidth, height: height + Math.min(16, Math.max(0, instances.length - 1) * 2) })
+    })
+  })
+  return layout
+}
+
 function fallbackReferenceCoordinate(index: number) {
   const column = index % 10
   const row = Math.floor(index / 10)
   return {
     x: 620 + column * 124,
     y: 120 + row * 68,
-    width: 43,
-    height: 18,
+    width: 300,
+    height: 82,
   }
 }
 
-function referenceTopologyCoordinates() {
-  return [
-    { x: 590, y: 99 }, { x: 1042, y: 142, width: 41 }, { x: 619, y: 230, width: 41, height: 13 },
-    { x: 732, y: 186, width: 39, height: 13 }, { x: 775, y: 230, width: 41, height: 13 },
-    { x: 850, y: 230, height: 17 }, { x: 737, y: 273, width: 39 }, { x: 678, y: 317, width: 41 },
-    { x: 743, y: 317, height: 17 }, { x: 694, y: 360, width: 41 }, { x: 678, y: 404 },
-    { x: 728, y: 404, width: 41 }, { x: 693, y: 448, height: 17 }, { x: 743, y: 448, height: 17 },
-    { x: 906, y: 448, height: 17 }, { x: 956, y: 448, width: 41, height: 17 },
-    { x: 1032, y: 448, height: 17 }, { x: 693, y: 491 }, { x: 743, y: 491 },
-    { x: 830, y: 491, width: 41 }, { x: 931, y: 491 }, { x: 981, y: 491, width: 41 },
-    { x: 1032, y: 491 }, { x: 673, y: 535, width: 41 }, { x: 880, y: 535, width: 41 },
-    { x: 931, y: 535, height: 17 }, { x: 649, y: 578, height: 13 }, { x: 1043, y: 578, width: 41 },
-    { x: 896, y: 579, height: 17 }, { x: 746, y: 643, width: 41 }, { x: 867, y: 643 },
-    { x: 967, y: 643, width: 41, height: 13 }, { x: 1063, y: 687, width: 39, height: 13 },
-    { x: 1119, y: 643, height: 13 }, { x: 1237, y: 687, height: 13 }, { x: 1358, y: 687, height: 13 },
-    { x: 866, y: 731, width: 41, height: 17 }, { x: 1240, y: 731, height: 13 },
-    { x: 1320, y: 731, height: 13 }, { x: 1410, y: 731, width: 41, height: 17 },
-    { x: 1118, y: 796, width: 41, height: 17 }, { x: 1480, y: 731, height: 17 },
-    { x: 1378, y: 767, height: 17 }, { x: 967, y: 796, height: 13 },
-    { x: 1018, y: 796, height: 13 }, { x: 1169, y: 796, height: 17 },
-    { x: 1219, y: 796, width: 41, height: 17 }, { x: 1269, y: 796, width: 41, height: 13 },
-    { x: 1335, y: 796, height: 17 }, { x: 1400, y: 796, height: 17 }, { x: 1480, y: 796, height: 17 },
-    { x: 1219, y: 839, width: 41 }, { x: 1270, y: 839 }, { x: 1367, y: 839, width: 41 },
-    { x: 697, y: 875, width: 41, height: 13 }, { x: 830, y: 948, width: 41 },
-    { x: 1195, y: 948, width: 41 }, { x: 1510, y: 904 }, { x: 1610, y: 948, width: 41 },
-    { x: 1661, y: 904 }, { x: 1711, y: 904, width: 41 }, { x: 1762, y: 904 },
-    { x: 1661, y: 948, height: 13 }, { x: 1761, y: 948, width: 41 },
-    { x: 1812, y: 948 }, { x: 1913, y: 948 }, { x: 1963, y: 948, width: 41 },
-    { x: 2013, y: 948 }, { x: 2064, y: 948 }, { x: 1580, y: 1036 },
-    { x: 1635, y: 1038 }, { x: 1690, y: 1040 }, { x: 1745, y: 1042 },
-    { x: 1800, y: 1044 }, { x: 1855, y: 1046 }, { x: 1910, y: 1048 },
-    { x: 1965, y: 1050 }, { x: 2020, y: 1052 }, { x: 2075, y: 1054 },
-    { x: 2130, y: 1056 }, { x: 2185, y: 1058 }, { x: 1605, y: 1100 },
-    { x: 1660, y: 1102 }, { x: 1715, y: 1104 }, { x: 1770, y: 1106 },
-    { x: 1825, y: 1108 }, { x: 1880, y: 1110 }, { x: 1935, y: 1112 },
-    { x: 1990, y: 1114 }, { x: 2045, y: 1116 },
-  ]
+function createTopologyRegionBoxes(nodes: ReferenceTopologyNode[]): TopologyRegionBox[] {
+  const regionGroups = new Map<string, ReferenceTopologyNode[]>()
+  nodes.forEach((node) => {
+    const region = node.regineCode || 'unknown'
+    const list = regionGroups.get(region) || []
+    list.push(node)
+    regionGroups.set(region, list)
+  })
+
+  return [...regionGroups.entries()]
+    .map(([region, regionNodes]) => {
+      const regionBounds = boundsForReferenceNodes(regionNodes, 48, 54)
+      const azGroups = new Map<string, ReferenceTopologyNode[]>()
+      regionNodes.forEach((node) => {
+        const az = node.azCode || 'unknown'
+        const list = azGroups.get(az) || []
+        list.push(node)
+        azGroups.set(az, list)
+      })
+      const azBoxes = [...azGroups.entries()]
+        .map(([az, azNodes]) => ({
+          key: `${region}:${az}`,
+          label: az,
+          ...boundsForReferenceNodes(azNodes, 28, 36),
+        }))
+        .sort((left, right) => left.y - right.y || left.x - right.x)
+      return {
+        key: region,
+        label: region,
+        ...regionBounds,
+        azBoxes,
+      }
+    })
+    .sort((left, right) => left.x - right.x || left.y - right.y)
 }
 
-function referenceEdgePath(edge: ReferenceTopologyEdge) {
+function boundsForReferenceNodes(nodes: ReferenceTopologyNode[], paddingX: number, paddingY: number) {
+  const bounds = nodes.reduce((box, node) => ({
+    minX: Math.min(box.minX, node.x),
+    minY: Math.min(box.minY, node.y),
+    maxX: Math.max(box.maxX, node.x + node.width),
+    maxY: Math.max(box.maxY, node.y + node.height),
+  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity })
+  if (!Number.isFinite(bounds.minX)) return { x: 0, y: 0, width: 0, height: 0 }
+  return {
+    x: Math.max(8, bounds.minX - paddingX),
+    y: Math.max(8, bounds.minY - paddingY),
+    width: bounds.maxX - bounds.minX + paddingX * 2,
+    height: bounds.maxY - bounds.minY + paddingY * 2,
+  }
+}
+
+function referenceEdgeAnchors(edge: ReferenceTopologyEdge) {
   const sourceCenterX = edge.source.x + edge.source.width / 2
   const sourceCenterY = edge.source.y + edge.source.height / 2
   const targetCenterX = edge.target.x + edge.target.width / 2
   const targetCenterY = edge.target.y + edge.target.height / 2
   const vertical = Math.abs(targetCenterY - sourceCenterY) > Math.abs(targetCenterX - sourceCenterX) * 0.35
-  const sourceX = sourceCenterX
-  const sourceY = vertical && targetCenterY > sourceCenterY ? edge.source.y + edge.source.height : vertical ? edge.source.y : sourceCenterY
-  const targetX = targetCenterX
-  const targetY = vertical && targetCenterY > sourceCenterY ? edge.target.y : vertical ? edge.target.y + edge.target.height : targetCenterY
+  return {
+    sourceX: sourceCenterX,
+    sourceY: vertical && targetCenterY > sourceCenterY ? edge.source.y + edge.source.height : vertical ? edge.source.y : sourceCenterY,
+    targetX: targetCenterX,
+    targetY: vertical && targetCenterY > sourceCenterY ? edge.target.y : vertical ? edge.target.y + edge.target.height : targetCenterY,
+    vertical,
+  }
+}
+
+function referenceEdgePath(edge: ReferenceTopologyEdge) {
+  const { sourceX, sourceY, targetX, targetY, vertical } = referenceEdgeAnchors(edge)
   const dx = targetX - sourceX
   const dy = targetY - sourceY
-  const curve = Math.max(48, Math.min(330, Math.abs(dx) * 0.48 + Math.abs(dy) * 0.12))
+  if (vertical) {
+    const midY = sourceY + dy * 0.5
+    const bend = Math.max(-90, Math.min(90, dx * 0.08))
+    return `M ${sourceX} ${sourceY} C ${sourceX + bend} ${midY}, ${targetX - bend} ${midY}, ${targetX} ${targetY}`
+  }
+  const curve = Math.max(68, Math.min(260, Math.abs(dx) * 0.42))
   const direction = dx >= 0 ? 1 : -1
-  const lift = Math.max(-150, Math.min(150, dy * 0.18))
-  const bow = Math.max(-88, Math.min(88, dx * 0.065))
-  return `M ${sourceX} ${sourceY} C ${sourceX + curve * direction} ${sourceY + lift - bow}, ${targetX - curve * direction} ${targetY - lift + bow}, ${targetX} ${targetY}`
+  return `M ${sourceX} ${sourceY} C ${sourceX + curve * direction} ${sourceY}, ${targetX - curve * direction} ${targetY}, ${targetX} ${targetY}`
+}
+
+function referenceEdgeLabel(edge: ReferenceTopologyEdge, index: number) {
+  const { sourceX, sourceY, targetX, targetY, vertical } = referenceEdgeAnchors(edge)
+  const duplicateOffset = ((index % 3) - 1) * 9
+  return {
+    x: (sourceX + targetX) / 2 + (vertical ? duplicateOffset : 0),
+    y: (sourceY + targetY) / 2 - 8 + (vertical ? 0 : duplicateOffset),
+    width: Math.min(150, Math.max(58, edge.label.length * 9 + 24)),
+  }
 }
 
 function referenceIconPath(type: string) {
@@ -2817,6 +3510,7 @@ function toEntityRecord(node: TopologyNode, sequence: number): EntityRecord {
     || valueText(node.properties.environment)
     || '-'
   const relationCount = Number(node.properties.relationCount || 0)
+  const [regineCode, azCode] = simulatedTopologyLocation(node)
   return {
     id: node.id,
     label: node.label || node.id,
@@ -2826,6 +3520,8 @@ function toEntityRecord(node: TopologyNode, sequence: number): EntityRecord {
     properties: {
       ...node.properties,
       id: node.id,
+      regine_code: valueText(node.properties.regine_code) || valueText(node.properties.region) || regineCode,
+      az_code: valueText(node.properties.az_code) || valueText(node.properties.zone) || azCode,
       ip: valueText(node.properties.ip) || '-',
       host: valueText(node.properties.host) || valueText(node.properties.hostname) || '-',
       relationCount,
@@ -2946,23 +3642,13 @@ function matchesEntityScopePreset(record: EntityRecord, preset: EntityScopePrese
   return ['rum', 'browser', 'frontend', 'webapp'].some((keyword) => text.includes(keyword))
 }
 
-function createEntityMetricRows(records: EntityRecord[]) {
-  return records.slice(0, 10).map((record, index) => {
-    const sequence = entitySequence(record)
-    const relationCount = Number(record.properties.relationCount || 0)
-    const active = record.status !== 'normal' || relationCount > 0
-    return {
-      name: record.label,
-      probe: valueText(record.properties.__method__) || 'EntityStore',
-      language: valueText(record.properties.language) || '-',
-      region: valueText(record.properties.region) || record.domain,
-      calls: relationCount ? String(relationCount) : String(Math.max(0, sequence % 7)),
-      errors: record.status === 'critical' ? '1' : '0',
-      latency: active ? `${18 + ((sequence + index) % 82)} ms` : '0',
-      tokens: active ? `${Math.max(1, (sequence + relationCount) % 99)}K` : '0',
-      active,
-    }
-  })
+function aggregateRecordSortValue(record: EntityRecord, node: TopologyNode | undefined, key: EntityAggregateSortKey) {
+  if (key === 'name') return record.label
+  if (key === 'tags') return node ? entityTagCount(node) : 0
+  if (key === 'probe') return valueText(record.properties.__method__) || 'EntityStore'
+  if (key === 'language') return valueText(record.properties.language) || ''
+  if (key === 'region') return entityLocationText(record.properties) || record.domain
+  return Number(record.properties.relationCount || 0)
 }
 
 function entitySequence(record: EntityRecord) {
@@ -3005,6 +3691,12 @@ function formatLastSeen(value: unknown) {
 
 function valueText(value: unknown) {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : ''
+}
+
+function entityLocationText(props: Record<string, unknown>) {
+  const regine = valueText(props.regine_code) || valueText(props.region)
+  const az = valueText(props.az_code) || valueText(props.zone)
+  return [regine, az].filter(Boolean).join(' / ')
 }
 
 function booleanProperty(value: unknown) {
