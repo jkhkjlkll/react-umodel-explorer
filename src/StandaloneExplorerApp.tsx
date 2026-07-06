@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Box, GitBranch, Network, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
+import { ArrowLeft, GitBranch, Network, PanelLeftClose, PanelLeftOpen, RefreshCcw } from 'lucide-react'
 import { UModelApi, type UModelApiClient } from './api/client'
 import type { WorkspaceMetadata } from './api/types'
 import { Button, IconButton } from './design/components'
@@ -112,10 +112,6 @@ export function StandaloneExplorerApp() {
           <button className={section === 'umodel' ? 'active' : ''} type="button" title={t('nav.umodel')} onClick={() => setSection('umodel')}>
             <GitBranch size={16} />
             <span className="workspace-nav-label">{t('nav.umodel')}</span>
-          </button>
-          <button className={section === 'entity' ? 'active' : ''} type="button" title="实体探索" onClick={() => setSection('entity')}>
-            <Box size={16} />
-            <span className="workspace-nav-label">实体探索</span>
           </button>
           <button className={section === 'topology' ? 'active' : ''} type="button" title={t('nav.entityTopo')} onClick={() => setSection('topology')}>
             <Network size={16} />

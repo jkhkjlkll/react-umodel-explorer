@@ -141,6 +141,22 @@
   background: #f5f7fb;
 }
 
+.entity-page.topology-only {
+  background: #fff;
+}
+
+.entity-page.topology-only .entity-main {
+  grid-template-rows: minmax(0, 1fr);
+  background: #fff;
+}
+
+.entity-page.topology-only .entity-content {
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 .entity-toolbar {
   min-width: 0;
   display: grid;
@@ -1979,6 +1995,8 @@
   cursor: grab;
   overscroll-behavior: contain;
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .entity-topology-full.is-panning {
@@ -2002,6 +2020,8 @@
   color: #7b818a;
   font-size: 13px;
   font-weight: 500;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .entity-topology-zoom button,
@@ -2068,6 +2088,8 @@
   box-shadow: 0 2px 8px rgba(31, 45, 75, 0.07);
   color: #7b818a;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .entity-topology-filter svg {
@@ -2202,21 +2224,22 @@
 }
 
 .entity-reference-region-box > rect {
-  fill: rgba(240, 247, 255, 0.58);
-  stroke: rgba(73, 112, 255, 0.72);
+  fill: rgba(240, 247, 255, 0.5);
+  stroke: rgba(73, 112, 255, 0.62);
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
 
 .entity-reference-region-title rect {
   fill: #fff;
-  stroke: rgba(73, 112, 255, 0.62);
-  stroke-width: 1;
+  stroke: rgba(73, 112, 255, 0.34);
+  stroke-width: 1.1;
+  filter: drop-shadow(0 1px 3px rgba(42, 76, 143, 0.1));
   vector-effect: non-scaling-stroke;
 }
 
 .entity-reference-region-title text {
-  fill: #2c3441;
+  fill: #1f2a44;
   font-size: 16px;
   font-weight: 800;
   dominant-baseline: middle;
@@ -2224,7 +2247,7 @@
 
 .entity-reference-region-title path {
   fill: none;
-  stroke: #1686c6;
+  stroke: #1677ff;
   stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;

@@ -16,9 +16,11 @@ import { formatError } from '../../lib/json'
 import { createTopologyDataFromResults, type TopologyExplorerData, type TopologyNode } from './topologyModel'
 import { resolveTopologyNodeIconPreset, TopologyPresetIcon } from './topologyIcons'
 import { TopologyCanvas } from './TopologyCanvas'
+import { EntityExplorerPage } from '../entity/EntityExplorerPage'
 import './topology.css'
 
 type PanelTab = 'overview' | 'layout'
+type TopologyLayoutMode = 'force' | 'cluster' | 'entity'
 
 const ENTITY_LIMIT = 2000
 const TOPO_LIMIT = 4000
@@ -44,7 +46,7 @@ export function TopologyExplorerPage({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<PanelTab>('layout')
-  const [layoutMode, setLayoutMode] = useState<'force' | 'cluster'>('force')
+  const [layoutMode, setLayoutMode] = useState<TopologyLayoutMode>('force')
   const [clusterRule, setClusterRule] = useState<'replace' | 'append'>('replace')
   const [allowDrag, setAllowDrag] = useState(false)
   const [showLabels, setShowLabels] = useState(true)
@@ -249,7 +251,8 @@ export function TopologyExplorerPage({
           )}
         </aside>
 
-        <main className="topo-stage">
+        <main className={layoutMode === 'entity' ? 'topo-stage entity-layout-active' : 'topo-stage'}>
+          {layoutMode !== 'entity' && (
           <header className="topo-stage-toolbar">
             <div className="topo-search-wrap" ref={searchWrapRef}>
               <Search size={16} />
@@ -323,45 +326,55 @@ export function TopologyExplorerPage({
               </button>
             </div>
           </header>
+          )}
 
           <section className="topo-graph-card">
-            <TopologyCanvas
-              data={displayData}
-              layoutMode={layoutMode}
-              focusedTypes={[]}
-              selectedNode={selectedNode}
-              showLabels={showLabels}
-              showClusterLabels={showClusterLabels}
-              allowDrag={allowDrag}
-              playhead={playhead}
-              onSelectNode={setSelectedNode}
-              onFocusType={focusType}
-            />
-            {loading && (
-              <div className="topo-feedback-overlay">
-                <strong>正在加载后端拓扑数据...</strong>
-                <span>工作空间 `{workspaceId}`</span>
+            {layoutMode === 'entity' ? (
+              <div className="topo-entity-layout">
+                <EntityExplorerPage api={api} workspaceId={workspaceId} refreshToken={refreshToken} initialView="topology" topologyOnly />
               </div>
+            ) : (
+              <>
+                <TopologyCanvas
+                  data={displayData}
+                  layoutMode={layoutMode}
+                  focusedTypes={[]}
+                  selectedNode={selectedNode}
+                  showLabels={showLabels}
+                  showClusterLabels={showClusterLabels}
+                  allowDrag={allowDrag}
+                  playhead={playhead}
+                  onSelectNode={setSelectedNode}
+                  onFocusType={focusType}
+                />
+                {loading && (
+                  <div className="topo-feedback-overlay">
+                    <strong>正在加载后端拓扑数据...</strong>
+                    <span>工作空间 `{workspaceId}`</span>
+                  </div>
+                )}
+                {!loading && error && (
+                  <div className="topo-feedback-overlay error">
+                    <AlertCircle size={18} />
+                    <strong>拓扑查询失败</strong>
+                    <span>{error}</span>
+                    <button type="button" onClick={() => void load()}>
+                      重试
+                    </button>
+                  </div>
+                )}
+                {!loading && !error && data.nodes.length === 0 && (
+                  <div className="topo-feedback-overlay empty">
+                    <strong>当前工作空间暂无拓扑数据</strong>
+                    <span>请先导入样例或写入实体与关系后再查看拓扑。</span>
+                  </div>
+                )}
+                {selectedNode && <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />}
+              </>
             )}
-            {!loading && error && (
-              <div className="topo-feedback-overlay error">
-                <AlertCircle size={18} />
-                <strong>拓扑查询失败</strong>
-                <span>{error}</span>
-                <button type="button" onClick={() => void load()}>
-                  重试
-                </button>
-              </div>
-            )}
-            {!loading && !error && data.nodes.length === 0 && (
-              <div className="topo-feedback-overlay empty">
-                <strong>当前工作空间暂无拓扑数据</strong>
-                <span>请先导入样例或写入实体与关系后再查看拓扑。</span>
-              </div>
-            )}
-            {selectedNode && <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />}
           </section>
 
+          {layoutMode !== 'entity' && (
           <footer className="topo-statusbar">
             <span>当前: {currentNodeCount.toLocaleString()} 实体 / {currentEdgeCount.toLocaleString()} 关系</span>
             {searchText && (
@@ -374,6 +387,7 @@ export function TopologyExplorerPage({
             <span>总量: {data.nodes.length.toLocaleString()} 实体 / {data.edges.length.toLocaleString()} 关系</span>
             <b>实时拓扑</b>
           </footer>
+          )}
         </main>
       </section>
     </div>
@@ -479,12 +493,12 @@ function LayoutPanel({
   onShowLabelsChange,
   onShowClusterLabelsChange,
 }: {
-  layoutMode: 'force' | 'cluster'
+  layoutMode: TopologyLayoutMode
   clusterRule: 'replace' | 'append'
   allowDrag: boolean
   showLabels: boolean
   showClusterLabels: boolean
-  onLayoutModeChange: (value: 'force' | 'cluster') => void
+  onLayoutModeChange: (value: TopologyLayoutMode) => void
   onClusterRuleChange: (value: 'replace' | 'append') => void
   onAllowDragChange: (value: boolean) => void
   onShowLabelsChange: (value: boolean) => void
@@ -495,6 +509,8 @@ function LayoutPanel({
       <SectionTitle title="布局算法" />
       <RadioCard active={layoutMode === 'force'} title="关系布局" desc="按照实体连接关系展示真实拓扑。" onClick={() => onLayoutModeChange('force')} />
       <RadioCard active={layoutMode === 'cluster'} title="类型聚类" desc="按照实体类型分组查看结构总览。" onClick={() => onLayoutModeChange('cluster')} />
+      <SectionTitle title="扩展" />
+      <RadioCard active={layoutMode === 'entity'} title="实体探索" desc="在右侧展示实体探索的拓扑视图。" onClick={() => onLayoutModeChange('entity')} />
       <SectionTitle title="交互" />
       <ToggleRow title="允许拖拽" value={allowDrag} onChange={onAllowDragChange} />
       <SectionTitle title="聚焦规则" />

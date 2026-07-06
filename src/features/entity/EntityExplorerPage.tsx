@@ -137,16 +137,22 @@ export function EntityExplorerPage({
   api,
   workspaceId,
   refreshToken,
+  initialView = 'table',
+  topologyOnly = false,
+  openTopologyToken = 0,
 }: {
   api: UModelApiClient
   workspaceId: string
   refreshToken: number
+  initialView?: EntityView
+  topologyOnly?: boolean
+  openTopologyToken?: number
 }) {
   const [data, setData] = useState<TopologyExplorerData>(emptyEntityTopologyData)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const records = useMemo(() => createEntityRecords(data.nodes), [data.nodes])
-  const [view, setView] = useState<EntityView>('table')
+  const [view, setView] = useState<EntityView>(initialView)
   const [selectedTopScope, setSelectedTopScope] = useState<EntityScopePreset>('all')
   const [scope, setScope] = useState<ScopeFilter>('all')
   const [selectedDomain, setSelectedDomain] = useState('all')
@@ -189,6 +195,23 @@ export function EntityExplorerPage({
   useEffect(() => {
     void load()
   }, [load, refreshToken])
+
+  useEffect(() => {
+    if (!openTopologyToken) return
+    setDrilldown(null)
+    setQuery('')
+    setQueryDraft('')
+    setMainSuggestOpen(false)
+    setSearchCategoryOpen(false)
+    setCatalogSuggestOpen(false)
+    setView('topology')
+  }, [openTopologyToken])
+
+  useEffect(() => {
+    if (!topologyOnly) return
+    setDrilldown(null)
+    setView('topology')
+  }, [topologyOnly])
 
   const filtered = useMemo(() => records.filter((record) => {
     const search = query.trim().toLowerCase()
@@ -276,8 +299,9 @@ export function EntityExplorerPage({
   }
 
   return (
-    <div className="entity-page">
+    <div className={topologyOnly ? 'entity-page topology-only' : 'entity-page'}>
       <main className="entity-main">
+        {!topologyOnly && (
         <header className="entity-toolbar">
           <div className="entity-toolbar-top">
             <div className="entity-title">
@@ -425,6 +449,7 @@ export function EntityExplorerPage({
             </div>
           </div>
         </header>
+        )}
 
         <section className="entity-content">
           {drilldown ? (
@@ -1485,10 +1510,15 @@ function EntityTopologyView({
       activeElement.blur()
     }
   }
+  const clearTopologyTextSelection = () => {
+    window.getSelection()?.removeAllRanges()
+  }
   const startCanvasPan = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return
     if (isTopologyInteractiveTarget(event.target)) return
+    event.preventDefault()
     blurTopologyControls()
+    clearTopologyTextSelection()
     suppressClickRef.current = false
     panStateRef.current = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, moved: false }
     setIsPanning(true)
@@ -1508,6 +1538,7 @@ function EntityTopologyView({
   const stopCanvasPan = (event: PointerEvent<HTMLDivElement>) => {
     const panState = panStateRef.current
     if (!panState || panState.pointerId !== event.pointerId) return
+    clearTopologyTextSelection()
     suppressClickRef.current = panState.moved
     panStateRef.current = null
     setIsPanning(false)
@@ -1723,22 +1754,27 @@ function EntityTopologyView({
           <g ref={sceneRef} className="entity-reference-scene" transform={effectiveSceneTransform}>
             {regionBoxes.length > 0 && (
               <g className="entity-reference-region-boxes">
-                {regionBoxes.map((region) => (
-                  <g key={region.key} className="entity-reference-region-box">
-                    <rect x={region.x} y={region.y} width={region.width} height={region.height} rx="10" />
-                    <g className="entity-reference-region-title" transform={`translate(${region.x + 16} ${region.y + 17})`}>
-                      <rect x="0" y="-13" width={Math.max(156, region.label.length * 9 + 58)} height="28" rx="4" />
-                      <text x="38" y="1">Region {region.label}</text>
-                      <path d="M14 -7 H24 M14 -1 H24 M14 5 H22 M10 -10 H28 V10 H10 Z" />
-                    </g>
-                    {region.azBoxes.map((az) => (
-                      <g key={az.key} className="entity-reference-az-box">
-                        <rect x={az.x} y={az.y} width={az.width} height={az.height} rx="8" />
-                        <text x={az.x + az.width / 2} y={az.y + 24}>AZ {az.label}</text>
+                {regionBoxes.map((region) => {
+                  const title = `Region ${region.label}`
+                  const titleWidth = Math.max(168, title.length * 9 + 64)
+                  const titleX = Math.max(8, Math.min(region.x + 14, 2478 - titleWidth - 8))
+                  return (
+                    <g key={region.key} className="entity-reference-region-box">
+                      <rect x={region.x} y={region.y} width={region.width} height={region.height} rx="10" />
+                      <g className="entity-reference-region-title" transform={`translate(${titleX} ${region.y})`}>
+                        <rect x="0" y="-28" width={titleWidth} height="28" rx="5" />
+                        <text x="38" y="-14">{title}</text>
+                        <path d="M14 -22 H24 M14 -16 H24 M14 -10 H22 M10 -25 H29 V-4 H10 Z" />
                       </g>
-                    ))}
-                  </g>
-                ))}
+                      {region.azBoxes.map((az) => (
+                        <g key={az.key} className="entity-reference-az-box">
+                          <rect x={az.x} y={az.y} width={az.width} height={az.height} rx="8" />
+                          <text x={az.x + az.width / 2} y={az.y + 24}>AZ {az.label}</text>
+                        </g>
+                      ))}
+                    </g>
+                  )
+                })}
               </g>
             )}
             <g className="entity-reference-links">
