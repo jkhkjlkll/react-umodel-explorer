@@ -1,31 +1,36 @@
-# Fix OModel draft diff detection
+# Add entity topology entry to topology explorer
 
-Generated at: `2026-07-01 17:15 +0800`
+Generated at: `2026-07-06 09:50 +0800`
 
 Branch: `codex/opentopox-experiment`
 
-Commit: `c442a728cb12a641c71bdff044e3ac8e191d4afe`
+Commit: `created by this commit`
 
-Patch file: `patches/0001-Fix-OModel-draft-diff-detection.patch`
+Patch file: `patches/0001-Add-entity-topology-entry-to-topology-explorer.patch`
 
 ## Commit Message
 
 ```text
-Fix OModel draft diff detection
+Add entity topology entry to topology explorer
 ```
 
 ## Summary
 
-- Fixed a false-positive dirty draft state on the OModel page.
-- Updated the stable object serializer to ignore keys whose value is `undefined`.
-- Prevented equivalent server data and draft data from comparing as different just because cloned draft data drops `undefined` fields.
-- Kept the OModel submit button disabled when there is no user-visible change.
+- Exported the Entity Explorer topology view so it can be reused inside Topology Explorer.
+- Added a new `实体拓扑视图` entry under Topology Explorer `布局算法 / 聚类`.
+- Kept the default Topology Explorer canvas unchanged, and switched back to the original canvas when selecting `力导向` or `聚类`.
+- Added `常规 / 可用区分组` switching inside the reused entity topology canvas.
+- Added region and availability-zone grouped frames, draggable panning, wheel zoom, reset viewport, and a close button for the topology detail table.
+- Polished the embedded topology entry and canvas styles so the reused view fits the Topology Explorer page.
 
 ## Changed Files
 
 | Status | File |
 | --- | --- |
-| M | `src/features/umodel/model.ts` |
+| M | `src/features/entity/EntityExplorerPage.tsx` |
+| M | `src/features/entity/entity.css` |
+| M | `src/features/topology/TopologyExplorerPage.tsx` |
+| M | `src/features/topology/topology.css` |
 
 ## Verification
 
@@ -34,12 +39,11 @@ pnpm build
 git diff --check
 ```
 
-Browser verification on `http://localhost:5181/`:
+Browser verification already completed on `http://127.0.0.1:5181/`:
 
-- `OModel 探索`, `实体探索`, `拓扑探索`, `查询`, `导入与写入`, `设置`, and `API 调试` all rendered without blank screens.
-- OModel initial state no longer showed a false unsaved draft banner.
-- OModel add/upload/create dialogs opened and closed correctly.
-- Entity Explorer search, table/topology/health tabs, and topology zoom controls worked.
-- Topology Explorer search, custom time range, and play controls worked.
-- Query, Imports, Settings, and API Debugger primary actions worked with mock responses.
+- Topology Explorer shows the new `实体拓扑视图` entry below `聚类`.
+- Clicking `实体拓扑视图` opens the reused Entity Explorer topology view.
+- Default embedded topology stays in `常规` mode.
+- Clicking `可用区分组` shows region and availability-zone frames.
+- Clicking `聚类` returns to the original Topology Explorer canvas.
 - Browser application console reported no app errors.

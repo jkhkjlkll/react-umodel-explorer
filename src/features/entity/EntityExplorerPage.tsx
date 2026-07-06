@@ -1,4 +1,4 @@
-import { type WheelEvent, useMemo, useState } from 'react'
+import { type PointerEvent as ReactPointerEvent, type WheelEvent, useMemo, useRef, useState } from 'react'
 import {
   Box,
   Filter,
@@ -724,7 +724,7 @@ function EntityTable({ records, selected, onSelect }: { records: EntityRecord[];
   )
 }
 
-function EntityTopologyView({
+export function EntityTopologyView({
   data,
   focusedTypes,
   selectedNode,
@@ -737,12 +737,18 @@ function EntityTopologyView({
   onSelectNode: (node: TopologyNode | null) => void
   onFocusType: (type: string) => void
 }) {
-  const referenceTopology = useMemo(() => createReferenceStyleTopology(data), [data])
+  const [regionMode, setRegionMode] = useState(false)
+  const referenceTopology = useMemo(() => createReferenceStyleTopology(data, regionMode), [data, regionMode])
   const selectedId = selectedNode?.id
   const selectedReferenceItem = selectedId
     ? referenceTopology.nodes.find((item) => item.node.id === selectedId) || null
     : null
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const dragRef = useRef<{ pointerId: number; clientX: number; clientY: number } | null>(null)
+  const suppressClickRef = useRef(false)
   const [zoom, setZoom] = useState(10)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState(false)
   const zoomScale = zoom / 10
   const focusedZoomScale = selectedReferenceItem ? zoomScale * 10.5 : zoomScale
   const zoomDisplay = Math.round(zoomScale * 98)
@@ -751,27 +757,91 @@ function EntityTopologyView({
   const focusCenterY = selectedReferenceItem ? selectedReferenceItem.y + selectedReferenceItem.height / 2 : 0
   const sceneX = selectedReferenceItem ? 1239 - focusCenterX * focusedZoomScale : -2550 * zoomProgress
   const sceneY = selectedReferenceItem ? 619 - focusCenterY * focusedZoomScale : -425 * zoomProgress
-  const sceneTransform = `translate(${sceneX} ${sceneY}) scale(${focusedZoomScale})`
+  const sceneTransform = `translate(${sceneX + pan.x} ${sceneY + pan.y}) scale(${focusedZoomScale})`
   const changeZoom = (direction: 1 | -1) => {
     setZoom((value) => Math.max(10, Math.min(46, value + direction * 6)))
   }
   const zoomOut = () => changeZoom(-1)
   const zoomIn = () => changeZoom(1)
+  const resetViewport = () => {
+    setZoom(10)
+    setPan({ x: 0, y: 0 })
+  }
+  const setTopologyGroupMode = (nextRegionMode: boolean) => {
+    if (regionMode === nextRegionMode) return
+    setRegionMode(nextRegionMode)
+    onSelectNode(null)
+    resetViewport()
+  }
   const handleWheelZoom = (event: WheelEvent<HTMLElement>) => {
     event.preventDefault()
     changeZoom(event.deltaY < 0 ? 1 : -1)
   }
+  const toGraphDelta = (deltaX: number, deltaY: number) => {
+    const rect = svgRef.current?.getBoundingClientRect()
+    if (!rect || rect.width <= 0 || rect.height <= 0) return { x: deltaX, y: deltaY }
+    return {
+      x: deltaX * (2478 / rect.width),
+      y: deltaY * (1238 / rect.height),
+    }
+  }
+  const startPan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return
+    if ((event.target as Element | null)?.closest('.entity-topology-zoom')) return
+    if ((event.target as Element | null)?.closest('.entity-reference-nodes g')) return
+    dragRef.current = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY }
+    suppressClickRef.current = false
+    setIsPanning(true)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+  const movePan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    event.preventDefault()
+    const deltaX = event.clientX - drag.clientX
+    const deltaY = event.clientY - drag.clientY
+    if (Math.abs(deltaX) + Math.abs(deltaY) > 3) suppressClickRef.current = true
+    const graphDelta = toGraphDelta(deltaX, deltaY)
+    setPan((value) => ({ x: value.x + graphDelta.x, y: value.y + graphDelta.y }))
+    dragRef.current = { ...drag, clientX: event.clientX, clientY: event.clientY }
+  }
+  const stopPan = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    dragRef.current = null
+    setIsPanning(false)
+    event.currentTarget.releasePointerCapture?.(event.pointerId)
+    if (suppressClickRef.current) window.setTimeout(() => { suppressClickRef.current = false }, 0)
+  }
+  const cardMetrics = regionMode ? regionTopologyCardMetrics : referenceTopologyCardMetrics
 
   return (
     <section className={selectedReferenceItem ? 'entity-topology-split has-detail' : 'entity-topology-split'}>
-      <div className="entity-topology-full" onWheel={handleWheelZoom}>
+      <div
+        className={`entity-topology-full ${regionMode ? 'region-mode' : 'reference-mode'} ${isPanning ? 'is-panning' : ''}`}
+        onPointerDown={startPan}
+        onPointerMove={movePan}
+        onPointerUp={stopPan}
+        onPointerCancel={stopPan}
+        onWheel={handleWheelZoom}
+      >
         <div className="entity-topology-zoom">
           <button className="entity-topology-zoom-action" type="button" data-zoom-action="out" aria-label="缩小拓扑" onClick={zoomOut}>−</button>
           <b>{zoomDisplay}%</b>
           <button className="entity-topology-zoom-action" type="button" data-zoom-action="in" aria-label="放大拓扑" onClick={zoomIn}>＋</button>
-          <button className="entity-topology-zoom-action" type="button" data-zoom-action="fit" aria-label="适应画布" onClick={() => setZoom(10)}>⌖</button>
+          <button className="entity-topology-zoom-action" type="button" data-zoom-action="fit" aria-label="适应画布" onClick={resetViewport}>⌖</button>
+          <div className="entity-topology-layout-tabs" role="group" aria-label="拓扑布局模式">
+            <button className={regionMode ? '' : 'active'} type="button" onClick={() => setTopologyGroupMode(false)}>
+              <Network size={14} />
+              常规
+            </button>
+            <button className={regionMode ? 'active' : ''} type="button" onClick={() => setTopologyGroupMode(true)}>
+              <Grid2X2 size={14} />
+              可用区分组
+            </button>
+          </div>
         </div>
-        <svg className="entity-cms-reference-graph" viewBox="0 0 2478 1238" preserveAspectRatio="xMinYMin meet" role="img" aria-label="实体拓扑关系图">
+        <svg ref={svgRef} className="entity-cms-reference-graph" viewBox="0 0 2478 1238" preserveAspectRatio="xMinYMin meet" role="img" aria-label="实体拓扑关系图">
           <defs>
             <pattern id="entity-reference-dot-grid" width="12" height="12" patternUnits="userSpaceOnUse">
               <circle cx="1.2" cy="1.2" r="1" fill="#e7ebf1" />
@@ -783,9 +853,28 @@ function EntityTopologyView({
           <rect width="2478" height="1238" fill="#fff" />
           <rect width="2478" height="1238" fill="url(#entity-reference-dot-grid)" opacity="0.52" />
           <g className="entity-reference-scene" transform={sceneTransform}>
+            <g className="entity-reference-regions">
+              {referenceTopology.regions.map((region) => (
+                <g key={region.id} className="entity-reference-region" data-region={region.id} transform={`translate(${region.x} ${region.y})`}>
+                  <rect className="entity-reference-region-frame" width={region.width} height={region.height} rx="24" fill={region.fill} stroke={region.stroke} />
+                  <rect className="entity-reference-region-header" x="20" y="18" width={region.width - 40} height="50" rx="15" />
+                  <circle className="entity-reference-region-dot" cx="46" cy="43" r="9" fill={region.accent} />
+                  <text className="region-title" x="66" y="38">{region.label}</text>
+                  <text className="region-subtitle" x="66" y="55">{region.id}</text>
+                  <rect className="entity-reference-region-count" x={region.width - 132} y="30" width="92" height="24" rx="12" />
+                  <text className="region-count" x={region.width - 86} y="46" textAnchor="middle">{region.nodeCount} 节点</text>
+                  {region.zones.map((zone) => (
+                    <g key={zone.id} className="entity-reference-zone">
+                      <rect x={zone.x} y={zone.y} width={zone.width} height={zone.height} rx="18" />
+                      <text x={zone.x + 20} y={zone.y + 30}>{zone.label}</text>
+                    </g>
+                  ))}
+                </g>
+              ))}
+            </g>
             <g className="entity-reference-links">
               {referenceTopology.edges.map((edge) => (
-                <g key={edge.id}>
+                <g key={edge.id} className={edge.crossRegion ? 'cross-region' : ''}>
                   <path d={referenceEdgePath(edge)} markerEnd="url(#entity-reference-arrow)" />
                   {edge.showLabel && (
                     <text x={(edge.source.x + edge.target.x) / 2} y={(edge.source.y + edge.target.y) / 2 - 4}>
@@ -800,25 +889,27 @@ function EntityTopologyView({
                 <g
                   key={item.node.id}
                   className={selectedId === item.node.id ? 'selected' : ''}
+                  data-region={item.region}
                   transform={`translate(${item.x} ${item.y})`}
                   onClick={() => {
+                    if (suppressClickRef.current) return
                     onSelectNode(item.node)
                     onFocusType(item.node.type)
                   }}
                 >
                   <clipPath id={`entity-reference-title-clip-${index}`}>
-                    <rect x="7.6" y="3.2" width={Math.max(12, item.width - 26)} height="6.4" />
+                    <rect x={cardMetrics.titleX} y={cardMetrics.titleClipY} width={Math.max(cardMetrics.titleClipMinWidth, item.width - cardMetrics.titleClipReserve)} height={cardMetrics.titleClipHeight} />
                   </clipPath>
                   <clipPath id={`entity-reference-subtitle-clip-${index}`}>
-                    <rect x="7.6" y={item.height - 6.8} width={Math.max(17, item.width - 9)} height="5.4" />
+                    <rect x={cardMetrics.subtitleX} y={item.height - cardMetrics.subtitleClipBottom} width={Math.max(cardMetrics.subtitleClipMinWidth, item.width - cardMetrics.subtitleClipReserve)} height={cardMetrics.subtitleClipHeight} />
                   </clipPath>
-                  <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx="1.8" fill={item.color} />
-                  <rect className="entity-reference-card" width={item.width} height={item.height} rx="1.8" fill="none" stroke={item.color} />
-                  <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height="1.55" rx="0.78" fill={item.color} />
-                  <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform="translate(3.1 5.3) scale(0.17)" fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <text x="7.6" y="7.45" className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
-                  <text x={item.width - 2} y="7.45" className="count" textAnchor="end">查询量: {item.access}</text>
-                  <text x="7.6" y={item.height - 2.8} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
+                  <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx={cardMetrics.cardRadius} fill={item.color} />
+                  <rect className="entity-reference-card" width={item.width} height={item.height} rx={cardMetrics.cardRadius} fill="none" stroke={item.color} />
+                  <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height={cardMetrics.barHeight} rx={cardMetrics.barRadius} fill={item.color} />
+                  <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform={cardMetrics.iconTransform} fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <text x={cardMetrics.titleX} y={cardMetrics.titleY} className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
+                  <text x={item.width - cardMetrics.countRight} y={cardMetrics.titleY} className="count" textAnchor="end">查询量: {item.access}</text>
+                  <text x={cardMetrics.subtitleX} y={item.height - cardMetrics.subtitleBottom} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
                 </g>
               ))}
             </g>
@@ -828,6 +919,9 @@ function EntityTopologyView({
           <svg viewBox="0 0 2478 1238">
             <rect width="2478" height="1238" fill="#fff" />
             <g transform="translate(0 0)">
+              {referenceTopology.regions.map((region) => (
+                <rect key={region.id} x={region.x} y={region.y} width={region.width} height={region.height} rx="22" fill={region.fill} stroke={region.stroke} strokeWidth="8" />
+              ))}
               {referenceTopology.nodes.map((item) => (
                 <rect key={item.node.id} x={item.x} y={item.y} width="12" height="4" fill="#cfd5dd" opacity="0.75" />
               ))}
@@ -836,12 +930,12 @@ function EntityTopologyView({
           </svg>
         </div>
       </div>
-      {selectedReferenceItem && <EntityTopologyMetricPanel item={selectedReferenceItem} />}
+      {selectedReferenceItem && <EntityTopologyMetricPanel item={selectedReferenceItem} onClose={() => onSelectNode(null)} />}
     </section>
   )
 }
 
-function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
+function EntityTopologyMetricPanel({ item, onClose }: { item: ReferenceTopologyNode; onClose: () => void }) {
   const rows = topologyMetricRowsFor(item)
   const total = topologyMetricTotalFor(item)
   const totalPages = Math.max(1, Math.ceil(total / 10))
@@ -855,6 +949,13 @@ function EntityTopologyMetricPanel({ item }: { item: ReferenceTopologyNode }) {
   })
   return (
     <aside className="entity-topology-detail-panel" aria-label={`${item.title}拓扑明细`}>
+      <div className="entity-topology-detail-head">
+        <div>
+          <strong>{item.title} 明细</strong>
+          <span>平均请求、错误和延迟</span>
+        </div>
+        <button type="button" aria-label="关闭拓扑明细" onClick={onClose}>×</button>
+      </div>
       <div className="entity-topology-detail-table-wrap">
         <table className="entity-topology-detail-table">
           <thead>
@@ -989,6 +1090,7 @@ interface ReferenceTopologyNode {
   color: string
   access: number
   barWidth: number
+  region: string
 }
 
 interface ReferenceTopologyEdge {
@@ -997,6 +1099,30 @@ interface ReferenceTopologyEdge {
   target: ReferenceTopologyNode
   label: string
   showLabel?: boolean
+  crossRegion: boolean
+}
+
+interface ReferenceTopologyRegion {
+  id: string
+  label: string
+  x: number
+  y: number
+  width: number
+  height: number
+  fill: string
+  stroke: string
+  accent: string
+  nodeCount: number
+  zones: ReferenceTopologyZone[]
+}
+
+interface ReferenceTopologyZone {
+  id: string
+  label: string
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 interface ReferenceTopologyTemplate {
@@ -1010,33 +1136,153 @@ interface ReferenceTopologyTemplate {
   height?: number
 }
 
-function createReferenceStyleTopology(data: ReturnType<typeof createAliyunLikeTopologyData>) {
+const referenceTopologyCardMetrics = {
+  cardRadius: 1.8,
+  titleX: 7.6,
+  titleY: 7.45,
+  titleClipY: 3.2,
+  titleClipHeight: 6.4,
+  titleClipMinWidth: 12,
+  titleClipReserve: 26,
+  subtitleX: 7.6,
+  subtitleBottom: 2.8,
+  subtitleClipBottom: 6.8,
+  subtitleClipHeight: 5.4,
+  subtitleClipMinWidth: 17,
+  subtitleClipReserve: 9,
+  countRight: 2,
+  barHeight: 1.55,
+  barRadius: 0.78,
+  iconTransform: 'translate(3.1 5.3) scale(0.17)',
+}
+
+const regionTopologyCardMetrics = {
+  cardRadius: 2.4,
+  titleX: 16,
+  titleY: 15,
+  titleClipY: 6,
+  titleClipHeight: 12,
+  titleClipMinWidth: 28,
+  titleClipReserve: 76,
+  subtitleX: 16,
+  subtitleBottom: 7.2,
+  subtitleClipBottom: 14,
+  subtitleClipHeight: 9,
+  subtitleClipMinWidth: 40,
+  subtitleClipReserve: 22,
+  countRight: 5,
+  barHeight: 2.8,
+  barRadius: 1.4,
+  iconTransform: 'translate(6.4 11.2) scale(0.32)',
+}
+
+function createReferenceStyleTopology(data: ReturnType<typeof createAliyunLikeTopologyData>, groupByRegion = false) {
   const templates = referenceTopologyTemplates()
   const nodes = templates.map((template, index) => {
     const node = data.nodes[(index * 23 + 5) % data.nodes.length]
+    const region = String(node.properties.region || 'unknown')
+    const baseWidth = template.width || 43
+    const baseHeight = template.height || 18
     return {
       node,
       x: template.x,
       y: template.y,
-      width: template.width || 43,
-      height: template.height || 18,
+      width: groupByRegion ? Math.max(92, baseWidth * 2.15) : baseWidth,
+      height: groupByRegion ? Math.max(30, baseHeight * 1.76) : baseHeight,
       title: template.title,
       subtitle: template.subtitle,
       color: template.color,
       access: template.access,
-      barWidth: Math.max(16, Math.min(25, (template.width || 43) * 0.38)),
+      barWidth: groupByRegion ? Math.max(38, Math.min(58, baseWidth * 0.9)) : Math.max(16, Math.min(25, baseWidth * 0.38)),
+      region,
     }
   })
+  const regions = groupByRegion ? layoutReferenceTopologyByRegion(nodes) : []
   const edges: ReferenceTopologyEdge[] = []
   const addEdge = (sourceIndex: number, targetIndex: number, label: string, showLabel = false) => {
     const source = nodes[sourceIndex]
     const target = nodes[targetIndex]
     if (!source || !target) return
-    edges.push({ id: `reference-edge-${edges.length}`, source, target, label, showLabel })
+    edges.push({ id: `reference-edge-${edges.length}`, source, target, label, showLabel, crossRegion: groupByRegion && source.region !== target.region })
   }
 
   referenceTopologyRelations().forEach(([source, target, label, showLabel]) => addEdge(source, target, label, showLabel))
-  return { nodes, edges }
+  return { nodes, edges, regions }
+}
+
+const referenceRegionLayouts = [
+  { id: 'cn-hangzhou', label: '华东 1', x: 136, y: 88, width: 1050, height: 500, fill: '#f6faff', stroke: '#c8ddff', accent: '#1677ff' },
+  { id: 'cn-shanghai', label: '华东 2', x: 1292, y: 88, width: 1050, height: 500, fill: '#f7fbf7', stroke: '#cce8d3', accent: '#1f9d55' },
+  { id: 'cn-beijing', label: '华北 2', x: 136, y: 650, width: 1050, height: 500, fill: '#fff9f4', stroke: '#f2d2b0', accent: '#f08b2f' },
+  { id: 'cn-hongkong', label: '中国香港', x: 1292, y: 650, width: 1050, height: 500, fill: '#fbf7ff', stroke: '#d9c9f7', accent: '#8b5cf6' },
+] as const
+
+function layoutReferenceTopologyByRegion(nodes: ReferenceTopologyNode[]): ReferenceTopologyRegion[] {
+  const grouped = new Map<string, ReferenceTopologyNode[]>()
+  nodes.forEach((node) => {
+    const group = grouped.get(node.region) || []
+    group.push(node)
+    grouped.set(node.region, group)
+  })
+
+  const knownRegions = new Set<string>(referenceRegionLayouts.map((layout) => layout.id))
+  const unknownRegions = [...grouped.keys()].filter((region) => !knownRegions.has(region))
+  const layouts = [
+    ...referenceRegionLayouts,
+    ...unknownRegions.map((region, index) => ({
+      id: region,
+      label: region,
+      x: 136 + (index % 2) * 1156,
+      y: 1212 + Math.floor(index / 2) * 500,
+      width: 1050,
+      height: 430,
+      fill: '#f8fafc',
+      stroke: '#d9e1ec',
+      accent: '#64748b',
+    })),
+  ]
+
+  return layouts.flatMap((layout) => {
+    const groupNodes = grouped.get(layout.id) || []
+    if (groupNodes.length === 0) return []
+    const zones = createReferenceRegionZones(layout.width, layout.height)
+    const maxNodeWidth = Math.max(...groupNodes.map((node) => node.width))
+    const maxNodeHeight = Math.max(...groupNodes.map((node) => node.height))
+    const contentLeft = layout.x + 70
+    const contentTop = layout.y + 118
+    const contentWidth = layout.width - 140
+    const contentHeight = layout.height - 166
+    const columns = Math.min(5, Math.max(3, Math.ceil(Math.sqrt(groupNodes.length * 1.25))))
+    const rows = Math.max(1, Math.ceil(groupNodes.length / columns))
+    const columnGap = columns > 1 ? (contentWidth - maxNodeWidth) / (columns - 1) : 0
+    const rowGap = rows > 1 ? Math.min(76, Math.max(48, (contentHeight - maxNodeHeight) / (rows - 1))) : 0
+
+    groupNodes.forEach((node, index) => {
+      const row = Math.floor(index / columns)
+      const column = index % columns
+      const stagger = row % 2 === 0 ? 0 : Math.min(18, columnGap * 0.16)
+      node.x = contentLeft + column * columnGap + stagger
+      node.y = contentTop + row * rowGap
+    })
+
+    return [{
+      ...layout,
+      nodeCount: groupNodes.length,
+      zones,
+    }]
+  })
+}
+
+function createReferenceRegionZones(width: number, height: number): ReferenceTopologyZone[] {
+  const gap = 20
+  const x = 34
+  const y = 86
+  const zoneWidth = (width - x * 2 - gap) / 2
+  const zoneHeight = height - y - 30
+  return [
+    { id: 'zone-a', label: '可用区 A', x, y, width: zoneWidth, height: zoneHeight },
+    { id: 'zone-b', label: '可用区 B', x: x + zoneWidth + gap, y, width: zoneWidth, height: zoneHeight },
+  ]
 }
 
 function referenceTopologyTemplates() {

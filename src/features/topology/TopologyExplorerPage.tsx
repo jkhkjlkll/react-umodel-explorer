@@ -12,12 +12,14 @@ import {
   Shuffle,
 } from 'lucide-react'
 import type { UModelApiClient } from '../../api/client'
+import { EntityTopologyView } from '../entity/EntityExplorerPage'
 import { createAliyunLikeTopologyData, type TopologyNode } from './topologyModel'
 import { resolveTopologyNodeIconPreset, TopologyPresetIcon } from './topologyIcons'
 import { TopologyCanvas } from './TopologyCanvas'
 import './topology.css'
 
 type PanelTab = 'overview' | 'layout'
+type TopologyStageMode = 'canvas' | 'entity-reference'
 type TimeRangeMode = '1h' | '1d' | 'custom'
 
 interface TopologyTimeRange {
@@ -51,6 +53,7 @@ export function TopologyExplorerPage({
 }) {
   const data = useMemo(() => createAliyunLikeTopologyData(), [refreshToken])
   const [tab, setTab] = useState<PanelTab>('layout')
+  const [stageMode, setStageMode] = useState<TopologyStageMode>('canvas')
   const [layoutMode, setLayoutMode] = useState<'force' | 'cluster'>('force')
   const [clusterRule, setClusterRule] = useState<'replace' | 'append'>('replace')
   const [allowDrag, setAllowDrag] = useState(false)
@@ -184,6 +187,7 @@ export function TopologyExplorerPage({
   }, [timePanelOpen])
 
   const focusType = (type: string) => {
+    setStageMode('canvas')
     setSelectedNode(null)
     setFocusedTypes((current) => {
       if (clusterRule === 'replace') return current.length === 1 && current[0] === type ? [] : [type]
@@ -192,6 +196,7 @@ export function TopologyExplorerPage({
   }
 
   const focusNode = (node: TopologyNode) => {
+    setStageMode('canvas')
     setSearchText('')
     setSearchDraft('')
     setLayoutMode('force')
@@ -204,6 +209,7 @@ export function TopologyExplorerPage({
 
   const applySearch = (text = searchDraft) => {
     const value = text.trim()
+    setStageMode('canvas')
     setSearchText(value)
     setSearchDraft(value)
     setSearchOpen(false)
@@ -270,13 +276,21 @@ export function TopologyExplorerPage({
           ) : (
             <LayoutPanel
               layoutMode={layoutMode}
+              stageMode={stageMode}
               clusterRule={clusterRule}
               allowDrag={allowDrag}
               showLabels={showLabels}
               showClusterLabels={showClusterLabels}
               onLayoutModeChange={(value) => {
+                setStageMode('canvas')
                 setLayoutMode(value)
                 setSelectedNode(null)
+              }}
+              onOpenReferenceTopology={() => {
+                setStageMode('entity-reference')
+                setSelectedNode(null)
+                setSearchOpen(false)
+                setPlaying(false)
               }}
               onClusterRuleChange={setClusterRule}
               onAllowDragChange={setAllowDrag}
@@ -384,30 +398,44 @@ export function TopologyExplorerPage({
             </div>
           </header>
 
-          <section className="topo-graph-card">
-            <TopologyCanvas
-              data={displayData}
-              layoutMode={layoutMode}
-              focusedTypes={[]}
-              selectedNode={selectedNode}
-              showLabels={showLabels}
-              showClusterLabels={showClusterLabels}
-              allowDrag={allowDrag}
-              playhead={playhead}
-              onSelectNode={setSelectedNode}
-              onFocusType={focusType}
-            />
-            {selectedNode && (
-              <NodeDetail
-                node={selectedNode}
-                onClose={() => setSelectedNode(null)}
-                onInspect={(node) => {
-                  setSearchText(node.label)
-                  setSearchDraft(node.label)
-                  setFocusedTypes([])
-                  setSelectedNode(null)
+          <section className={stageMode === 'entity-reference' ? 'topo-graph-card entity-reference-topology' : 'topo-graph-card'}>
+            {stageMode === 'entity-reference' ? (
+              <EntityTopologyView
+                data={data}
+                focusedTypes={focusedTypes}
+                selectedNode={selectedNode}
+                onSelectNode={setSelectedNode}
+                onFocusType={(type) => {
+                  setFocusedTypes([type])
                 }}
               />
+            ) : (
+              <>
+                <TopologyCanvas
+                  data={displayData}
+                  layoutMode={layoutMode}
+                  focusedTypes={[]}
+                  selectedNode={selectedNode}
+                  showLabels={showLabels}
+                  showClusterLabels={showClusterLabels}
+                  allowDrag={allowDrag}
+                  playhead={playhead}
+                  onSelectNode={setSelectedNode}
+                  onFocusType={focusType}
+                />
+                {selectedNode && (
+                  <NodeDetail
+                    node={selectedNode}
+                    onClose={() => setSelectedNode(null)}
+                    onInspect={(node) => {
+                      setSearchText(node.label)
+                      setSearchDraft(node.label)
+                      setFocusedTypes([])
+                      setSelectedNode(null)
+                    }}
+                  />
+                )}
+              </>
             )}
           </section>
 
@@ -421,7 +449,7 @@ export function TopologyExplorerPage({
             )}
             <i />
             <span>总量：{data.nodes.length.toLocaleString()} 实体 / {data.edges.length.toLocaleString()} 关系</span>
-            <b>拓扑探索</b>
+            <b>{stageMode === 'entity-reference' ? '实体拓扑' : '拓扑探索'}</b>
           </footer>
         </main>
       </section>
@@ -597,22 +625,26 @@ function OverviewPanel({
 
 function LayoutPanel({
   layoutMode,
+  stageMode,
   clusterRule,
   allowDrag,
   showLabels,
   showClusterLabels,
   onLayoutModeChange,
+  onOpenReferenceTopology,
   onClusterRuleChange,
   onAllowDragChange,
   onShowLabelsChange,
   onShowClusterLabelsChange,
 }: {
   layoutMode: 'force' | 'cluster'
+  stageMode: TopologyStageMode
   clusterRule: 'replace' | 'append'
   allowDrag: boolean
   showLabels: boolean
   showClusterLabels: boolean
   onLayoutModeChange: (value: 'force' | 'cluster') => void
+  onOpenReferenceTopology: () => void
   onClusterRuleChange: (value: 'replace' | 'append') => void
   onAllowDragChange: (value: boolean) => void
   onShowLabelsChange: (value: boolean) => void
@@ -621,8 +653,15 @@ function LayoutPanel({
   return (
     <div className="topo-layout-panel">
       <SectionTitle title="布局算法" />
-      <RadioCard active={layoutMode === 'force'} title="力导向" desc="按实体连接关系布局，不按类型聚类" onClick={() => onLayoutModeChange('force')} />
-      <RadioCard active={layoutMode === 'cluster'} title="聚类" desc="按实体类型分组，生成聚类拓扑总览" onClick={() => onLayoutModeChange('cluster')} />
+      <RadioCard active={stageMode === 'canvas' && layoutMode === 'force'} title="力导向" desc="按实体连接关系布局，不按类型聚类" onClick={() => onLayoutModeChange('force')} />
+      <RadioCard active={stageMode === 'canvas' && layoutMode === 'cluster'} title="聚类" desc="按实体类型分组，生成聚类拓扑总览" onClick={() => onLayoutModeChange('cluster')} />
+      <button className={`topo-reference-entry ${stageMode === 'entity-reference' ? 'active' : ''}`} type="button" onClick={onOpenReferenceTopology}>
+        <span>
+          <Network size={15} />
+        </span>
+        <strong>实体拓扑视图</strong>
+        <small>常规 / 可用区分组拓扑</small>
+      </button>
       <SectionTitle title="仿真" />
       <ToggleRow title="允许拖拽" value={allowDrag} onChange={onAllowDragChange} />
       <SectionTitle title="聚焦规则" />

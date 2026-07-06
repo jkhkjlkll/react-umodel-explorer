@@ -210,6 +210,58 @@
   font-size: 12px;
 }
 
+.topo-reference-entry {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 9px;
+  align-items: center;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e0e7f3;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+  color: #4b5563;
+  cursor: pointer;
+  text-align: left;
+}
+
+.topo-reference-entry:hover,
+.topo-reference-entry.active {
+  border-color: #b8c0ff;
+  background: #f4f5ff;
+  color: #6559e8;
+  box-shadow: 0 4px 14px rgba(31, 45, 75, 0.08);
+}
+
+.topo-reference-entry > span {
+  grid-row: 1 / 3;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #6559e8;
+}
+
+.topo-reference-entry strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.topo-reference-entry small {
+  margin-top: 5px;
+  color: #8f98a8;
+  font-size: 12px;
+}
+
+.topo-reference-entry.active small {
+  color: #7b72d6;
+}
+
 .topo-toggle-row {
   height: 40px;
   display: flex;
@@ -638,6 +690,10 @@
   min-height: 0;
   overflow: hidden;
   background: #fff;
+}
+
+.topo-graph-card.entity-reference-topology .entity-topology-split {
+  height: 100%;
 }
 
 .topo-canvas-shell {
