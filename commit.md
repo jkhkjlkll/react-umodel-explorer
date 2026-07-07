@@ -1,27 +1,27 @@
-# Add entity topology entry to topology explorer
+# Polish entity topology OModel cards
 
-Generated at: `2026-07-06 09:50 +0800`
+Generated at: `2026-07-07 14:57 +0800`
 
 Branch: `codex/opentopox-experiment`
 
 Commit: `created by this commit`
 
-Patch file: `patches/0001-Add-entity-topology-entry-to-topology-explorer.patch`
+Patch file: `patches/0001-Polish-entity-topology-omodel-cards.patch`
 
 ## Commit Message
 
 ```text
-Add entity topology entry to topology explorer
+Polish entity topology OModel cards
 ```
 
 ## Summary
 
-- Exported the Entity Explorer topology view so it can be reused inside Topology Explorer.
-- Added a new `实体拓扑视图` entry under Topology Explorer `布局算法 / 聚类`.
-- Kept the default Topology Explorer canvas unchanged, and switched back to the original canvas when selecting `力导向` or `聚类`.
-- Added `常规 / 可用区分组` switching inside the reused entity topology canvas.
-- Added region and availability-zone grouped frames, draggable panning, wheel zoom, reset viewport, and a close button for the topology detail table.
-- Polished the embedded topology entry and canvas styles so the reused view fits the Topology Explorer page.
+- Updated the Topology Explorer `实体拓扑视图` to render entity nodes with OModel-style cards.
+- Added larger OModel card dimensions so node title, domain, kind, and label text are not clipped when zoomed in.
+- Added node dragging for the embedded entity topology view while keeping blank-canvas panning behavior.
+- Kept node link paths synchronized with dragged node positions.
+- Added an OModel-card-specific spread layout so enlarged cards do not overlap in normal mode.
+- Kept the original Entity Explorer CMS topology card style unchanged.
 
 ## Changed Files
 
@@ -30,7 +30,6 @@ Add entity topology entry to topology explorer
 | M | `src/features/entity/EntityExplorerPage.tsx` |
 | M | `src/features/entity/entity.css` |
 | M | `src/features/topology/TopologyExplorerPage.tsx` |
-| M | `src/features/topology/topology.css` |
 
 ## Verification
 
@@ -39,11 +38,11 @@ pnpm build
 git diff --check
 ```
 
-Browser verification already completed on `http://127.0.0.1:5181/`:
+Browser verification on `http://127.0.0.1:5181/`:
 
-- Topology Explorer shows the new `实体拓扑视图` entry below `聚类`.
-- Clicking `实体拓扑视图` opens the reused Entity Explorer topology view.
-- Default embedded topology stays in `常规` mode.
-- Clicking `可用区分组` shows region and availability-zone frames.
-- Clicking `聚类` returns to the original Topology Explorer canvas.
-- Browser application console reported no app errors.
+- `拓扑探索 / 实体拓扑视图` uses OModel-style cards.
+- Node dragging updates the node and connected link positions.
+- At `451%` zoom, card text is no longer clipped.
+- Scanned 90 nodes and found no title/domain/tag clipping.
+- At `333%` zoom, scanned 90 nodes and found `0` card overlaps.
+- Browser application console reported no errors.

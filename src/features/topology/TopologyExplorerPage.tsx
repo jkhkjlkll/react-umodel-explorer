@@ -404,6 +404,8 @@ export function TopologyExplorerPage({
                 data={data}
                 focusedTypes={focusedTypes}
                 selectedNode={selectedNode}
+                cardVariant="omodel"
+                nodeDragEnabled
                 onSelectNode={setSelectedNode}
                 onFocusType={(type) => {
                   setFocusedTypes([type])

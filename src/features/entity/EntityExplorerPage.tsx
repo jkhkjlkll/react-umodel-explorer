@@ -728,27 +728,44 @@ export function EntityTopologyView({
   data,
   focusedTypes,
   selectedNode,
+  cardVariant = 'cms',
+  nodeDragEnabled = false,
   onSelectNode,
   onFocusType,
 }: {
   data: ReturnType<typeof createAliyunLikeTopologyData>
   focusedTypes: string[]
   selectedNode: TopologyNode | null
+  cardVariant?: 'cms' | 'omodel'
+  nodeDragEnabled?: boolean
   onSelectNode: (node: TopologyNode | null) => void
   onFocusType: (type: string) => void
 }) {
   const [regionMode, setRegionMode] = useState(false)
-  const referenceTopology = useMemo(() => createReferenceStyleTopology(data, regionMode), [data, regionMode])
+  const [nodeOffsets, setNodeOffsets] = useState<Record<string, { x: number; y: number }>>({})
+  const useOModelCards = cardVariant === 'omodel'
+  const referenceTopology = useMemo(() => {
+    const topology = createReferenceStyleTopology(data, regionMode, cardVariant)
+    topology.nodes.forEach((item) => {
+      const offset = nodeOffsets[item.node.id]
+      if (!offset) return
+      item.x += offset.x
+      item.y += offset.y
+    })
+    return topology
+  }, [cardVariant, data, nodeOffsets, regionMode])
   const selectedId = selectedNode?.id
   const selectedReferenceItem = selectedId
     ? referenceTopology.nodes.find((item) => item.node.id === selectedId) || null
     : null
   const svgRef = useRef<SVGSVGElement | null>(null)
   const dragRef = useRef<{ pointerId: number; clientX: number; clientY: number } | null>(null)
+  const nodeDragRef = useRef<{ pointerId: number; id: string; clientX: number; clientY: number; moved: boolean } | null>(null)
   const suppressClickRef = useRef(false)
   const [zoom, setZoom] = useState(10)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
+  const [isDraggingNode, setIsDraggingNode] = useState(false)
   const zoomScale = zoom / 10
   const focusedZoomScale = selectedReferenceItem ? zoomScale * 10.5 : zoomScale
   const zoomDisplay = Math.round(zoomScale * 98)
@@ -770,6 +787,7 @@ export function EntityTopologyView({
   const setTopologyGroupMode = (nextRegionMode: boolean) => {
     if (regionMode === nextRegionMode) return
     setRegionMode(nextRegionMode)
+    setNodeOffsets({})
     onSelectNode(null)
     resetViewport()
   }
@@ -813,16 +831,76 @@ export function EntityTopologyView({
     event.currentTarget.releasePointerCapture?.(event.pointerId)
     if (suppressClickRef.current) window.setTimeout(() => { suppressClickRef.current = false }, 0)
   }
+  const startNodeDrag = (event: ReactPointerEvent<SVGGElement>, nodeId: string) => {
+    if (!nodeDragEnabled || event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    dragRef.current = null
+    nodeDragRef.current = { pointerId: event.pointerId, id: nodeId, clientX: event.clientX, clientY: event.clientY, moved: false }
+    suppressClickRef.current = false
+    setIsPanning(false)
+    setIsDraggingNode(true)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+  const moveNodeDrag = (event: ReactPointerEvent<Element>) => {
+    const drag = nodeDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    event.preventDefault()
+    const deltaX = event.clientX - drag.clientX
+    const deltaY = event.clientY - drag.clientY
+    if (Math.abs(deltaX) + Math.abs(deltaY) > 3) {
+      drag.moved = true
+      suppressClickRef.current = true
+    }
+    const graphDelta = toGraphDelta(deltaX, deltaY)
+    const scaledDelta = {
+      x: graphDelta.x / focusedZoomScale,
+      y: graphDelta.y / focusedZoomScale,
+    }
+    setNodeOffsets((offsets) => {
+      const offset = offsets[drag.id] || { x: 0, y: 0 }
+      return {
+        ...offsets,
+        [drag.id]: {
+          x: offset.x + scaledDelta.x,
+          y: offset.y + scaledDelta.y,
+        },
+      }
+    })
+    nodeDragRef.current = { ...drag, clientX: event.clientX, clientY: event.clientY }
+  }
+  const stopNodeDrag = (event: ReactPointerEvent<Element>) => {
+    const drag = nodeDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    nodeDragRef.current = null
+    setIsDraggingNode(false)
+    if (drag.moved) window.setTimeout(() => { suppressClickRef.current = false }, 0)
+  }
+  const moveTopologyPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (nodeDragRef.current) {
+      moveNodeDrag(event)
+      return
+    }
+    movePan(event)
+  }
+  const stopTopologyPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (nodeDragRef.current) {
+      stopNodeDrag(event)
+      return
+    }
+    stopPan(event)
+  }
   const cardMetrics = regionMode ? regionTopologyCardMetrics : referenceTopologyCardMetrics
+  const omodelMetrics = regionMode ? omodelRegionTopologyCardMetrics : omodelReferenceTopologyCardMetrics
 
   return (
     <section className={selectedReferenceItem ? 'entity-topology-split has-detail' : 'entity-topology-split'}>
       <div
-        className={`entity-topology-full ${regionMode ? 'region-mode' : 'reference-mode'} ${isPanning ? 'is-panning' : ''}`}
+        className={`entity-topology-full ${regionMode ? 'region-mode' : 'reference-mode'} ${useOModelCards ? 'omodel-card-mode' : 'cms-card-mode'} ${nodeDragEnabled ? 'node-drag-enabled' : ''} ${isPanning ? 'is-panning' : ''} ${isDraggingNode ? 'is-node-dragging' : ''}`}
         onPointerDown={startPan}
-        onPointerMove={movePan}
-        onPointerUp={stopPan}
-        onPointerCancel={stopPan}
+        onPointerMove={moveTopologyPointer}
+        onPointerUp={stopTopologyPointer}
+        onPointerCancel={stopTopologyPointer}
         onWheel={handleWheelZoom}
       >
         <div className="entity-topology-zoom">
@@ -891,6 +969,7 @@ export function EntityTopologyView({
                   className={selectedId === item.node.id ? 'selected' : ''}
                   data-region={item.region}
                   transform={`translate(${item.x} ${item.y})`}
+                  onPointerDown={(event) => startNodeDrag(event, item.node.id)}
                   onClick={() => {
                     if (suppressClickRef.current) return
                     onSelectNode(item.node)
@@ -903,13 +982,51 @@ export function EntityTopologyView({
                   <clipPath id={`entity-reference-subtitle-clip-${index}`}>
                     <rect x={cardMetrics.subtitleX} y={item.height - cardMetrics.subtitleClipBottom} width={Math.max(cardMetrics.subtitleClipMinWidth, item.width - cardMetrics.subtitleClipReserve)} height={cardMetrics.subtitleClipHeight} />
                   </clipPath>
-                  <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx={cardMetrics.cardRadius} fill={item.color} />
-                  <rect className="entity-reference-card" width={item.width} height={item.height} rx={cardMetrics.cardRadius} fill="none" stroke={item.color} />
-                  <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height={cardMetrics.barHeight} rx={cardMetrics.barRadius} fill={item.color} />
-                  <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform={cardMetrics.iconTransform} fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <text x={cardMetrics.titleX} y={cardMetrics.titleY} className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
-                  <text x={item.width - cardMetrics.countRight} y={cardMetrics.titleY} className="count" textAnchor="end">查询量: {item.access}</text>
-                  <text x={cardMetrics.subtitleX} y={item.height - cardMetrics.subtitleBottom} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
+                  {useOModelCards ? (
+                    <>
+                      <clipPath id={`entity-omodel-domain-clip-${index}`}>
+                        <rect x={omodelMetrics.domainX} y={omodelMetrics.metaClipY} width={Math.max(omodelMetrics.domainClipMinWidth, item.width - omodelMetrics.domainClipReserve)} height={omodelMetrics.metaClipHeight} />
+                      </clipPath>
+                      <clipPath id={`entity-omodel-title-clip-${index}`}>
+                        <rect x={omodelMetrics.contentX} y={omodelMetrics.titleClipY} width={Math.max(omodelMetrics.titleClipMinWidth, item.width - omodelMetrics.titleClipReserve)} height={omodelMetrics.titleClipHeight} />
+                      </clipPath>
+                      <clipPath id={`entity-omodel-tag-clip-${index}`}>
+                        <rect x={omodelMetrics.tagTextX} y={item.height - omodelMetrics.tagClipBottom} width={Math.max(omodelMetrics.tagClipMinWidth, item.width - omodelMetrics.tagClipReserve)} height={omodelMetrics.tagClipHeight} />
+                      </clipPath>
+                      <rect className="entity-omodel-card-body" width={item.width} height={item.height} rx={omodelMetrics.cardRadius} />
+                      <rect className="entity-omodel-card-stripe" width={omodelMetrics.stripeWidth} height={item.height} rx={omodelMetrics.stripeRadius} fill={item.color} />
+                      <rect className="entity-omodel-kind-pill" x={omodelMetrics.kindX} y={omodelMetrics.kindY} width={omodelMetrics.kindWidth} height={omodelMetrics.kindHeight} rx={omodelMetrics.kindRadius} fill={item.color} />
+                      <text className="entity-omodel-kind" x={omodelMetrics.kindX + omodelMetrics.kindWidth / 2} y={omodelMetrics.kindTextY} textAnchor="middle" fill={item.color}>
+                        {referenceKindLabel(item.subtitle)}
+                      </text>
+                      <text className="entity-omodel-domain" x={omodelMetrics.domainX} y={omodelMetrics.kindTextY} clipPath={`url(#entity-omodel-domain-clip-${index})`}>
+                        {item.subtitle}
+                      </text>
+                      <text className="entity-omodel-title" x={omodelMetrics.contentX} y={omodelMetrics.titleY} clipPath={`url(#entity-omodel-title-clip-${index})`}>
+                        {item.title}
+                      </text>
+                      <rect className="entity-omodel-tag-bg" x={omodelMetrics.contentX} y={item.height - omodelMetrics.tagBottom} width={omodelMetrics.tagWidth} height={omodelMetrics.tagHeight} rx={omodelMetrics.tagRadius} />
+                      <text className="entity-omodel-tag" x={omodelMetrics.tagTextX} y={item.height - omodelMetrics.tagTextBottom} clipPath={`url(#entity-omodel-tag-clip-${index})`}>
+                        {referenceRegionLabel(item.region)} · 关系 {item.access}
+                      </text>
+                      <g className="entity-omodel-card-menu" transform={`translate(${item.width - omodelMetrics.menuXOffset} ${omodelMetrics.menuY})`}>
+                        <rect width={omodelMetrics.menuWidth} height={omodelMetrics.menuHeight} rx={omodelMetrics.menuRadius} />
+                        <circle cx={omodelMetrics.menuDotStart} cy={omodelMetrics.menuDotY} r={omodelMetrics.menuDotRadius} />
+                        <circle cx={omodelMetrics.menuDotStart + omodelMetrics.menuDotGap} cy={omodelMetrics.menuDotY} r={omodelMetrics.menuDotRadius} />
+                        <circle cx={omodelMetrics.menuDotStart + omodelMetrics.menuDotGap * 2} cy={omodelMetrics.menuDotY} r={omodelMetrics.menuDotRadius} />
+                      </g>
+                    </>
+                  ) : (
+                    <>
+                      <rect className="entity-reference-card-fill" width={item.width} height={item.height} rx={cardMetrics.cardRadius} fill={item.color} />
+                      <rect className="entity-reference-card" width={item.width} height={item.height} rx={cardMetrics.cardRadius} fill="none" stroke={item.color} />
+                      <rect className="entity-reference-card-bar" x={(item.width - item.barWidth) / 2} y="0" width={item.barWidth} height={cardMetrics.barHeight} rx={cardMetrics.barRadius} fill={item.color} />
+                      <path className="entity-reference-card-icon" d={referenceIconPath(item.title)} transform={cardMetrics.iconTransform} fill="none" stroke={item.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <text x={cardMetrics.titleX} y={cardMetrics.titleY} className="title" clipPath={`url(#entity-reference-title-clip-${index})`}>{item.title}</text>
+                      <text x={item.width - cardMetrics.countRight} y={cardMetrics.titleY} className="count" textAnchor="end">查询量: {item.access}</text>
+                      <text x={cardMetrics.subtitleX} y={item.height - cardMetrics.subtitleBottom} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
+                    </>
+                  )}
                 </g>
               ))}
             </g>
@@ -1176,27 +1293,119 @@ const regionTopologyCardMetrics = {
   iconTransform: 'translate(6.4 11.2) scale(0.32)',
 }
 
-function createReferenceStyleTopology(data: ReturnType<typeof createAliyunLikeTopologyData>, groupByRegion = false) {
+const omodelReferenceTopologyCardMetrics = {
+  cardRadius: 5.4,
+  stripeWidth: 2.4,
+  stripeRadius: 1.2,
+  contentX: 11,
+  kindX: 11,
+  kindY: 5.8,
+  kindWidth: 31,
+  kindHeight: 8.4,
+  kindRadius: 2.4,
+  kindTextY: 12.2,
+  domainX: 48,
+  metaClipY: 5.2,
+  metaClipHeight: 9.2,
+  domainClipMinWidth: 42,
+  domainClipReserve: 58,
+  titleY: 24.6,
+  titleClipY: 15.6,
+  titleClipHeight: 11,
+  titleClipMinWidth: 70,
+  titleClipReserve: 18,
+  tagBottom: 8.4,
+  tagWidth: 68,
+  tagHeight: 6.6,
+  tagRadius: 2.2,
+  tagTextX: 15,
+  tagTextBottom: 3.6,
+  tagClipBottom: 8,
+  tagClipHeight: 7.2,
+  tagClipMinWidth: 56,
+  tagClipReserve: 22,
+  menuXOffset: 25,
+  menuY: 5.6,
+  menuWidth: 17,
+  menuHeight: 10,
+  menuRadius: 3,
+  menuDotStart: 4.6,
+  menuDotY: 5,
+  menuDotGap: 4,
+  menuDotRadius: 0.9,
+}
+
+const omodelRegionTopologyCardMetrics = {
+  cardRadius: 6,
+  stripeWidth: 2.8,
+  stripeRadius: 1.4,
+  contentX: 11,
+  kindX: 11,
+  kindY: 6,
+  kindWidth: 28,
+  kindHeight: 9.5,
+  kindRadius: 2.6,
+  kindTextY: 13.2,
+  domainX: 45,
+  metaClipY: 5.4,
+  metaClipHeight: 10,
+  domainClipMinWidth: 28,
+  domainClipReserve: 52,
+  titleY: 24,
+  titleClipY: 16,
+  titleClipHeight: 11,
+  titleClipMinWidth: 42,
+  titleClipReserve: 18,
+  tagBottom: 8.6,
+  tagWidth: 62,
+  tagHeight: 6.8,
+  tagRadius: 2.2,
+  tagTextX: 15,
+  tagTextBottom: 3.6,
+  tagClipBottom: 8.1,
+  tagClipHeight: 7.4,
+  tagClipMinWidth: 36,
+  tagClipReserve: 22,
+  menuXOffset: 25,
+  menuY: 5.8,
+  menuWidth: 17,
+  menuHeight: 10,
+  menuRadius: 3,
+  menuDotStart: 4.6,
+  menuDotY: 5,
+  menuDotGap: 4,
+  menuDotRadius: 0.9,
+}
+
+function createReferenceStyleTopology(data: ReturnType<typeof createAliyunLikeTopologyData>, groupByRegion = false, cardVariant: 'cms' | 'omodel' = 'cms') {
   const templates = referenceTopologyTemplates()
+  const useOModelCards = cardVariant === 'omodel'
   const nodes = templates.map((template, index) => {
     const node = data.nodes[(index * 23 + 5) % data.nodes.length]
     const region = String(node.properties.region || 'unknown')
     const baseWidth = template.width || 43
     const baseHeight = template.height || 18
+    const width = referenceTopologyCardWidth(baseWidth, groupByRegion, useOModelCards)
+    const height = referenceTopologyCardHeight(baseHeight, groupByRegion, useOModelCards)
+    const scaleX = useOModelCards && !groupByRegion ? 1.28 : 1
+    const scaleY = useOModelCards && !groupByRegion ? 1.14 : 1
+    const x = 1239 + (template.x - 1239) * scaleX - (width - baseWidth) / 2
+    const y = 619 + (template.y - 619) * scaleY - (height - baseHeight) / 2
     return {
       node,
-      x: template.x,
-      y: template.y,
-      width: groupByRegion ? Math.max(92, baseWidth * 2.15) : baseWidth,
-      height: groupByRegion ? Math.max(30, baseHeight * 1.76) : baseHeight,
+      x,
+      y,
+      width,
+      height,
       title: template.title,
       subtitle: template.subtitle,
       color: template.color,
       access: template.access,
-      barWidth: groupByRegion ? Math.max(38, Math.min(58, baseWidth * 0.9)) : Math.max(16, Math.min(25, baseWidth * 0.38)),
+      barWidth: groupByRegion ? Math.max(38, Math.min(58, width * 0.42)) : Math.max(16, Math.min(25, baseWidth * 0.38)),
       region,
     }
   })
+  if (useOModelCards && !groupByRegion) spreadOModelReferenceTopology(nodes)
   const regions = groupByRegion ? layoutReferenceTopologyByRegion(nodes) : []
   const edges: ReferenceTopologyEdge[] = []
   const addEdge = (sourceIndex: number, targetIndex: number, label: string, showLabel = false) => {
@@ -1208,6 +1417,89 @@ function createReferenceStyleTopology(data: ReturnType<typeof createAliyunLikeTo
 
   referenceTopologyRelations().forEach(([source, target, label, showLabel]) => addEdge(source, target, label, showLabel))
   return { nodes, edges, regions }
+}
+
+function referenceTopologyCardWidth(baseWidth: number, groupByRegion: boolean, useOModelCards: boolean) {
+  if (useOModelCards) return groupByRegion ? Math.max(176, baseWidth * 4.1) : Math.max(138, baseWidth * 3.15)
+  return groupByRegion ? Math.max(92, baseWidth * 2.15) : baseWidth
+}
+
+function referenceTopologyCardHeight(baseHeight: number, groupByRegion: boolean, useOModelCards: boolean) {
+  if (useOModelCards) return groupByRegion ? Math.max(54, baseHeight * 3) : Math.max(40, baseHeight * 2.24)
+  return groupByRegion ? Math.max(30, baseHeight * 1.76) : baseHeight
+}
+
+function spreadOModelReferenceTopology(nodes: ReferenceTopologyNode[]) {
+  const rows: Array<{ anchorY: number; nodes: ReferenceTopologyNode[] }> = []
+  const rowThreshold = 26
+  const sorted = [...nodes].sort((left, right) => left.y - right.y || left.x - right.x)
+  sorted.forEach((node) => {
+    const row = rows.find((item) => Math.abs(item.anchorY - node.y) <= rowThreshold)
+    if (row) {
+      row.nodes.push(node)
+      row.anchorY = row.nodes.reduce((sum, item) => sum + item.y, 0) / row.nodes.length
+      return
+    }
+    rows.push({ anchorY: node.y, nodes: [node] })
+  })
+
+  const minHorizontalGap = 34
+  const canvasLeft = 76
+  const canvasRight = 2428
+  rows.forEach((row) => {
+    const rowNodes = row.nodes.sort((left, right) => left.x - right.x)
+    if (rowNodes.length <= 1) return
+    const originalCenter = rowNodes.reduce((sum, node) => sum + node.x + node.width / 2, 0) / rowNodes.length
+    for (let index = 1; index < rowNodes.length; index += 1) {
+      const previous = rowNodes[index - 1]
+      const node = rowNodes[index]
+      const minX = previous.x + previous.width + minHorizontalGap
+      if (node.x < minX) node.x = minX
+    }
+    const currentCenter = rowNodes.reduce((sum, node) => sum + node.x + node.width / 2, 0) / rowNodes.length
+    let shiftX = originalCenter - currentCenter
+    const minX = Math.min(...rowNodes.map((node) => node.x + shiftX))
+    const maxX = Math.max(...rowNodes.map((node) => node.x + node.width + shiftX))
+    if (minX < canvasLeft) shiftX += canvasLeft - minX
+    if (maxX > canvasRight) shiftX -= maxX - canvasRight
+    rowNodes.forEach((node) => { node.x += shiftX })
+  })
+
+  const minRowGap = 56
+  const orderedRows = rows
+    .map((row) => ({
+      ...row,
+      y: Math.min(...row.nodes.map((node) => node.y)),
+    }))
+    .sort((left, right) => left.y - right.y)
+  for (let index = 1; index < orderedRows.length; index += 1) {
+    const previous = orderedRows[index - 1]
+    const row = orderedRows[index]
+    const shiftY = previous.y + minRowGap - row.y
+    if (shiftY <= 0) continue
+    row.nodes.forEach((node) => { node.y += shiftY })
+    row.y += shiftY
+  }
+  const minY = Math.min(...nodes.map((node) => node.y))
+  if (minY < 64) {
+    nodes.forEach((node) => { node.y += 64 - minY })
+  }
+}
+
+function referenceKindLabel(subtitle: string) {
+  const [scope, segment] = subtitle.split('.').filter(Boolean)
+  const label = segment || scope || 'entity'
+  return label.length > 6 ? label.slice(0, 6).toUpperCase() : label.toUpperCase()
+}
+
+function referenceRegionLabel(region: string) {
+  const labels: Record<string, string> = {
+    'cn-hangzhou': '华东1',
+    'cn-shanghai': '华东2',
+    'cn-beijing': '华北2',
+    'cn-hongkong': '香港',
+  }
+  return labels[region] || region || '未知'
 }
 
 const referenceRegionLayouts = [

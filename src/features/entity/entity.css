@@ -1142,6 +1142,14 @@
   cursor: pointer;
 }
 
+.entity-topology-full.node-drag-enabled .entity-reference-nodes g {
+  cursor: grab;
+}
+
+.entity-topology-full.node-drag-enabled.is-node-dragging .entity-reference-nodes g {
+  cursor: grabbing;
+}
+
 .entity-reference-nodes g:hover .entity-reference-card,
 .entity-reference-nodes g.selected .entity-reference-card {
   stroke-width: 0.9;
@@ -1182,6 +1190,90 @@
   font-weight: 500;
 }
 
+.entity-topology-full.omodel-card-mode .entity-reference-nodes g {
+  filter: drop-shadow(0 2px 5px rgba(15, 23, 42, 0.08));
+}
+
+.entity-topology-full.omodel-card-mode .entity-omodel-card-body {
+  fill: #fff;
+  stroke: rgba(0, 0, 0, 0.06);
+  stroke-width: 0.58;
+  transition: stroke 150ms ease, filter 150ms ease;
+}
+
+.entity-topology-full.omodel-card-mode .entity-reference-nodes g:hover,
+.entity-topology-full.omodel-card-mode .entity-reference-nodes g.selected {
+  filter: drop-shadow(0 4px 11px rgba(15, 23, 42, 0.13));
+}
+
+.entity-topology-full.omodel-card-mode .entity-reference-nodes g:hover .entity-omodel-card-body {
+  stroke: rgba(0, 0, 0, 0.12);
+}
+
+.entity-topology-full.omodel-card-mode .entity-reference-nodes g.selected .entity-omodel-card-body {
+  stroke: #6559e8;
+  stroke-width: 0.82;
+}
+
+.entity-omodel-card-stripe {
+  opacity: 0.98;
+}
+
+.entity-omodel-kind-pill {
+  opacity: 0.13;
+}
+
+.entity-topology-full.omodel-card-mode .entity-omodel-kind {
+  font-size: 4.7px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.entity-topology-full.omodel-card-mode .entity-omodel-domain {
+  fill: #71717a;
+  font-size: 4.3px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.entity-topology-full.omodel-card-mode .entity-omodel-title {
+  fill: #242a35;
+  font-size: 6.8px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.entity-omodel-tag-bg {
+  fill: #f4f4f5;
+}
+
+.entity-topology-full.omodel-card-mode .entity-omodel-tag {
+  fill: #71717a;
+  font-size: 4.2px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.entity-omodel-card-menu {
+  opacity: 0;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.entity-reference-nodes g:hover .entity-omodel-card-menu,
+.entity-reference-nodes g.selected .entity-omodel-card-menu {
+  opacity: 1;
+}
+
+.entity-omodel-card-menu rect {
+  fill: rgba(255, 255, 255, 0.96);
+  stroke: #e5e7eb;
+  stroke-width: 0.35;
+}
+
+.entity-omodel-card-menu circle {
+  fill: #7b8190;
+}
+
 .entity-topology-full.region-mode .entity-reference-nodes g:hover .entity-reference-card,
 .entity-topology-full.region-mode .entity-reference-nodes g.selected .entity-reference-card {
   stroke-width: 1.25;
@@ -1202,6 +1294,30 @@
 .entity-topology-full.region-mode .entity-reference-nodes text.count,
 .entity-topology-full.region-mode .entity-reference-nodes text.muted {
   font-size: 5.35px;
+}
+
+.entity-topology-full.region-mode.omodel-card-mode .entity-omodel-card-body {
+  stroke-width: 0.8;
+}
+
+.entity-topology-full.region-mode.omodel-card-mode .entity-reference-nodes g.selected .entity-omodel-card-body {
+  stroke-width: 1.2;
+}
+
+.entity-topology-full.region-mode.omodel-card-mode .entity-omodel-kind {
+  font-size: 5px;
+}
+
+.entity-topology-full.region-mode.omodel-card-mode .entity-omodel-domain {
+  font-size: 4.7px;
+}
+
+.entity-topology-full.region-mode.omodel-card-mode .entity-omodel-title {
+  font-size: 7.2px;
+}
+
+.entity-topology-full.region-mode.omodel-card-mode .entity-omodel-tag {
+  font-size: 4.6px;
 }
 
 .entity-cms-minimap {
