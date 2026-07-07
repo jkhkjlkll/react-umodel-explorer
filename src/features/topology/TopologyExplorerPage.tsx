@@ -252,7 +252,6 @@ export function TopologyExplorerPage({
         </aside>
 
         <main className={layoutMode === 'entity' ? 'topo-stage entity-layout-active' : 'topo-stage'}>
-          {layoutMode !== 'entity' && (
           <header className="topo-stage-toolbar">
             <div className="topo-search-wrap" ref={searchWrapRef}>
               <Search size={16} />
@@ -326,7 +325,6 @@ export function TopologyExplorerPage({
               </button>
             </div>
           </header>
-          )}
 
           <section className="topo-graph-card">
             {layoutMode === 'entity' ? (

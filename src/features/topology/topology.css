@@ -270,7 +270,7 @@
 }
 
 .topo-stage.entity-layout-active {
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: 72px minmax(0, 1fr);
 }
 
 .topo-stage-toolbar {

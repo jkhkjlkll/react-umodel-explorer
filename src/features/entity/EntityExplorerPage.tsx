@@ -468,6 +468,8 @@ export function EntityExplorerPage({
             <EntityTopologyView
               data={data}
               focusedTypes={topologyTypes}
+              focusSelection={!topologyOnly}
+              overlayPanel={topologyOnly}
               selectedNode={selectedTopoNode}
               onSelectNode={(node) => {
                 setSelectedTopoNode(node)
@@ -1329,6 +1331,8 @@ function entityTagCountFromRecord(record: EntityRecord) {
 function EntityTopologyView({
   data,
   focusedTypes,
+  focusSelection = true,
+  overlayPanel = false,
   selectedNode,
   onSelectNode,
   onFocusType,
@@ -1336,6 +1340,8 @@ function EntityTopologyView({
 }: {
   data: TopologyExplorerData
   focusedTypes: string[]
+  focusSelection?: boolean
+  overlayPanel?: boolean
   selectedNode: TopologyNode | null
   onSelectNode: (node: TopologyNode | null) => void
   onFocusType: (type: string) => void
@@ -1403,14 +1409,16 @@ function EntityTopologyView({
   const activePanelItem = selectedInstanceItem || selectedAggregateItem
   const isInstanceDetailOpen = Boolean(selectedNode && selectedInstanceItem)
   const [zoom, setZoom] = useState(10)
+  const minZoom = selectedRegions.length > 1 ? 2 : 10
   const zoomScale = zoom / 10
-  const focusedZoomScale = activePanelItem ? zoomScale * 2.9 : zoomScale
+  const shouldFocusSelection = focusSelection && selectedRegions.length === 0 && Boolean(activePanelItem)
+  const focusedZoomScale = shouldFocusSelection ? zoomScale * 2.9 : zoomScale
   const zoomDisplay = Math.round(zoomScale * 98)
   const zoomProgress = (zoom - 10) / 36
   const focusCenterX = activePanelItem ? activePanelItem.x + activePanelItem.width / 2 : 0
   const focusCenterY = activePanelItem ? activePanelItem.y + activePanelItem.height / 2 : 0
-  const sceneX = activePanelItem ? 1239 - focusCenterX * focusedZoomScale : -2550 * zoomProgress
-  const sceneY = activePanelItem ? 619 - focusCenterY * focusedZoomScale : -425 * zoomProgress
+  const sceneX = shouldFocusSelection ? 1239 - focusCenterX * focusedZoomScale : -2550 * zoomProgress
+  const sceneY = shouldFocusSelection ? 619 - focusCenterY * focusedZoomScale : -425 * zoomProgress
   const sceneTranslateX = sceneX + pan.x
   const sceneTranslateY = sceneY + pan.y
   const sceneTransform = `translate(${sceneTranslateX} ${sceneTranslateY}) scale(${focusedZoomScale})`
@@ -1467,16 +1475,16 @@ function EntityTopologyView({
   }, [minimapViewport, visibleEdges, visibleNodes])
   const selectAggregate = (item: ReferenceTopologyNode) => {
     setSelectedAggregateId(item.id)
-    onFocusType(item.type)
+    if (focusSelection && selectedRegions.length === 0) onFocusType(item.type)
     if (!item.instances.some((node) => node.id === selectedNode?.id)) onSelectNode(null)
   }
   const selectInstance = (node: TopologyNode) => {
     setSelectedAggregateId('')
     onSelectNode(node)
-    onFocusType(node.type)
+    if (focusSelection && selectedRegions.length === 0) onFocusType(node.type)
   }
   const changeZoom = (direction: 1 | -1) => {
-    setZoom((value) => Math.max(10, Math.min(46, value + direction * 6)))
+    setZoom((value) => Math.max(minZoom, Math.min(46, value + direction * 6)))
   }
   const zoomOut = () => changeZoom(-1)
   const zoomIn = () => changeZoom(1)
@@ -1484,6 +1492,26 @@ function EntityTopologyView({
     setZoom(10)
     setPan({ x: 0, y: 0 })
   }
+  useEffect(() => {
+    if (selectedRegions.length <= 1) {
+      setZoom((current) => Math.max(10, current))
+      return
+    }
+    if (referenceTopology.nodes.length === 0) return
+    const bounds = boundsForReferenceNodes(referenceTopology.nodes, 96, 80)
+    if (bounds.width <= 0 || bounds.height <= 0) return
+    const targetScale = Math.max(0.2, Math.min(1, (2478 * 0.9) / bounds.width, (1238 * 0.86) / bounds.height))
+    const targetZoom = Math.max(minZoom, Math.min(10, Math.floor(targetScale * 10)))
+    const targetZoomScale = targetZoom / 10
+    const targetZoomProgress = (targetZoom - 10) / 36
+    const targetSceneX = -2550 * targetZoomProgress
+    const targetSceneY = -425 * targetZoomProgress
+    setZoom(targetZoom)
+    setPan({
+      x: 1239 - (bounds.x + bounds.width / 2) * targetZoomScale - targetSceneX,
+      y: 619 - (bounds.y + bounds.height / 2) * targetZoomScale - targetSceneY,
+    })
+  }, [minZoom, referenceTopology.nodes, selectedRegions.length])
   const finishZoomAction = (event: MouseEvent<HTMLButtonElement>, action: () => void) => {
     action()
     event.currentTarget.blur()
@@ -1555,7 +1583,7 @@ function EntityTopologyView({
     setSelectedAggregateId('')
     onSelectNode(null)
     onResetFocus()
-    resetViewport()
+    if (!overlayPanel) resetViewport()
   }
   const focusMinimapPoint = (event: PointerEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -1629,7 +1657,10 @@ function EntityTopologyView({
     event.preventDefault()
     const dx = point.x - dragState.startX
     const dy = point.y - dragState.startY
-    if (!dragState.moved && Math.hypot(dx, dy) > 4) dragState.moved = true
+    if (!dragState.moved) {
+      if (Math.hypot(dx, dy) <= 4) return
+      dragState.moved = true
+    }
     const node = positionedNodeById.get(dragState.nodeId)
     const nextX = Math.max(24, Math.min(2454 - (node?.width || 320), dragState.nodeX + dx))
     const nextY = Math.max(24, Math.min(1214 - (node?.height || 82), dragState.nodeY + dy))
@@ -1653,7 +1684,13 @@ function EntityTopologyView({
   }
 
   return (
-    <section className={activePanelItem ? `entity-topology-split ${isInstanceDetailOpen ? 'has-instance-detail' : 'has-detail'}` : 'entity-topology-split'}>
+    <section
+      className={[
+        'entity-topology-split',
+        overlayPanel ? 'overlay-panel' : '',
+        activePanelItem ? (isInstanceDetailOpen ? 'has-instance-detail' : 'has-detail') : '',
+      ].filter(Boolean).join(' ')}
+    >
       <div
         className={`entity-topology-full ${isPanning ? 'is-panning' : ''}`}
         onPointerDown={startCanvasPan}
@@ -1757,7 +1794,7 @@ function EntityTopologyView({
                 {regionBoxes.map((region) => {
                   const title = `Region ${region.label}`
                   const titleWidth = Math.max(168, title.length * 9 + 64)
-                  const titleX = Math.max(8, Math.min(region.x + 14, 2478 - titleWidth - 8))
+                  const titleX = region.x + 14
                   return (
                     <g key={region.key} className="entity-reference-region-box">
                       <rect x={region.x} y={region.y} width={region.width} height={region.height} rx="10" />
@@ -1766,12 +1803,6 @@ function EntityTopologyView({
                         <text x="38" y="-14">{title}</text>
                         <path d="M14 -22 H24 M14 -16 H24 M14 -10 H22 M10 -25 H29 V-4 H10 Z" />
                       </g>
-                      {region.azBoxes.map((az) => (
-                        <g key={az.key} className="entity-reference-az-box">
-                          <rect x={az.x} y={az.y} width={az.width} height={az.height} rx="8" />
-                          <text x={az.x + az.width / 2} y={az.y + 24}>AZ {az.label}</text>
-                        </g>
-                      ))}
                     </g>
                   )
                 })}
@@ -2134,7 +2165,7 @@ function EntityInstanceDetailPanel({
   const propertyRows = entityDetailProperties(node)
   const tabs: Array<{ key: EntityInstanceTab; label: string; count?: number; dropdown?: boolean }> = [
     { key: 'detail', label: '\u5b9e\u4f53\u8be6\u60c5' },
-    { key: 'topology', label: '\u5173\u8054\u62d3\u6251', dropdown: true },
+    { key: 'topology', label: '\u5173\u8054\u62d3\u6251' },
     { key: 'trace', label: '\u4f1a\u8bdd\u8ffd\u8e2a' },
     { key: 'page', label: '\u9875\u9762\u8bbf\u95ee' },
     { key: 'heatmap', label: '\u70ed\u529b\u56fe\u5206\u6790' },
@@ -2201,12 +2232,6 @@ function EntityInstanceDetailPanel({
           </button>
         ))}
       </nav>
-      {activeTab === 'topology' && (
-        <div className="entity-instance-tab-menu entity-instance-topology-menu">
-          <button className="active" type="button">{'\u5173\u8054\u5b9e\u4f53\u62d3\u6251'}</button>
-          <button type="button">UModel {'\u63a2\u7d22'}</button>
-        </div>
-      )}
       {activeTab === 'settings' && (
         <div className="entity-instance-tab-menu entity-instance-settings-menu">
           <button className="active" type="button">{'\u5e94\u7528\u8bbe\u7f6e'}</button>
@@ -2603,10 +2628,25 @@ function EntityRelatedTopologyCanvas({
   links: EntityRelatedLink[]
   onSelectNode: (node: TopologyNode) => void
 }) {
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const viewportRef = useRef<SVGGElement | null>(null)
+  const dragStateRef = useRef<{
+    key: string
+    pointerId: number
+    startX: number
+    startY: number
+    nodeX: number
+    nodeY: number
+    moved: boolean
+  } | null>(null)
+  const dragCaptureRef = useRef<SVGGElement | null>(null)
+  const suppressNodeClickRef = useRef(false)
   const [zoom, setZoom] = useState(100)
   const [filterOpen, setFilterOpen] = useState(false)
   const [showIncoming, setShowIncoming] = useState(true)
   const [showOutgoing, setShowOutgoing] = useState(true)
+  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
+  const [draggingNodeKey, setDraggingNodeKey] = useState('')
   const incomingTotal = links.filter((link) => link.direction === 'in').length
   const outgoingTotal = links.filter((link) => link.direction === 'out').length
   const filteredLinks = links.filter((link) => link.direction === 'in' ? showIncoming : showOutgoing)
@@ -2620,19 +2660,94 @@ function EntityRelatedTopologyCanvas({
     : outgoing.length > 0 && incoming.length === 0
       ? width * 0.38
       : width / 2
-  const center = { x: centerX, y: height / 2 }
+  const canvasCenter = { x: centerX, y: height / 2 }
+  const currentNodeKey = 'current'
+  const center = nodePositions[currentNodeKey] || canvasCenter
   const domainBand = { x: 42, y: center.y - 58, width: width - 84, height: 116 }
   const upstreamLayout = layoutRelatedColumn(incoming, 150, height)
   const downstreamLayout = layoutRelatedColumn(outgoing, width - 150, height)
-  const layout = [...upstreamLayout, ...downstreamLayout]
+  const baseLayout = [...upstreamLayout, ...downstreamLayout]
+  const layout = baseLayout.map((item) => {
+    const position = nodePositions[item.link.edge.id]
+    return position ? { ...item, x: position.x, y: position.y } : item
+  })
   const legendItems = uniqueRelatedLegend([node, ...visibleLinks.map((link) => link.neighbor)])
   const domain = valueText(node.properties.__domain__) || valueText(node.properties.domain) || 'domain'
   const zoomScale = zoom / 100
-  const graphTransform = 'translate(' + center.x + ' ' + center.y + ') scale(' + zoomScale + ') translate(' + (-center.x) + ' ' + (-center.y) + ')'
+  const graphTransform = 'translate(' + canvasCenter.x + ' ' + canvasCenter.y + ') scale(' + zoomScale + ') translate(' + (-canvasCenter.x) + ' ' + (-canvasCenter.y) + ')'
+  useEffect(() => {
+    const availableKeys = new Set([currentNodeKey, ...visibleLinks.map((link) => link.edge.id)])
+    setNodePositions((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([key]) => availableKeys.has(key)))
+      return Object.keys(next).length === Object.keys(current).length ? current : next
+    })
+  }, [visibleLinks])
   const zoomOut = () => setZoom((current) => Math.max(50, current - 10))
   const zoomIn = () => setZoom((current) => Math.min(160, current + 10))
   const resetZoom = () => setZoom(100)
   const fitCanvas = () => setZoom(90)
+  const resetLayout = () => {
+    setZoom(100)
+    setNodePositions({})
+  }
+  const scenePointFromEvent = (event: PointerEvent<SVGGElement | SVGSVGElement>) => {
+    const svg = svgRef.current
+    const matrix = viewportRef.current?.getScreenCTM()
+    if (!svg || !matrix) return null
+    const point = svg.createSVGPoint()
+    point.x = event.clientX
+    point.y = event.clientY
+    const scenePoint = point.matrixTransform(matrix.inverse())
+    return { x: scenePoint.x, y: scenePoint.y }
+  }
+  const startNodeDrag = (event: PointerEvent<SVGGElement>, key: string, x: number, y: number) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    const startPoint = scenePointFromEvent(event)
+    if (!startPoint) return
+    event.preventDefault()
+    event.stopPropagation()
+    suppressNodeClickRef.current = false
+    dragStateRef.current = {
+      key,
+      pointerId: event.pointerId,
+      startX: startPoint.x,
+      startY: startPoint.y,
+      nodeX: x,
+      nodeY: y,
+      moved: false,
+    }
+    dragCaptureRef.current = event.currentTarget
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    setDraggingNodeKey(key)
+  }
+  const moveNodeDrag = (event: PointerEvent<SVGSVGElement>) => {
+    const dragState = dragStateRef.current
+    if (!dragState || dragState.pointerId !== event.pointerId) return
+    const point = scenePointFromEvent(event)
+    if (!point) return
+    event.preventDefault()
+    const dx = point.x - dragState.startX
+    const dy = point.y - dragState.startY
+    if (!dragState.moved && Math.hypot(dx, dy) > 4) dragState.moved = true
+    const nextX = Math.max(88, Math.min(width - 88, dragState.nodeX + dx))
+    const nextY = Math.max(42, Math.min(height - 42, dragState.nodeY + dy))
+    setNodePositions((current) => {
+      const position = current[dragState.key]
+      if (position && Math.abs(position.x - nextX) < 0.5 && Math.abs(position.y - nextY) < 0.5) return current
+      return { ...current, [dragState.key]: { x: nextX, y: nextY } }
+    })
+  }
+  const finishNodeDrag = () => {
+    const dragState = dragStateRef.current
+    if (!dragState) return
+    suppressNodeClickRef.current = dragState.moved
+    if (dragCaptureRef.current?.hasPointerCapture(dragState.pointerId)) {
+      dragCaptureRef.current.releasePointerCapture(dragState.pointerId)
+    }
+    dragStateRef.current = null
+    dragCaptureRef.current = null
+    setDraggingNodeKey('')
+  }
 
   return (
     <section className="entity-related-topology-tab">
@@ -2651,7 +2766,7 @@ function EntityRelatedTopologyCanvas({
               <button type="button" aria-label="放大" onClick={zoomIn} disabled={zoom >= 160}>+</button>
               <button type="button" aria-label="适应画布" onClick={fitCanvas}><Maximize2 size={13} /></button>
               <button type="button" aria-label="回到中心" onClick={resetZoom}><Home size={13} /></button>
-              <button type="button" aria-label="重置布局" onClick={resetZoom}><RotateCcw size={13} /></button>
+              <button type="button" aria-label="重置布局" onClick={resetLayout}><RotateCcw size={13} /></button>
               <button
                 type="button"
                 className={filterOpen ? 'active' : ''}
@@ -2682,7 +2797,15 @@ function EntityRelatedTopologyCanvas({
                 </button>
               </div>
             )}
-            <svg viewBox={'0 0 ' + width + ' ' + height} role="img" aria-label={node.label + '\u5173\u8054\u62d3\u6251'}>
+            <svg
+              ref={svgRef}
+              viewBox={'0 0 ' + width + ' ' + height}
+              role="img"
+              aria-label={node.label + '\u5173\u8054\u62d3\u6251'}
+              onPointerMove={moveNodeDrag}
+              onPointerUp={finishNodeDrag}
+              onPointerCancel={finishNodeDrag}
+            >
               <defs>
                 <pattern id="entity-related-grid" width="16" height="16" patternUnits="userSpaceOnUse">
                   <circle cx="1" cy="1" r="1" fill="#dfe7f1" />
@@ -2693,7 +2816,7 @@ function EntityRelatedTopologyCanvas({
               </defs>
               <rect width={width} height={height} fill="#fff" />
               <rect width={width} height={height} fill="url(#entity-related-grid)" opacity="0.78" />
-              <g className="entity-related-viewport" transform={graphTransform} data-zoom={zoom}>
+              <g ref={viewportRef} className="entity-related-viewport" transform={graphTransform} data-zoom={zoom}>
               <rect className="entity-related-domain-band" x={domainBand.x} y={domainBand.y} width={domainBand.width} height={domainBand.height} />
               <text className="entity-related-domain-label" x={domainBand.x + 14} y={domainBand.y + 24}>{domain}</text>
               <g className="entity-related-edges">
@@ -2719,9 +2842,30 @@ function EntityRelatedTopologyCanvas({
               </g>
               <g className="entity-related-nodes">
                 {layout.map(({ link, x, y }) => (
-                  <RelatedTopologyNodeCard key={link.edge.id} node={link.neighbor} x={x} y={y} onSelect={() => onSelectNode(link.neighbor)} />
+                  <RelatedTopologyNodeCard
+                    key={link.edge.id}
+                    node={link.neighbor}
+                    x={x}
+                    y={y}
+                    dragging={draggingNodeKey === link.edge.id}
+                    onPointerDown={(event) => startNodeDrag(event, link.edge.id, x, y)}
+                    onSelect={() => {
+                      if (suppressNodeClickRef.current) {
+                        suppressNodeClickRef.current = false
+                        return
+                      }
+                      onSelectNode(link.neighbor)
+                    }}
+                  />
                 ))}
-                <RelatedTopologyNodeCard node={node} x={center.x} y={center.y} current />
+                <RelatedTopologyNodeCard
+                  node={node}
+                  x={center.x}
+                  y={center.y}
+                  current
+                  dragging={draggingNodeKey === currentNodeKey}
+                  onPointerDown={(event) => startNodeDrag(event, currentNodeKey, center.x, center.y)}
+                />
               </g>
               </g>
             </svg>
@@ -2755,12 +2899,16 @@ function RelatedTopologyNodeCard({
   x,
   y,
   current = false,
+  dragging = false,
+  onPointerDown,
   onSelect,
 }: {
   node: TopologyNode
   x: number
   y: number
   current?: boolean
+  dragging?: boolean
+  onPointerDown?: (event: PointerEvent<SVGGElement>) => void
   onSelect?: () => void
 }) {
   const width = current ? 184 : 158
@@ -2768,7 +2916,17 @@ function RelatedTopologyNodeCard({
   const relationCount = Number(node.properties.relationCount || 0)
   const stackDepth = Math.min(2, Math.max(0, relationCount - 1))
   return (
-    <g className={current ? 'current' : onSelect ? 'selectable' : ''} transform={'translate(' + (x - width / 2) + ' ' + (y - height / 2) + ')'} onClick={onSelect}>
+    <g
+      className={[
+        current ? 'current' : '',
+        onSelect ? 'selectable' : '',
+        onPointerDown ? 'draggable' : '',
+        dragging ? 'dragging' : '',
+      ].filter(Boolean).join(' ')}
+      transform={'translate(' + (x - width / 2) + ' ' + (y - height / 2) + ')'}
+      onPointerDown={onPointerDown}
+      onClick={onSelect}
+    >
       {stackDepth > 1 && <rect className="stack" x="8" y="-8" width={width} height={height} rx="2" style={{ stroke: node.color }} />}
       {stackDepth > 0 && <rect className="stack" x="4" y="-4" width={width} height={height} rx="2" style={{ stroke: node.color }} />}
       <rect width={width} height={height} rx="2" style={{ stroke: node.color }} />
@@ -2949,7 +3107,7 @@ function EntityDetail({
   const relationTitle = relationFilter === 'provided' ? '提供服务' : relationFilter === 'dependency' ? '依赖服务' : '关联项'
   const tabs: Array<{ key: EntityDetailTab; label: string; count?: number; disabled?: boolean; dropdown?: boolean }> = [
     { key: 'detail', label: '实体详情' },
-    { key: 'topology', label: '关联拓扑', count: relatedLinks.length, disabled: !node, dropdown: true },
+    { key: 'topology', label: '关联拓扑', count: relatedLinks.length, disabled: !node },
     { key: 'trace', label: '会话追踪', disabled: !node },
     { key: 'page', label: '页面访问', disabled: !node },
     { key: 'heatmap', label: '热力图分析', disabled: !node },
@@ -3008,12 +3166,6 @@ function EntityDetail({
           </button>
         ))}
       </nav>
-      {activeTab === 'topology' && (
-        <div className="entity-detail-tab-menu">
-          <button className="active" type="button">关联实体拓扑</button>
-          <button type="button">UModel 探索</button>
-        </div>
-      )}
       {activeTab === 'settings' && (
         <div className="entity-detail-tab-menu">
           <button className="active" type="button">应用设置</button>
@@ -3110,14 +3262,6 @@ interface TopologyRegionBox {
   y: number
   width: number
   height: number
-  azBoxes: Array<{
-    key: string
-    label: string
-    x: number
-    y: number
-    width: number
-    height: number
-  }>
 }
 
 interface EntityRelatedLink {
@@ -3135,7 +3279,7 @@ function createReferenceStyleTopology(data: TopologyExplorerData, focusedTypes: 
     : data.nodes)
     .filter((node) => !groupByRegion || regionFocused.has(topologyNodeRegineCode(node)))
   const groupIdForNode = (node: TopologyNode) => groupByRegion
-    ? `${node.type}::${topologyNodeRegineCode(node)}::${topologyNodeAzCode(node)}`
+    ? `${node.type}::${topologyNodeRegineCode(node)}`
     : node.type
   const grouped = new Map<string, TopologyNode[]>()
   sourceNodes.forEach((node) => {
@@ -3151,17 +3295,16 @@ function createReferenceStyleTopology(data: TopologyExplorerData, focusedTypes: 
     const sample = instances[0]
     const type = sample?.type || groupId
     const regineCode = commonTopologyValue(instances, topologyNodeRegineCode)
-    const azCode = commonTopologyValue(instances, topologyNodeAzCode)
     const coordinate = layoutByType.get(groupId) || fallbackReferenceCoordinate(0)
     const title = entityTypeDisplayName(type)
     const subtitle = groupByRegion
-      ? [type, regineCode, azCode].filter(Boolean).join(' · ')
+      ? [type, regineCode].filter(Boolean).join(' · ')
       : type
     return {
       id: groupId,
       type,
       regineCode,
-      azCode,
+      azCode: '',
       instances,
       x: coordinate.x,
       y: coordinate.y,
@@ -3218,7 +3361,7 @@ function referenceNodeDomain(node: ReferenceTopologyNode) {
 
 function referenceNodeLocationLabel(node: ReferenceTopologyNode) {
   if (!node.regineCode) return ''
-  return node.azCode ? `${node.regineCode} / ${node.azCode}` : node.regineCode
+  return node.regineCode
 }
 
 function topologyNodeRegineCode(node: TopologyNode) {
@@ -3313,42 +3456,25 @@ function createLayeredTypeLayout(
       || left.localeCompare(right, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
   }
 
-  const indegree = new Map(incoming)
-  const queue = types.filter((type) => (indegree.get(type) || 0) === 0).sort(sortByTopologyWeight)
-  if (queue.length === 0 && types.length > 0) queue.push([...types].sort(sortByTopologyWeight)[0])
-
-  const levels = new Map<string, number>()
-  const visited = new Set<string>()
-  queue.forEach((type) => levels.set(type, 0))
-  while (queue.length > 0) {
-    const type = queue.shift()
-    if (!type || visited.has(type)) continue
-    visited.add(type)
-    const nextLevel = (levels.get(type) || 0) + 1
-    ;(adjacency.get(type) || []).sort(sortByTopologyWeight).forEach((target) => {
-      levels.set(target, Math.max(levels.get(target) || 0, nextLevel))
-      indegree.set(target, Math.max(0, (indegree.get(target) || 0) - 1))
-      if ((indegree.get(target) || 0) === 0 && !visited.has(target) && !queue.includes(target)) queue.push(target)
-    })
+  const downstreamDistance = new Map<string, number>()
+  const visiting = new Set<string>()
+  const distanceToSink = (type: string): number => {
+    const cached = downstreamDistance.get(type)
+    if (typeof cached === 'number') return cached
+    if (visiting.has(type)) return 0
+    visiting.add(type)
+    const targets = (adjacency.get(type) || []).filter((target) => typeSet.has(target))
+    const distance = targets.length === 0
+      ? 0
+      : 1 + Math.max(...targets.map((target) => distanceToSink(target)))
+    visiting.delete(type)
+    downstreamDistance.set(type, distance)
+    return distance
   }
+  types.forEach(distanceToSink)
 
-  types.filter((type) => !levels.has(type)).sort(sortByTopologyWeight).forEach((type) => {
-    const upstreamLevels = edges
-      .filter((edge) => edge.target === type && levels.has(edge.source))
-      .map((edge) => (levels.get(edge.source) || 0) + 1)
-    levels.set(type, upstreamLevels.length > 0 ? Math.max(...upstreamLevels) : 0)
-  })
-
-  edges
-    .slice()
-    .sort((left, right) => (levels.get(left.source) || 0) - (levels.get(right.source) || 0))
-    .forEach((edge) => {
-      const sourceLevel = levels.get(edge.source) || 0
-      const targetLevel = levels.get(edge.target) || 0
-      if (targetLevel <= sourceLevel && (outgoing.get(edge.source) || 0) >= (outgoing.get(edge.target) || 0)) {
-        levels.set(edge.target, sourceLevel + 1)
-      }
-    })
+  const maxDistance = Math.max(0, ...types.map((type) => downstreamDistance.get(type) || 0))
+  const levels = new Map(types.map((type) => [type, maxDistance - (downstreamDistance.get(type) || 0)]))
 
   const normalizedLevels = [...new Set(types.map((type) => levels.get(type) || 0))].sort((left, right) => left - right)
   const levelIndex = new Map(normalizedLevels.map((level, index) => [level, index]))
@@ -3362,7 +3488,7 @@ function createLayeredTypeLayout(
 
   const canvasWidth = 2478
   const layerTop = 120
-  const layerGap = 148
+  const layerGap = 190
   const sidePadding = 120
   const layout = new Map<string, { x: number; y: number; width: number; height: number }>()
   const regionMode = groups.some(([groupId]) => groupId.includes('::'))
@@ -3373,24 +3499,39 @@ function createLayeredTypeLayout(
     ]))
     const regions = [...new Set(groups.map(([groupId]) => groupRegion.get(groupId) || 'unknown'))]
       .sort((left, right) => left.localeCompare(right, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' }))
-    const regionGap = 54
+    const regionGap = 96
     const regionSidePadding = 72
-    const regionWidth = Math.max(420, (canvasWidth - regionSidePadding * 2 - regionGap * Math.max(0, regions.length - 1)) / Math.max(1, regions.length))
-    const regionX = new Map(regions.map((region, index) => [region, regionSidePadding + index * (regionWidth + regionGap)]))
+    const regionInnerPadding = 42
+    const groupInstances = new Map(groups)
+    const regionWidths = new Map(regions.map((region) => {
+      const maxLayerCount = Math.max(1, ...[...layers.values()].map((layerTypes) => (
+        layerTypes.filter((groupId) => groupRegion.get(groupId) === region).length
+      )))
+      const width = Math.max(360, regionInnerPadding * 2 + maxLayerCount * 220 + Math.max(0, maxLayerCount - 1) * 34)
+      return [region, width] as const
+    }))
+    const totalRegionWidth = regions.reduce((sum, region) => sum + (regionWidths.get(region) || 360), 0)
+      + regionGap * Math.max(0, regions.length - 1)
+    const regionStartX = Math.max(regionSidePadding, (canvasWidth - totalRegionWidth) / 2)
+    const regionX = new Map<string, number>()
+    regions.reduce((x, region) => {
+      regionX.set(region, x)
+      return x + (regionWidths.get(region) || 360) + regionGap
+    }, regionStartX)
     ;[...layers.entries()].sort(([left], [right]) => left - right).forEach(([layer, layerTypes]) => {
       regions.forEach((region) => {
         const ordered = layerTypes
           .filter((groupId) => groupRegion.get(groupId) === region)
           .sort(sortByTopologyWeight)
         if (ordered.length === 0) return
-        const innerPadding = 42
-        const available = regionWidth - innerPadding * 2
-        const gap = ordered.length <= 1 ? 0 : Math.max(18, Math.min(52, available / ordered.length * 0.16))
-        const nodeWidth = Math.max(220, Math.min(300, Math.floor((available - gap * Math.max(0, ordered.length - 1)) / ordered.length)))
+        const regionWidth = regionWidths.get(region) || 360
+        const available = regionWidth - regionInnerPadding * 2
+        const gap = ordered.length <= 1 ? 0 : Math.max(16, Math.min(42, available / ordered.length * 0.14))
+        const nodeWidth = Math.max(170, Math.min(280, Math.floor((available - gap * Math.max(0, ordered.length - 1)) / ordered.length)))
         const rowWidth = ordered.length * nodeWidth + gap * Math.max(0, ordered.length - 1)
         const startX = (regionX.get(region) || 0) + (regionWidth - rowWidth) / 2
         ordered.forEach((groupId, index) => {
-          const instances = groups.find(([item]) => item === groupId)?.[1] || []
+          const instances = groupInstances.get(groupId) || []
           const height = 82
           layout.set(groupId, {
             x: startX + index * (nodeWidth + gap),
@@ -3444,25 +3585,10 @@ function createTopologyRegionBoxes(nodes: ReferenceTopologyNode[]): TopologyRegi
   return [...regionGroups.entries()]
     .map(([region, regionNodes]) => {
       const regionBounds = boundsForReferenceNodes(regionNodes, 48, 54)
-      const azGroups = new Map<string, ReferenceTopologyNode[]>()
-      regionNodes.forEach((node) => {
-        const az = node.azCode || 'unknown'
-        const list = azGroups.get(az) || []
-        list.push(node)
-        azGroups.set(az, list)
-      })
-      const azBoxes = [...azGroups.entries()]
-        .map(([az, azNodes]) => ({
-          key: `${region}:${az}`,
-          label: az,
-          ...boundsForReferenceNodes(azNodes, 28, 36),
-        }))
-        .sort((left, right) => left.y - right.y || left.x - right.x)
       return {
         key: region,
         label: region,
         ...regionBounds,
-        azBoxes,
       }
     })
     .sort((left, right) => left.x - right.x || left.y - right.y)
