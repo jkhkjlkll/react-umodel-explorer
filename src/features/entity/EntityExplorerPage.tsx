@@ -3645,25 +3645,34 @@ function createLayeredTypeLayout(
       || left.localeCompare(right, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
   }
 
-  const downstreamDistance = new Map<string, number>()
-  const visiting = new Set<string>()
-  const distanceToSink = (type: string): number => {
-    const cached = downstreamDistance.get(type)
-    if (typeof cached === 'number') return cached
-    if (visiting.has(type)) return 0
-    visiting.add(type)
-    const targets = (adjacency.get(type) || []).filter((target) => typeSet.has(target))
-    const distance = targets.length === 0
-      ? 0
-      : 1 + Math.max(...targets.map((target) => distanceToSink(target)))
-    visiting.delete(type)
-    downstreamDistance.set(type, distance)
-    return distance
+  const levels = new Map<string, number>()
+  const sources = types.filter((type) => (incoming.get(type) || 0) === 0).sort(sortByTopologyWeight)
+  const seedTypes = sources.length > 0 ? sources : [...types].sort(sortByTopologyWeight).slice(0, 1)
+  seedTypes.forEach((type) => levels.set(type, 0))
+  for (let pass = 0; pass < Math.max(1, types.length); pass += 1) {
+    let changed = false
+    edges.forEach((edge) => {
+      const sourceLevel = levels.get(edge.source)
+      if (sourceLevel === undefined) return
+      const nextLevel = sourceLevel + 1
+      if ((levels.get(edge.target) ?? -1) < nextLevel) {
+        levels.set(edge.target, nextLevel)
+        changed = true
+      }
+    })
+    if (!changed) break
   }
-  types.forEach(distanceToSink)
-
-  const maxDistance = Math.max(0, ...types.map((type) => downstreamDistance.get(type) || 0))
-  const levels = new Map(types.map((type) => [type, maxDistance - (downstreamDistance.get(type) || 0)]))
+  types.forEach((type) => {
+    if (!levels.has(type)) levels.set(type, 0)
+  })
+  types.forEach((type) => {
+    if ((incoming.get(type) || 0) !== 0) return
+    const targetLevels = (adjacency.get(type) || [])
+      .map((target) => levels.get(target))
+      .filter((level): level is number => typeof level === 'number' && level > 0)
+    if (targetLevels.length === 0) return
+    levels.set(type, Math.max(0, Math.min(...targetLevels) - 1))
+  })
 
   const normalizedLevels = [...new Set(types.map((type) => levels.get(type) || 0))].sort((left, right) => left - right)
   const levelIndex = new Map(normalizedLevels.map((level, index) => [level, index]))
