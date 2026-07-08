@@ -2484,15 +2484,21 @@
   top: 0;
   right: 0;
   z-index: 18;
-  width: min(760px, 48%);
+  width: min(960px, calc(100% - 56px));
+  max-width: calc(100% - 56px);
   height: 100%;
+  box-sizing: border-box;
   box-shadow: -18px 0 36px rgba(15, 23, 42, 0.14);
+}
+
+.entity-topology-split.overlay-panel .entity-instance-detail-panel {
+  width: min(1080px, calc(100% - 56px));
 }
 
 .entity-topology-panel-toolbar {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(160px, 0.8fr) minmax(260px, 1.5fr) auto auto;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(220px, 1.45fr) minmax(104px, auto) 76px;
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -2654,7 +2660,7 @@
 
 .entity-topology-detail-table-wrap {
   min-width: 0;
-  overflow: hidden;
+  overflow: auto;
   border: 0;
   border-radius: 0;
   background: #fff;
@@ -2662,7 +2668,7 @@
 
 .entity-topology-detail-table {
   width: 100%;
-  min-width: 0;
+  min-width: 980px;
   border-collapse: collapse;
   color: #303641;
   font-size: 13px;
@@ -2680,13 +2686,24 @@
 }
 
 .entity-topology-detail-table th:first-child {
-  width: 38%;
+  width: 20%;
 }
 
-.entity-topology-detail-table th:nth-child(2),
-.entity-topology-detail-table th:nth-child(3),
+.entity-topology-detail-table th:nth-child(2) {
+  width: 18%;
+}
+
+.entity-topology-detail-table th:nth-child(3) {
+  width: 14%;
+}
+
 .entity-topology-detail-table th:nth-child(4) {
-  width: 20.66%;
+  width: 22%;
+}
+
+.entity-topology-detail-table th:nth-child(5),
+.entity-topology-detail-table th:nth-child(6) {
+  width: 13%;
 }
 
 .entity-topology-sort-header {
@@ -3757,6 +3774,7 @@
   padding: 12px;
   overflow: hidden;
   background: #fff;
+  overscroll-behavior: contain;
 }
 
 .entity-topology-split.has-instance-detail .entity-related-topology-canvas {
@@ -3886,6 +3904,7 @@
 .entity-related-domain-band {
   fill: #f6f7f9;
   stroke: #edf1f5;
+  rx: 3px;
 }
 
 .entity-related-domain-label {
@@ -3911,18 +3930,6 @@
   text-anchor: middle;
 }
 
-.entity-related-nodes rect {
-  fill: #fff;
-  stroke: #2a9aa0;
-  stroke-width: 1.1;
-}
-
-.entity-related-nodes rect.stack {
-  fill: #fff;
-  stroke-width: 1;
-  opacity: 0.64;
-}
-
 .entity-related-nodes .selectable {
   cursor: pointer;
 }
@@ -3935,24 +3942,50 @@
   cursor: grabbing;
 }
 
-.entity-related-nodes .selectable:hover rect {
-  filter: drop-shadow(0 3px 8px rgb(15 154 154 / 18%));
-  stroke-width: 1.6;
+.entity-related-nodes .node-halo {
+  fill: #fff;
+  stroke-width: 2;
+  filter: drop-shadow(0 2px 4px rgb(15 23 42 / 12%));
 }
 
-.entity-related-nodes .dragging rect {
-  filter: drop-shadow(0 8px 14px rgb(15 154 154 / 22%));
-  stroke-width: 1.8;
-}
-
-.entity-related-nodes .current rect {
-  fill: #f2fbfb;
-  stroke: #0f9a9a;
+.entity-related-nodes .node-core {
+  stroke: #fff;
   stroke-width: 1.5;
 }
 
-.entity-related-nodes rect.accent {
-  stroke-width: 0;
+.entity-related-nodes .node-icon {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.entity-related-nodes .selectable:hover .node-halo,
+.entity-related-nodes .dragging .node-halo {
+  filter: drop-shadow(0 5px 10px rgb(15 23 42 / 18%));
+  stroke-width: 2.6;
+}
+
+.entity-related-nodes .expand-control {
+  cursor: pointer;
+}
+
+.entity-related-nodes .expand-control circle {
+  stroke: #fff;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 1px 3px rgb(15 23 42 / 18%));
+}
+
+.entity-related-nodes .expand-control path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.entity-related-nodes .expand-control.expanded circle {
+  opacity: 0.82;
 }
 
 .entity-related-nodes text.title {
@@ -3961,7 +3994,7 @@
   font-weight: 700;
 }
 
-.entity-related-nodes text.count {
+.entity-related-nodes text.instance {
   fill: #6b7280;
   font-size: 10px;
   font-weight: 700;

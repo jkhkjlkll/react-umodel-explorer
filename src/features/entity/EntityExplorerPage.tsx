@@ -58,7 +58,7 @@ type EntityDetailTab =
   | 'settings'
   | 'logSearch'
   | 'related'
-type EntityAggregateSortKey = 'name' | 'tags' | 'probe' | 'language' | 'region' | 'latency'
+type EntityAggregateSortKey = 'name' | 'tags' | 'probe' | 'language' | 'region' | 'latency' | 'instanceId' | 'type' | 'created' | 'updated'
 type EntityTableSortKey = 'name' | 'type' | 'instance' | 'domain' | 'tags' | 'health' | 'events' | 'updated'
 type SortDirection = 'asc' | 'desc'
 type EntityRelationFilter = 'all' | 'provided' | 'dependency'
@@ -1282,7 +1282,7 @@ function EntityTable({ records, selected, onSelect }: { records: EntityRecord[];
   )
 }
 
-function entityInstanceId(record: EntityRecord) {
+function entityInstanceId(record: { id: string; properties: Record<string, unknown> }) {
   return valueText(record.properties.instanceId)
     || valueText(record.properties.instance_id)
     || valueText(record.properties.id)
@@ -1941,6 +1941,8 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
   const [selectedTagKeys, setSelectedTagKeys] = useState<string[]>([])
   const [sortKey, setSortKey] = useState<EntityAggregateSortKey>('name')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 10
   const tagOptions = useMemo(() => createAggregateTagOptions(item.instances), [item.instances])
   const filteredInstances = useMemo(() => {
     const search = query.trim().toLowerCase()
@@ -1955,6 +1957,10 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
         valueText(node.properties.regine_code),
         valueText(node.properties.az_code),
         valueText(node.properties.region),
+        valueText(node.properties.created_at),
+        valueText(node.properties.createTime),
+        valueText(node.properties.updated_at),
+        valueText(node.properties.updateTime),
       ].join(' ').toLowerCase().includes(search)
       const matchesTags = selectedTagKeys.length === 0 || selectedTagKeys.every((key) => valueText(node.properties[key]))
       return matchesSearch && matchesTags
@@ -1968,11 +1974,27 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
       : String(leftValue).localeCompare(String(rightValue), 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
     return sortDirection === 'asc' ? result : -result
   }), [filteredInstances, sortDirection, sortKey])
-  const rows = sortedInstances.slice(0, 10)
-  const runInstanceQuery = () => setQuery(queryDraft)
-  const toggleTagFilter = (key: string) => setSelectedTagKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
-  const clearTagFilters = () => setSelectedTagKeys([])
+  const pageCount = Math.max(1, Math.ceil(sortedInstances.length / pageSize))
+  const pageButtons = useMemo(() => {
+    const start = Math.max(1, Math.min(currentPage - 2, pageCount - 4))
+    const end = Math.min(pageCount, start + 4)
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index)
+  }, [currentPage, pageCount])
+  const rows = sortedInstances.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const runInstanceQuery = () => {
+    setCurrentPage(1)
+    setQuery(queryDraft)
+  }
+  const toggleTagFilter = (key: string) => {
+    setCurrentPage(1)
+    setSelectedTagKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
+  }
+  const clearTagFilters = () => {
+    setCurrentPage(1)
+    setSelectedTagKeys([])
+  }
   const changeSort = (key: EntityAggregateSortKey) => {
+    setCurrentPage(1)
     setSortKey((currentKey) => {
       if (currentKey === key) {
         setSortDirection((currentDirection) => currentDirection === 'asc' ? 'desc' : 'asc')
@@ -1988,7 +2010,12 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
     setQueryDraft('')
     setSelectedTagKeys([])
     setTagFilterOpen(false)
+    setCurrentPage(1)
   }, [item.id])
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(Math.max(1, page), pageCount))
+  }, [pageCount])
 
   return (
     <aside className="entity-topology-detail-panel" aria-label={`${item.title}实例列表`}>
@@ -2052,22 +2079,12 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
             <tr>
               <th aria-sort={sortKey === 'name' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
                 <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('name')}>
-                  {item.title}名称 <span className={`entity-topology-sort ${sortKey === 'name' ? sortDirection : ''}`} />
+                  实例名称 <span className={`entity-topology-sort ${sortKey === 'name' ? sortDirection : ''}`} />
                 </button>
               </th>
-              <th aria-sort={sortKey === 'tags' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
-                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('tags')}>
-                  标签 <span className="entity-topology-info">?</span> <span className={`entity-topology-sort ${sortKey === 'tags' ? sortDirection : ''}`} />
-                </button>
-              </th>
-              <th aria-sort={sortKey === 'probe' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
-                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('probe')}>
-                  探针类型 <span className="entity-topology-info">?</span> <span className={`entity-topology-sort ${sortKey === 'probe' ? sortDirection : ''}`} />
-                </button>
-              </th>
-              <th aria-sort={sortKey === 'language' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
-                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('language')}>
-                  语言 <span className={`entity-topology-sort ${sortKey === 'language' ? sortDirection : ''}`} />
+              <th aria-sort={sortKey === 'instanceId' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('instanceId')}>
+                  实例ID <span className={`entity-topology-sort ${sortKey === 'instanceId' ? sortDirection : ''}`} />
                 </button>
               </th>
               <th aria-sort={sortKey === 'region' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
@@ -2075,9 +2092,19 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
                   区域 <span className={`entity-topology-sort ${sortKey === 'region' ? sortDirection : ''}`} />
                 </button>
               </th>
-              <th aria-sort={sortKey === 'latency' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
-                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('latency')}>
-                  平均耗时 <span className={`entity-topology-sort ${sortKey === 'latency' ? sortDirection : ''}`} />
+              <th aria-sort={sortKey === 'type' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('type')}>
+                  实体类型 <span className={`entity-topology-sort ${sortKey === 'type' ? sortDirection : ''}`} />
+                </button>
+              </th>
+              <th aria-sort={sortKey === 'created' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('created')}>
+                  创建时间 <span className={`entity-topology-sort ${sortKey === 'created' ? sortDirection : ''}`} />
+                </button>
+              </th>
+              <th aria-sort={sortKey === 'updated' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
+                <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('updated')}>
+                  更新时间 <span className={`entity-topology-sort ${sortKey === 'updated' ? sortDirection : ''}`} />
                 </button>
               </th>
             </tr>
@@ -2091,23 +2118,28 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
             {rows.map((row) => (
               <tr key={row.id}>
                 <td><a href="#entity-topology-detail" onClick={(event) => { event.preventDefault(); onSelectNode(row) }}>{row.label}</a></td>
-                <td>{entityTagCount(row)}</td>
-                <td>{valueText(row.properties.__method__) || 'EntityStore'}</td>
-                <td>{valueText(row.properties.language) || '-'}</td>
+                <td title={entityInstanceId(row)}>{entityInstanceId(row)}</td>
                 <td>{entityLocationText(row.properties) || valueText(row.properties.__domain__) || '-'}</td>
-                <td>{Number(row.properties.relationCount || 0) > 0 ? `${18 + Number(row.properties.relationCount || 0)} ms` : '-'}</td>
+                <td title={row.type}>{row.type}</td>
+                <td>{entityCreatedTime(row.properties)}</td>
+                <td>{entityUpdatedTime(row.properties)}</td>
               </tr>
             ))}
           </tbody>
         </table>
         <div className="entity-topology-detail-footer">
           <span>每页显示:</span>
-          <button type="button">10 <ChevronDown size={14} /></button>
+          <button type="button">{pageSize} <ChevronDown size={14} /></button>
           <span>总数: {filteredInstances.length}</span>
-          <button type="button" disabled>‹ 上一页</button>
-          <button type="button" className="active">1</button>
-          {filteredInstances.length > 10 && <button type="button">2</button>}
-          <button type="button">下一页 ›</button>
+          <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>‹ 上一页</button>
+          {pageButtons[0] > 1 && <button type="button" onClick={() => setCurrentPage(1)}>1</button>}
+          {pageButtons[0] > 2 && <span>...</span>}
+          {pageButtons.map((page) => (
+            <button key={page} type="button" className={page === currentPage ? 'active' : ''} onClick={() => setCurrentPage(page)}>{page}</button>
+          ))}
+          {pageButtons[pageButtons.length - 1] < pageCount - 1 && <span>...</span>}
+          {pageButtons[pageButtons.length - 1] < pageCount && <button type="button" onClick={() => setCurrentPage(pageCount)}>{pageCount}</button>}
+          <button type="button" disabled={currentPage >= pageCount} onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))}>下一页 ›</button>
         </div>
       </div>
     </aside>
@@ -2129,12 +2161,37 @@ function createAggregateTagOptions(nodes: TopologyNode[]) {
 }
 
 function aggregateSortValue(node: TopologyNode, key: EntityAggregateSortKey) {
+  if (key === 'instanceId') return entityInstanceId(node)
   if (key === 'name') return node.label
+  if (key === 'type') return node.type
   if (key === 'tags') return entityTagCount(node)
   if (key === 'probe') return valueText(node.properties.__method__) || 'EntityStore'
   if (key === 'language') return valueText(node.properties.language) || ''
   if (key === 'region') return entityLocationText(node.properties) || valueText(node.properties.__domain__) || ''
+  if (key === 'created') return entityTimeSortValue(node.properties.created_at) || entityTimeSortValue(node.properties.createTime) || 0
+  if (key === 'updated') return entityTimeSortValue(node.properties.updated_at) || entityTimeSortValue(node.properties.updateTime) || entityTimeSortValue(node.properties.__last_observed_time__) || 0
   return Number(node.properties.relationCount || 0) > 0 ? 18 + Number(node.properties.relationCount || 0) : -1
+}
+
+function entityCreatedTime(props: Record<string, unknown>) {
+  return valueText(props.created_at) || valueText(props.createTime) || valueText(props.createdTime) || '-'
+}
+
+function entityUpdatedTime(props: Record<string, unknown>) {
+  return formatLastSeen(props.updated_at)
+    || formatLastSeen(props.updateTime)
+    || formatLastSeen(props.updatedTime)
+    || formatLastSeen(props.__last_observed_time__)
+    || '-'
+}
+
+function entityTimeSortValue(value: unknown) {
+  const text = valueText(value)
+  if (!text) return 0
+  const numeric = Number(text)
+  if (Number.isFinite(numeric)) return numeric
+  const timestamp = Date.parse(text)
+  return Number.isFinite(timestamp) ? timestamp : text
 }
 
 function EntityInstanceDetailPanel({
@@ -2166,17 +2223,6 @@ function EntityInstanceDetailPanel({
   const tabs: Array<{ key: EntityInstanceTab; label: string; count?: number; dropdown?: boolean }> = [
     { key: 'detail', label: '\u5b9e\u4f53\u8be6\u60c5' },
     { key: 'topology', label: '\u5173\u8054\u62d3\u6251' },
-    { key: 'trace', label: '\u4f1a\u8bdd\u8ffd\u8e2a' },
-    { key: 'page', label: '\u9875\u9762\u8bbf\u95ee' },
-    { key: 'heatmap', label: '\u70ed\u529b\u56fe\u5206\u6790' },
-    { key: 'resource', label: '\u8d44\u6e90\u52a0\u8f7d' },
-    { key: 'api', label: 'API\u8bf7\u6c42' },
-    { key: 'exception', label: '\u5f02\u5e38\u7edf\u8ba1' },
-    { key: 'customEvent', label: '\u81ea\u5b9a\u4e49\u4e8b\u4ef6' },
-    { key: 'customLog', label: '\u81ea\u5b9a\u4e49\u65e5\u5fd7' },
-    { key: 'settings', label: '\u5e94\u7528\u8bbe\u7f6e', dropdown: true },
-    { key: 'logSearch', label: '\u65e5\u5fd7\u63a2\u7d22', count: relatedLinks.length, dropdown: true },
-    { key: 'related', label: '\u5173\u8054\u9879', dropdown: true },
   ]
 
   useEffect(() => {
@@ -2265,7 +2311,7 @@ function EntityInstanceDetailPanel({
           </dl>
         </section>
       )}
-      {activeTab === 'topology' && <EntityRelatedTopologyCanvas node={node} links={relatedLinks} onSelectNode={onSelectNode} />}
+      {activeTab === 'topology' && <EntityRelatedTopologyCanvas data={data} node={node} links={relatedLinks} onSelectNode={onSelectNode} />}
       {activeTab === 'trace' && (
         <EntityTracePanel node={node} links={relatedLinks} />
       )}
@@ -2620,10 +2666,12 @@ function EntityRelationList({
 }
 
 function EntityRelatedTopologyCanvas({
+  data,
   node,
   links,
   onSelectNode,
 }: {
+  data: TopologyExplorerData
   node: TopologyNode
   links: EntityRelatedLink[]
   onSelectNode: (node: TopologyNode) => void
@@ -2647,48 +2695,58 @@ function EntityRelatedTopologyCanvas({
   const [showOutgoing, setShowOutgoing] = useState(true)
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({})
   const [draggingNodeKey, setDraggingNodeKey] = useState('')
+  const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>([])
   const incomingTotal = links.filter((link) => link.direction === 'in').length
   const outgoingTotal = links.filter((link) => link.direction === 'out').length
-  const filteredLinks = links.filter((link) => link.direction === 'in' ? showIncoming : showOutgoing)
-  const visibleLinks = filteredLinks.slice(0, 12)
-  const incoming = visibleLinks.filter((link) => link.direction === 'in')
-  const outgoing = visibleLinks.filter((link) => link.direction === 'out')
-  const width = 760
-  const height = 360
-  const centerX = incoming.length > 0 && outgoing.length === 0
-    ? width * 0.62
-    : outgoing.length > 0 && incoming.length === 0
-      ? width * 0.38
-      : width / 2
-  const canvasCenter = { x: centerX, y: height / 2 }
-  const currentNodeKey = 'current'
-  const center = nodePositions[currentNodeKey] || canvasCenter
-  const domainBand = { x: 42, y: center.y - 58, width: width - 84, height: 116 }
-  const upstreamLayout = layoutRelatedColumn(incoming, 150, height)
-  const downstreamLayout = layoutRelatedColumn(outgoing, width - 150, height)
-  const baseLayout = [...upstreamLayout, ...downstreamLayout]
-  const layout = baseLayout.map((item) => {
-    const position = nodePositions[item.link.edge.id]
-    return position ? { ...item, x: position.x, y: position.y } : item
+  const graph = useMemo(
+    () => createRelatedInstanceGraph(data, node, links, expandedNodeIds, showIncoming, showOutgoing),
+    [data, expandedNodeIds, links, node, showIncoming, showOutgoing],
+  )
+  const baseLayout = useMemo(() => layoutRelatedInstanceGraph(graph.nodes, graph.edges, node.id), [graph.edges, graph.nodes, node.id])
+  const layout = graph.nodes.map((item) => {
+    const base = baseLayout.positions.get(item.id) || { x: baseLayout.width / 2, y: baseLayout.height / 2 }
+    const position = nodePositions[item.id]
+    return { node: item, x: position?.x ?? base.x, y: position?.y ?? base.y }
   })
-  const legendItems = uniqueRelatedLegend([node, ...visibleLinks.map((link) => link.neighbor)])
+  const nodeById = useMemo(() => new Map(layout.map((item) => [item.node.id, item])), [layout])
+  const width = baseLayout.width
+  const height = baseLayout.height
+  const canvasCenter = baseLayout.center
+  const center = nodeById.get(node.id) || { node, x: canvasCenter.x, y: canvasCenter.y }
+  const domainBand = { x: 42, y: Math.max(56, canvasCenter.y - 130), width: width - 84, height: Math.max(190, height - 112) }
+  const legendItems = uniqueRelatedLegend(graph.nodes)
   const domain = valueText(node.properties.__domain__) || valueText(node.properties.domain) || 'domain'
   const zoomScale = zoom / 100
   const graphTransform = 'translate(' + canvasCenter.x + ' ' + canvasCenter.y + ') scale(' + zoomScale + ') translate(' + (-canvasCenter.x) + ' ' + (-canvasCenter.y) + ')'
   useEffect(() => {
-    const availableKeys = new Set([currentNodeKey, ...visibleLinks.map((link) => link.edge.id)])
+    const availableKeys = new Set(graph.nodes.map((item) => item.id))
     setNodePositions((current) => {
       const next = Object.fromEntries(Object.entries(current).filter(([key]) => availableKeys.has(key)))
       return Object.keys(next).length === Object.keys(current).length ? current : next
     })
-  }, [visibleLinks])
+  }, [graph.nodes])
+  useEffect(() => {
+    setExpandedNodeIds([])
+    setNodePositions({})
+  }, [node.id])
   const zoomOut = () => setZoom((current) => Math.max(50, current - 10))
   const zoomIn = () => setZoom((current) => Math.min(160, current + 10))
+  const handleRelatedWheelZoom = (event: WheelEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const delta = event.deltaY < 0 ? 8 : -8
+    setZoom((current) => Math.max(50, Math.min(160, current + delta)))
+  }
   const resetZoom = () => setZoom(100)
   const fitCanvas = () => setZoom(90)
   const resetLayout = () => {
     setZoom(100)
     setNodePositions({})
+  }
+  const toggleExpandNode = (targetNode: TopologyNode) => {
+    setExpandedNodeIds((current) => current.includes(targetNode.id)
+      ? current.filter((id) => id !== targetNode.id)
+      : [...current, targetNode.id])
   }
   const scenePointFromEvent = (event: PointerEvent<SVGGElement | SVGSVGElement>) => {
     const svg = svgRef.current
@@ -2729,8 +2787,8 @@ function EntityRelatedTopologyCanvas({
     const dx = point.x - dragState.startX
     const dy = point.y - dragState.startY
     if (!dragState.moved && Math.hypot(dx, dy) > 4) dragState.moved = true
-    const nextX = Math.max(88, Math.min(width - 88, dragState.nodeX + dx))
-    const nextY = Math.max(42, Math.min(height - 42, dragState.nodeY + dy))
+    const nextX = Math.max(-140, Math.min(width + 140, dragState.nodeX + dx))
+    const nextY = Math.max(-100, Math.min(height + 100, dragState.nodeY + dy))
     setNodePositions((current) => {
       const position = current[dragState.key]
       if (position && Math.abs(position.x - nextX) < 0.5 && Math.abs(position.y - nextY) < 0.5) return current
@@ -2752,11 +2810,11 @@ function EntityRelatedTopologyCanvas({
   return (
     <section className="entity-related-topology-tab">
       <div className="entity-related-topology-head">
-        <strong>{'\u5173\u8054\u5b9e\u4f53\u62d3\u6251'}</strong>
-        <span>{filteredLinks.length} / {links.length} {'\u6761\u76f4\u63a5\u5173\u7cfb'}</span>
+        <strong aria-hidden="true" />
+        <span>{graph.edges.length} / {links.length} {'\u6761\u5173\u7cfb'}</span>
       </div>
-      <div className="entity-related-topology-canvas">
-        {visibleLinks.length === 0 ? (
+      <div className="entity-related-topology-canvas" onWheel={handleRelatedWheelZoom}>
+        {graph.edges.length === 0 ? (
           <div className="entity-related-topology-empty">{'\u6682\u65e0\u76f4\u63a5\u5173\u8054\u62d3\u6251'}</div>
         ) : (
           <>
@@ -2820,60 +2878,61 @@ function EntityRelatedTopologyCanvas({
               <rect className="entity-related-domain-band" x={domainBand.x} y={domainBand.y} width={domainBand.width} height={domainBand.height} />
               <text className="entity-related-domain-label" x={domainBand.x + 14} y={domainBand.y + 24}>{domain}</text>
               <g className="entity-related-edges">
-                {layout.map(({ link, x, y }) => {
-                  const source = link.direction === 'out' ? center : { x, y }
-                  const target = link.direction === 'out' ? { x, y } : center
-                  const elbowOffset = link.direction === 'out' ? 72 : -72
+                {graph.edges.map((edge) => {
+                  const sourceNode = nodeById.get(edge.source.id)
+                  const targetNode = nodeById.get(edge.target.id)
+                  if (!sourceNode || !targetNode) return null
+                  const forward = targetNode.x >= sourceNode.x
+                  const source = relatedNodeEdgeAnchor(sourceNode, forward ? 'right' : 'left', sourceNode.node.id === node.id)
+                  const target = relatedNodeEdgeAnchor(targetNode, forward ? 'left' : 'right', targetNode.node.id === node.id)
+                  const elbowOffset = Math.max(-92, Math.min(92, (target.x - source.x) * 0.32))
                   const path = 'M ' + source.x + ' ' + source.y
                     + ' C ' + (source.x + elbowOffset) + ' ' + source.y
                     + ', ' + (target.x - elbowOffset) + ' ' + target.y
                     + ', ' + target.x + ' ' + target.y
                   const midX = (source.x + target.x) / 2
                   const midY = (source.y + target.y) / 2
-                  const labelWidth = Math.min(64, Math.max(42, link.edge.type.length * 6 + 16))
+                  const labelWidth = Math.min(80, Math.max(42, edge.label.length * 6 + 16))
                   return (
-                    <g key={link.edge.id}>
+                    <g key={edge.id}>
                       <path d={path} markerEnd="url(#entity-related-arrow)" />
                       <rect x={midX - labelWidth / 2} y={midY - 10} width={labelWidth} height="20" rx="2" />
-                      <text x={midX} y={midY + 4}>{link.edge.type}</text>
+                      <text x={midX} y={midY + 4}>{edge.label}</text>
                     </g>
                   )
                 })}
               </g>
               <g className="entity-related-nodes">
-                {layout.map(({ link, x, y }) => (
+                {layout.map(({ node: item, x, y }) => (
                   <RelatedTopologyNodeCard
-                    key={link.edge.id}
-                    node={link.neighbor}
+                    key={item.id}
+                    node={item}
                     x={x}
                     y={y}
-                    dragging={draggingNodeKey === link.edge.id}
-                    onPointerDown={(event) => startNodeDrag(event, link.edge.id, x, y)}
+                    current={item.id === node.id}
+                    expanded={expandedNodeIds.includes(item.id)}
+                    expandable={item.id !== node.id && relatedLinksForInstance(data, item).length > 0}
+                    dragging={draggingNodeKey === item.id}
+                    onPointerDown={(event) => startNodeDrag(event, item.id, x, y)}
+                    onExpand={item.id === node.id ? undefined : () => toggleExpandNode(item)}
                     onSelect={() => {
                       if (suppressNodeClickRef.current) {
                         suppressNodeClickRef.current = false
                         return
                       }
-                      onSelectNode(link.neighbor)
+                      if (item.id !== node.id) onSelectNode(item)
                     }}
                   />
                 ))}
-                <RelatedTopologyNodeCard
-                  node={node}
-                  x={center.x}
-                  y={center.y}
-                  current
-                  dragging={draggingNodeKey === currentNodeKey}
-                  onPointerDown={(event) => startNodeDrag(event, currentNodeKey, center.x, center.y)}
-                />
               </g>
               </g>
             </svg>
             <div className="entity-related-minimap" aria-hidden="true">
               <svg viewBox={'0 0 ' + width + ' ' + height}>
                 <rect width={width} height={height} />
-                {layout.map(({ link, x, y }) => <rect key={link.edge.id} x={x - 20} y={y - 8} width="40" height="16" />)}
-                <rect className="current" x={center.x - 24} y={center.y - 10} width="48" height="20" />
+                {layout.map(({ node: item, x, y }) => (
+                  <rect key={item.id} className={item.id === node.id ? 'current' : ''} x={x - 3} y={y - 3} width="6" height="6" rx="3" />
+                ))}
               </svg>
             </div>
             <div className="entity-related-legend">
@@ -2887,8 +2946,8 @@ function EntityRelatedTopologyCanvas({
           </>
         )}
       </div>
-      {links.length > visibleLinks.length && (
-        <p className="entity-related-topology-more">{'\u5df2\u5c55\u793a\u524d'} {visibleLinks.length} {'\u6761\u76f4\u63a5\u5173\u7cfb\uff0c\u5171'} {links.length} {'\u6761\u3002'}</p>
+      {graph.truncated && (
+        <p className="entity-related-topology-more">{'\u5df2\u5c55\u793a\u524d'} {graph.edges.length} {'\u6761\u5173\u7cfb\uff0c\u53ef\u901a\u8fc7\u8282\u70b9\u53f3\u4fa7\u6309\u94ae\u7ee7\u7eed\u5c55\u5f00\u3002'}</p>
       )}
     </section>
   )
@@ -2900,21 +2959,28 @@ function RelatedTopologyNodeCard({
   y,
   current = false,
   dragging = false,
+  expanded = false,
+  expandable = false,
   onPointerDown,
   onSelect,
+  onExpand,
 }: {
   node: TopologyNode
   x: number
   y: number
   current?: boolean
   dragging?: boolean
+  expanded?: boolean
+  expandable?: boolean
   onPointerDown?: (event: PointerEvent<SVGGElement>) => void
   onSelect?: () => void
+  onExpand?: () => void
 }) {
-  const width = current ? 184 : 158
-  const height = current ? 64 : 58
-  const relationCount = Number(node.properties.relationCount || 0)
-  const stackDepth = Math.min(2, Math.max(0, relationCount - 1))
+  const width = current ? 190 : 168
+  const height = 78
+  const instanceId = entityInstanceId(node)
+  const labelLimit = current ? 20 : 17
+  const typeText = entityTypeDisplayName(node.type)
   return (
     <g
       className={[
@@ -2927,27 +2993,150 @@ function RelatedTopologyNodeCard({
       onPointerDown={onPointerDown}
       onClick={onSelect}
     >
-      {stackDepth > 1 && <rect className="stack" x="8" y="-8" width={width} height={height} rx="2" style={{ stroke: node.color }} />}
-      {stackDepth > 0 && <rect className="stack" x="4" y="-4" width={width} height={height} rx="2" style={{ stroke: node.color }} />}
-      <rect width={width} height={height} rx="2" style={{ stroke: node.color }} />
-      <rect className="accent" x="0" y="0" width={width} height="4" style={{ fill: node.color }} />
-      <circle cx="20" cy="21" r="8" fill={node.color} />
-      <text className="title" x="36" y="22">{truncateSvgText(node.label, current ? 18 : 15)}</text>
-      <text className="count" x={width - 12} y="22" textAnchor="end">{'\u6570\u91cf: '}{relationCount}</text>
-      <text className="type" x="14" y={height - 13}>{'\u7c7b\u578b: '}{truncateSvgText(node.type, current ? 24 : 20)}</text>
+      <circle className="node-halo" cx={width / 2} cy="18" r={current ? 17 : 15} style={{ stroke: node.color }} />
+      <circle className="node-core" cx={width / 2} cy="18" r={current ? 11 : 10} style={{ fill: node.color }} />
+      <path className="node-icon" transform={`translate(${width / 2 - 5} 13)`} d="M1 2.5 L5 0.3 L9 2.5 V7.5 L5 9.7 L1 7.5 Z M5 0.3 V4.9 M1 2.5 L5 4.9 L9 2.5" />
+      {expandable && (
+        <g
+          className={expanded ? 'expand-control expanded' : 'expand-control'}
+          transform={`translate(${width / 2 + (current ? 18 : 16)} 18)`}
+          role="button"
+          aria-label={expanded ? '收起上下游' : '展开上下游'}
+          onPointerDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            onExpand?.()
+          }}
+        >
+          <circle r="7" style={{ fill: node.color }} />
+          <path d={expanded ? 'M-3 0 H3' : 'M-3 0 H3 M0 -3 V3'} />
+        </g>
+      )}
+      <text className="title" x={width / 2} y="48" textAnchor="middle">{truncateSvgText(node.label, labelLimit)}</text>
+      <text className="instance" x={width / 2} y="63" textAnchor="middle">{truncateSvgText(instanceId, current ? 22 : 18)}</text>
+      <text className="type" x={width / 2} y="76" textAnchor="middle">{truncateSvgText(typeText, current ? 24 : 20)}</text>
     </g>
   )
 }
 
-function layoutRelatedColumn(links: EntityRelatedLink[], x: number, height: number) {
-  const total = Math.max(links.length, 1)
-  const available = Math.min(260, Math.max(90, total * 70))
-  const startY = height / 2 - available / 2
-  return links.map((link, index) => ({
-    link,
-    x,
-    y: startY + ((index + 0.5) * available) / total,
-  }))
+function relatedNodeEdgeAnchor(
+  item: { x: number; y: number },
+  side: 'left' | 'right',
+  current: boolean,
+) {
+  const radius = current ? 17 : 15
+  return {
+    x: item.x + (side === 'right' ? radius : -radius),
+    y: item.y - 21,
+  }
+}
+
+interface RelatedInstanceEdge {
+  id: string
+  source: TopologyNode
+  target: TopologyNode
+  label: string
+}
+
+function createRelatedInstanceGraph(
+  data: TopologyExplorerData,
+  root: TopologyNode,
+  rootLinks: EntityRelatedLink[],
+  expandedNodeIds: string[],
+  showIncoming: boolean,
+  showOutgoing: boolean,
+) {
+  const nodeMap = new Map<string, TopologyNode>([[root.id, root]])
+  const edgeMap = new Map<string, RelatedInstanceEdge>()
+  const maxEdges = 36
+  let truncated = false
+  const addLink = (anchor: TopologyNode, link: EntityRelatedLink) => {
+    if (edgeMap.size >= maxEdges) {
+      truncated = true
+      return
+    }
+    if (link.direction === 'in' && !showIncoming) return
+    if (link.direction === 'out' && !showOutgoing) return
+    const source = link.direction === 'out' ? anchor : link.neighbor
+    const target = link.direction === 'out' ? link.neighbor : anchor
+    if (source.id === target.id) return
+    nodeMap.set(source.id, source)
+    nodeMap.set(target.id, target)
+    edgeMap.set(link.edge.id, { id: link.edge.id, source, target, label: link.edge.type })
+  }
+
+  rootLinks.forEach((link) => addLink(root, link))
+  expandedNodeIds.forEach((id) => {
+    const expandedNode = nodeMap.get(id) || data.nodesById.get(id)
+    if (!expandedNode) return
+    relatedLinksForInstance(data, expandedNode).forEach((link) => addLink(expandedNode, link))
+  })
+
+  return {
+    nodes: [...nodeMap.values()],
+    edges: [...edgeMap.values()],
+    truncated,
+  }
+}
+
+function layoutRelatedInstanceGraph(nodes: TopologyNode[], edges: RelatedInstanceEdge[], rootId: string) {
+  const levelById = new Map<string, number>([[rootId, 0]])
+  for (let pass = 0; pass < Math.max(2, nodes.length); pass += 1) {
+    let changed = false
+    edges.forEach((edge) => {
+      const sourceLevel = levelById.get(edge.source.id)
+      const targetLevel = levelById.get(edge.target.id)
+      if (sourceLevel !== undefined && targetLevel === undefined) {
+        levelById.set(edge.target.id, sourceLevel + 1)
+        changed = true
+      } else if (targetLevel !== undefined && sourceLevel === undefined) {
+        levelById.set(edge.source.id, targetLevel - 1)
+        changed = true
+      }
+    })
+    if (!changed) break
+  }
+
+  nodes.forEach((node) => {
+    if (!levelById.has(node.id)) levelById.set(node.id, 0)
+  })
+  const levels = [...new Set(nodes.map((node) => levelById.get(node.id) || 0))].sort((left, right) => left - right)
+  const minLevel = Math.min(0, ...levels)
+  const maxLevel = Math.max(0, ...levels)
+  const columnGap = 260
+  const rowGap = 112
+  const sidePadding = 150
+  const topPadding = 108
+  const maxRows = Math.max(1, ...levels.map((level) => nodes.filter((node) => (levelById.get(node.id) || 0) === level).length))
+  const width = Math.max(760, sidePadding * 2 + (maxLevel - minLevel) * columnGap + 180)
+  const height = Math.max(360, topPadding * 2 + (maxRows - 1) * rowGap)
+  const center = {
+    x: sidePadding + (0 - minLevel) * columnGap + 90,
+    y: height / 2,
+  }
+  const positions = new Map<string, { x: number; y: number }>()
+  levels.forEach((level) => {
+    const layerNodes = nodes
+      .filter((node) => (levelById.get(node.id) || 0) === level)
+      .sort((left, right) => {
+        if (left.id === rootId) return -1
+        if (right.id === rootId) return 1
+        return left.label.localeCompare(right.label, 'zh-Hans-CN', { numeric: true, sensitivity: 'base' })
+      })
+    const x = sidePadding + (level - minLevel) * columnGap + 90
+    const startY = height / 2 - ((layerNodes.length - 1) * rowGap) / 2
+    layerNodes.forEach((node, index) => {
+      positions.set(node.id, {
+        x,
+        y: node.id === rootId ? center.y : startY + index * rowGap,
+      })
+    })
+  })
+  return { positions, width, height, center }
 }
 
 function uniqueRelatedLegend(nodes: TopologyNode[]) {
@@ -3200,7 +3389,7 @@ function EntityDetail({
           </dl>
         )}
         {activeTab === 'topology' && node && (
-          <EntityRelatedTopologyCanvas node={node} links={relatedLinks} onSelectNode={onSelectNode} />
+          <EntityRelatedTopologyCanvas data={data} node={node} links={relatedLinks} onSelectNode={onSelectNode} />
         )}
         {activeTab === 'trace' && node && (
           <EntityTracePanel node={node} links={relatedLinks} />
@@ -3805,11 +3994,15 @@ function matchesEntityScopePreset(record: EntityRecord, preset: EntityScopePrese
 }
 
 function aggregateRecordSortValue(record: EntityRecord, node: TopologyNode | undefined, key: EntityAggregateSortKey) {
+  if (key === 'instanceId') return record.id
   if (key === 'name') return record.label
+  if (key === 'type') return record.type
   if (key === 'tags') return node ? entityTagCount(node) : 0
   if (key === 'probe') return valueText(record.properties.__method__) || 'EntityStore'
   if (key === 'language') return valueText(record.properties.language) || ''
   if (key === 'region') return entityLocationText(record.properties) || record.domain
+  if (key === 'created') return entityTimeSortValue(record.properties.created_at) || entityTimeSortValue(record.properties.createTime) || 0
+  if (key === 'updated') return entityTimeSortValue(record.properties.updated_at) || entityTimeSortValue(record.properties.updateTime) || entityTimeSortValue(record.properties.__last_observed_time__) || 0
   return Number(record.properties.relationCount || 0)
 }
 
