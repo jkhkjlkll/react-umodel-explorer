@@ -65,6 +65,8 @@ const iconModeZoom = 2.35
 const glyphModeZoom = 4.25
 const labelModeZoom = 6.95
 const nodeCullZoom = 0.88
+const cosmosSpaceSize = 16384
+const cosmosSpacePadding = 1800
 
 interface SelectedRelation {
   type: string
@@ -116,6 +118,12 @@ interface CosmosData {
   kind: CosmosPointKind
 }
 
+interface CosmosViewBoxBasis {
+  key: string
+  width: number
+  height: number
+}
+
 export function TopologyCanvas(props: TopologyCanvasProps) {
   const {
     data,
@@ -132,19 +140,51 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
   const graphHostRef = useRef<HTMLDivElement | null>(null)
   const graphRef = useRef<Graph | null>(null)
   const cosmosDataRef = useRef<CosmosData | null>(null)
+  const cosmosDragRef = useRef({ active: false, moved: false })
+  const manualCosmosDragRef = useRef<{
+    pointerId: number
+    pointIndex: number
+    lastX: number
+    lastY: number
+    moved: boolean
+  } | null>(null)
   const handlersRef = useRef({ onFocusType, onSelectNode })
   const [webglFailed, setWebglFailed] = useState(false)
   const [cosmosReady, setCosmosReady] = useState(false)
   const [overlayVersion, setOverlayVersion] = useState(0)
   const [graphInitVersion, setGraphInitVersion] = useState(0)
   const [size, setSize] = useState({ width: 0, height: 0 })
+  const [cosmosViewBoxBasis, setCosmosViewBoxBasis] = useState<CosmosViewBoxBasis>({ key: '', width: 0, height: 0 })
+  const lastFitKeyRef = useRef('')
   const graphReadyToMount = size.width > 0 && size.height > 0
   handlersRef.current = { onFocusType, onSelectNode }
   const nodeById = useMemo(() => data.nodesById || new Map(data.nodes.map((node) => [node.id, node])), [data])
   const clusterSummaries = useMemo(() => createClusterSummaries(data), [data])
+  const cosmosBounds = useMemo(
+    () => (layoutMode === 'cluster' ? clusterBounds(clusterSummaries) : data.bounds),
+    [clusterSummaries, data.bounds, layoutMode],
+  )
+  const cosmosViewBoxKey = useMemo(
+    () => [
+      layoutMode,
+      data.nodes.length,
+      data.edges.length,
+      Math.round(cosmosBounds.minX),
+      Math.round(cosmosBounds.minY),
+      Math.round(cosmosBounds.maxX),
+      Math.round(cosmosBounds.maxY),
+    ].join(':'),
+    [cosmosBounds, data.edges.length, data.nodes.length, layoutMode],
+  )
+  const cosmosMappingWidth = cosmosViewBoxBasis.width > 0 ? cosmosViewBoxBasis.width : size.width
+  const cosmosMappingHeight = cosmosViewBoxBasis.height > 0 ? cosmosViewBoxBasis.height : size.height
+  const cosmosMappingSize = useMemo(
+    () => ({ width: cosmosMappingWidth, height: cosmosMappingHeight }),
+    [cosmosMappingHeight, cosmosMappingWidth],
+  )
   const cosmosData = useMemo(
-    () => buildCosmosData(data, layoutMode, clusterSummaries, Math.max(0.16, Math.min(1, playhead))),
-    [clusterSummaries, data, layoutMode, playhead],
+    () => buildCosmosData(data, layoutMode, clusterSummaries, Math.max(0.16, Math.min(1, playhead)), cosmosMappingSize, cosmosBounds),
+    [clusterSummaries, cosmosBounds, cosmosMappingSize, data, layoutMode, playhead],
   )
   const selectedRelation = useMemo<SelectedRelation | null>(() => {
     if (!selectedNode) return null
@@ -165,14 +205,34 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
       const graph = new Graph(host, createCosmosConfig({
         allowDrag,
         onOverlayChange: bumpOverlay,
+        onDragStart: () => {
+          cosmosDragRef.current = { active: true, moved: false }
+        },
+        onDrag: () => {
+          cosmosDragRef.current.moved = true
+          syncCosmosPointPositions(graphRef.current, cosmosDataRef.current)
+          bumpOverlay()
+        },
+        onDragEnd: () => {
+          syncCosmosPointPositions(graphRef.current, cosmosDataRef.current)
+          cosmosDragRef.current.active = false
+          window.setTimeout(() => {
+            cosmosDragRef.current.moved = false
+          }, 0)
+          bumpOverlay()
+        },
         onClickPoint: (index) => {
+          if (cosmosDragRef.current.moved) return
           const graphData = cosmosDataRef.current
           const point = graphData?.points[index]
           if (!point) return
           if (point.node) handlersRef.current.onSelectNode(point.node)
           if (point.cluster) handlersRef.current.onFocusType(point.cluster.type)
         },
-        onClickBackground: () => handlersRef.current.onSelectNode(null),
+        onClickBackground: () => {
+          if (cosmosDragRef.current.moved) return
+          handlersRef.current.onSelectNode(null)
+        },
       }))
       graphRef.current = graph
       setGraphInitVersion((value) => value + 1)
@@ -203,6 +263,14 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
   }, [])
 
   useEffect(() => {
+    if (size.width <= 0 || size.height <= 0) return
+    setCosmosViewBoxBasis((current) => {
+      if (current.key === cosmosViewBoxKey && current.width > 0 && current.height > 0) return current
+      return { key: cosmosViewBoxKey, width: size.width, height: size.height }
+    })
+  }, [cosmosViewBoxKey, size.height, size.width])
+
+  useEffect(() => {
     const graph = graphRef.current
     if (!graph || webglFailed) return
     let verifyTimer: number | null = null
@@ -220,7 +288,11 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
       graph.setPinnedPoints(cosmosData.points.map((_, index) => index))
       graph.render()
       graph.pause()
-      graph.fitView(240, layoutMode === 'cluster' ? 0.28 : 0.2)
+      const fitKey = `${graphInitVersion}:${cosmosViewBoxBasis.key || cosmosViewBoxKey}`
+      if (lastFitKeyRef.current !== fitKey) {
+        lastFitKeyRef.current = fitKey
+        graph.fitView(240, layoutMode === 'cluster' ? 0.28 : 0.2)
+      }
       setOverlayVersion((value) => value + 1)
       verifyTimer = window.setTimeout(() => {
         try {
@@ -243,37 +315,99 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
     return () => {
       if (verifyTimer !== null) window.clearTimeout(verifyTimer)
     }
-  }, [cosmosData, graphInitVersion, layoutMode, webglFailed])
+  }, [cosmosData, cosmosViewBoxBasis.key, cosmosViewBoxKey, graphInitVersion, layoutMode, webglFailed])
 
   useEffect(() => {
     const graph = graphRef.current
     if (!graph || webglFailed) return
-    graph.setConfig({ enableDrag: allowDrag })
+    graph.setConfig({ enableDrag: false })
   }, [allowDrag, webglFailed])
 
   useEffect(() => {
     const graph = graphRef.current
     const graphData = cosmosDataRef.current
     if (!graph || !graphData || webglFailed) return
-    const selectedIndex = selectedNode ? graphData.nodeIndexById.get(selectedNode.id) : undefined
-    const neighborIndices = selectedIndex === undefined
-      ? undefined
-      : [selectedIndex, ...(graph.getAdjacentIndices(selectedIndex) || [])]
-    graph.setConfig({
-      focusedPointIndex: selectedIndex,
-      pointGreyoutOpacity: selectedIndex === undefined ? undefined : 0.14,
-      linkGreyoutOpacity: selectedIndex === undefined ? 0.1 : 0.04,
-    })
-    if (selectedIndex === undefined) graph.unselectPoints()
-    else graph.selectPointsByIndices(neighborIndices)
-    if (selectedIndex !== undefined) graph.zoomToPointByIndex(selectedIndex, 280, 2.2, true)
     setOverlayVersion((value) => value + 1)
   }, [selectedNode, webglFailed])
+
+  const handleCosmosPointerDownCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!allowDrag || layoutMode === 'cluster' || event.button !== 0) return
+    const hit = findCosmosPointAt(event.clientX, event.clientY, graphRef.current, cosmosDataRef.current, graphHostRef.current)
+    if (!hit) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    cosmosDragRef.current = { active: true, moved: false }
+    manualCosmosDragRef.current = {
+      pointerId: event.pointerId,
+      pointIndex: hit.index,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      moved: false,
+    }
+  }
+
+  const handleCosmosPointerMoveCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = manualCosmosDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    event.preventDefault()
+    event.stopPropagation()
+    const moved = moveCosmosPoint(
+      drag.pointIndex,
+      drag.lastX,
+      drag.lastY,
+      event.clientX,
+      event.clientY,
+      graphRef.current,
+      cosmosDataRef.current,
+      graphHostRef.current,
+    )
+    if (moved) {
+      drag.moved = true
+      cosmosDragRef.current.moved = true
+      drag.lastX = event.clientX
+      drag.lastY = event.clientY
+      setOverlayVersion((value) => value + 1)
+    }
+  }
+
+  const handleCosmosPointerUpCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = manualCosmosDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    const point = cosmosDataRef.current?.points[drag.pointIndex]
+    manualCosmosDragRef.current = null
+    cosmosDragRef.current.active = false
+    window.setTimeout(() => {
+      cosmosDragRef.current.moved = false
+    }, 0)
+    if (point?.node && !drag.moved) handlersRef.current.onSelectNode(point.node)
+    setOverlayVersion((value) => value + 1)
+  }
+
+  const handleCosmosPointerCancelCapture = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = manualCosmosDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    manualCosmosDragRef.current = null
+    cosmosDragRef.current = { active: false, moved: false }
+  }
 
   if (webglFailed) return <LegacyTopologyCanvas {...props} />
 
   return (
-    <div className="topo-canvas-shell topo-cosmos-shell" data-cosmos-ready={cosmosReady} ref={shellRef}>
+    <div
+      className="topo-canvas-shell topo-cosmos-shell"
+      data-cosmos-ready={cosmosReady}
+      ref={shellRef}
+      onPointerDownCapture={handleCosmosPointerDownCapture}
+      onPointerMoveCapture={handleCosmosPointerMoveCapture}
+      onPointerUpCapture={handleCosmosPointerUpCapture}
+      onPointerCancelCapture={handleCosmosPointerCancelCapture}
+    >
       <div className="topo-cosmos-fallback">
         <LegacyTopologyCanvas {...props} />
       </div>
@@ -300,7 +434,7 @@ export function TopologyCanvas(props: TopologyCanvasProps) {
         <SelectedNodePopover
           node={selectedNode}
           relation={selectedRelation}
-          screenPoint={resolveCosmosScreenPoint(graphRef.current, selectedNode)}
+          screenPoint={resolveCosmosScreenPoint(graphRef.current, selectedNode, cosmosDataRef.current)}
           size={{ width: size.width, height: size.height }}
           version={overlayVersion}
         />
@@ -325,11 +459,17 @@ function recordCosmosFailure(error: unknown) {
 function createCosmosConfig({
   allowDrag,
   onOverlayChange,
+  onDragStart,
+  onDrag,
+  onDragEnd,
   onClickPoint,
   onClickBackground,
 }: {
   allowDrag: boolean
   onOverlayChange: () => void
+  onDragStart: () => void
+  onDrag: () => void
+  onDragEnd: () => void
   onClickPoint: (index: number) => void
   onClickBackground: () => void
 }): Partial<GraphConfigInterface> {
@@ -337,7 +477,7 @@ function createCosmosConfig({
     attribution: '',
     backgroundColor: '#ffffff',
     curvedLinks: false,
-    enableDrag: allowDrag,
+    enableDrag: false,
     enableSimulation: true,
     enableSimulationDuringZoom: false,
     enableZoom: true,
@@ -364,9 +504,13 @@ function createCosmosConfig({
     scaleLinksOnZoom: false,
     scalePointsOnZoom: false,
     showFPSMonitor: false,
+    spaceSize: cosmosSpaceSize,
     simulationGravity: 0,
     simulationRepulsion: 0,
     onBackgroundClick: onClickBackground,
+    onDragStart,
+    onDrag,
+    onDragEnd,
     onPointClick: onClickPoint,
     onSimulationTick: onOverlayChange,
     onZoom: onOverlayChange,
@@ -379,28 +523,37 @@ function buildCosmosData(
   layoutMode: 'force' | 'cluster',
   clusterSummaries: ClusterSummary[],
   playhead: number,
+  size: { width: number; height: number },
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
 ): CosmosData {
+  const mapper = createCosmosViewBoxMapper(bounds, size)
   const points: CosmosPoint[] = layoutMode === 'cluster'
-    ? clusterSummaries.map((cluster) => ({
-      id: cluster.type,
-      label: cluster.type,
-      type: cluster.type,
-      color: cluster.color,
-      x: cluster.x,
-      y: cluster.y,
-      size: clamp(cluster.radius * 0.18, 16, 46),
-      cluster,
-    }))
-    : data.nodes.map((node) => ({
-      id: node.id,
-      label: node.label,
-      type: node.type,
-      color: node.color,
-      x: node.x,
-      y: node.y,
-      size: clamp(2.7 + node.weight * 1.3, 3.8, 8.8),
-      node,
-    }))
+    ? clusterSummaries.map((cluster) => {
+      const point = mapper(cluster.x, cluster.y)
+      return {
+        id: cluster.type,
+        label: cluster.type,
+        type: cluster.type,
+        color: cluster.color,
+        x: point.x,
+        y: point.y,
+        size: clamp(cluster.radius * 0.18, 16, 46),
+        cluster,
+      }
+    })
+    : data.nodes.map((node) => {
+      const point = mapper(node.x, node.y)
+      return {
+        id: node.id,
+        label: node.label,
+        type: node.type,
+        color: node.color,
+        x: point.x,
+        y: point.y,
+        size: clamp(2.7 + node.weight * 1.3, 3.8, 8.8),
+        node,
+      }
+    })
   const nodeIndexById = new Map(points.map((point, index) => [point.id, index]))
   const clusterIndexById = new Map<string, number>()
   const clusterPositions: Array<number | undefined> = []
@@ -502,6 +655,31 @@ function buildClusterEdges(data: TopologyExplorerData, clusters: ClusterSummary[
     type: dominantRelationType(edge.typeCounts),
     count: edge.count,
   }))
+}
+
+function createCosmosViewBoxMapper(
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  size: { width: number; height: number },
+) {
+  const usable = cosmosSpaceSize - cosmosSpacePadding * 2
+  const screenRatio = Math.max(0.25, Math.min(4, (size.width || 1280) / Math.max(1, size.height || 720)))
+  const rawWidth = Math.max(1, bounds.maxX - bounds.minX)
+  const rawHeight = Math.max(1, bounds.maxY - bounds.minY)
+  let viewWidth = rawWidth
+  let viewHeight = rawHeight
+  if (viewWidth / viewHeight > screenRatio) {
+    viewHeight = viewWidth / screenRatio
+  } else {
+    viewWidth = viewHeight * screenRatio
+  }
+  const centerX = (bounds.minX + bounds.maxX) / 2
+  const centerY = (bounds.minY + bounds.maxY) / 2
+  const minX = centerX - viewWidth / 2
+  const minY = centerY - viewHeight / 2
+  return (x: number, y: number) => ({
+    x: cosmosSpacePadding + ((x - minX) / viewWidth) * usable,
+    y: cosmosSpacePadding + ((y - minY) / viewHeight) * usable,
+  })
 }
 
 function relationLabel(type: string, count?: number) {
@@ -612,8 +790,80 @@ function CosmosLabels({
   )
 }
 
-function resolveCosmosScreenPoint(graph: Graph | null, node: TopologyNode) {
+function syncCosmosPointPositions(graph: Graph | null, cosmosData: CosmosData | null) {
+  if (!graph || !cosmosData) return
+  const positions = graph.getPointPositions()
+  if (!positions || positions.length < cosmosData.points.length * 2) return
+  cosmosData.points.forEach((point, index) => {
+    const x = positions[index * 2]
+    const y = positions[index * 2 + 1]
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return
+    point.x = x
+    point.y = y
+    cosmosData.pointPositions[index * 2] = x
+    cosmosData.pointPositions[index * 2 + 1] = y
+  })
+}
+
+function findCosmosPointAt(
+  clientX: number,
+  clientY: number,
+  graph: Graph | null,
+  cosmosData: CosmosData | null,
+  host: HTMLElement | null,
+): { index: number; distance: number } | null {
+  if (!graph || !cosmosData || !host || cosmosData.kind !== 'node') return null
+  const rect = host.getBoundingClientRect()
+  let best: { index: number; distance: number } | null = null
+  for (let index = 0; index < cosmosData.points.length; index += 1) {
+    const point = cosmosData.points[index]
+    if (!point.node) continue
+    const [screenX, screenY] = graph.spaceToScreenPosition([point.x, point.y])
+    const dx = clientX - rect.left - screenX
+    const dy = clientY - rect.top - screenY
+    const radius = Math.max(24, Math.min(48, graph.spaceToScreenRadius(point.size) + 18))
+    const distance = Math.hypot(dx, dy)
+    if (distance > radius || (best && distance >= best.distance)) continue
+    best = { index, distance }
+  }
+  return best
+}
+
+function moveCosmosPoint(
+  pointIndex: number,
+  previousClientX: number,
+  previousClientY: number,
+  nextClientX: number,
+  nextClientY: number,
+  graph: Graph | null,
+  cosmosData: CosmosData | null,
+  host: HTMLElement | null,
+) {
+  if (!graph || !cosmosData || !host) return false
+  const point = cosmosData.points[pointIndex]
+  if (!point) return false
+  const rect = host.getBoundingClientRect()
+  const previousSpace = graph.screenToSpacePosition([previousClientX - rect.left, previousClientY - rect.top])
+  const nextSpace = graph.screenToSpacePosition([nextClientX - rect.left, nextClientY - rect.top])
+  const dx = nextSpace[0] - previousSpace[0]
+  const dy = nextSpace[1] - previousSpace[1]
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || (Math.abs(dx) + Math.abs(dy) <= 0)) return false
+  point.x += dx
+  point.y += dy
+  cosmosData.pointPositions[pointIndex * 2] = point.x
+  cosmosData.pointPositions[pointIndex * 2 + 1] = point.y
+  graph.setPointPositions(cosmosData.pointPositions, true)
+  graph.render()
+  return true
+}
+
+function resolveCosmosScreenPoint(graph: Graph | null, node: TopologyNode, cosmosData?: CosmosData | null) {
   if (!graph) return undefined
+  const index = cosmosData?.nodeIndexById.get(node.id)
+  if (index !== undefined) {
+    const point = cosmosData?.points[index]
+    if (point) return graph.spaceToScreenPosition([point.x, point.y])
+  }
   return graph.spaceToScreenPosition([node.x, node.y])
 }
 
@@ -679,7 +929,13 @@ function LegacyTopologyCanvas({
   const frameRef = useRef<number | null>(null)
   const minimapTimerRef = useRef<number | null>(null)
   const lastMinimapUpdateRef = useRef(0)
-  const dragRef = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  const dragRef = useRef<{
+    x: number
+    y: number
+    moved: boolean
+    mode: 'viewport' | 'node'
+    node?: TopologyNode
+  } | null>(null)
   const [minimapVersion, setMinimapVersion] = useState(0)
 
   const nodeById = useMemo(() => data.nodesById || new Map(data.nodes.map((node) => [node.id, node])), [data])
@@ -832,7 +1088,18 @@ function LegacyTopologyCanvas({
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     event.currentTarget.setPointerCapture(event.pointerId)
-    dragRef.current = { x: event.clientX, y: event.clientY, moved: false }
+    const rect = event.currentTarget.getBoundingClientRect()
+    const world = screenToWorld(event.clientX - rect.left, event.clientY - rect.top, viewportRef.current)
+    const dragNode = allowDrag && layoutMode !== 'cluster'
+      ? findNearestNode(data.nodes, world, viewportRef.current.zoom, focusedTypeSet)
+      : null
+    dragRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+      mode: dragNode ? 'node' : 'viewport',
+      node: dragNode || undefined,
+    }
   }
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -843,8 +1110,13 @@ function LegacyTopologyCanvas({
     if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true
     drag.x = event.clientX
     drag.y = event.clientY
-    viewportRef.current.x += dx
-    viewportRef.current.y += dy
+    if (drag.mode === 'node' && drag.node) {
+      drag.node.x += dx / viewportRef.current.zoom
+      drag.node.y += dy / viewportRef.current.zoom
+    } else {
+      viewportRef.current.x += dx
+      viewportRef.current.y += dy
+    }
     requestDraw()
     scheduleMinimapUpdate()
   }
@@ -853,7 +1125,10 @@ function LegacyTopologyCanvas({
     const drag = dragRef.current
     dragRef.current = null
     event.currentTarget.releasePointerCapture(event.pointerId)
-    if (drag?.moved) return
+    if (drag?.moved) {
+      if (drag.mode === 'node' && drag.node) onSelectNode(drag.node)
+      return
+    }
     const rect = event.currentTarget.getBoundingClientRect()
     const world = screenToWorld(event.clientX - rect.left, event.clientY - rect.top, viewportRef.current)
     if (layoutMode === 'cluster') {

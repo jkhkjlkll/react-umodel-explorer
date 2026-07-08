@@ -7,6 +7,7 @@ import type {
   ErrorEnvelope,
   ExpireRequest,
   HealthResponse,
+  MonitoringDashboardResponse,
   Page,
   QueryExecuteResponse,
   QueryExplain,
@@ -43,6 +44,7 @@ export interface UModelApiClient {
   health(): Promise<HealthResponse>
   getWorkspace(workspace: string): Promise<WorkspaceMetadata>
   query(workspace: string, payload: QueryRequest): Promise<QueryResult>
+  getMonitoringDashboard(workspace: string, entityId: string, timeRange?: string): Promise<MonitoringDashboardResponse>
   listUModel(workspace: string, limit?: number): Promise<QueryResult>
   importSampleData(workspace: string, sample?: string): Promise<SampleImportResult>
   validateUModel(workspace: string, elements: UModelElement[]): Promise<ValidationResult>
@@ -109,6 +111,12 @@ export class UModelApi implements UModelApiClient {
 
   listUModel(workspace: string, limit = 100): Promise<QueryResult> {
     return this.query(workspace, { query: `.umodel | sort name | limit ${limit}`, limit })
+  }
+
+  getMonitoringDashboard(workspace: string, entityId: string, timeRange = '15m'): Promise<MonitoringDashboardResponse> {
+    const params = new URLSearchParams()
+    params.set('time_range', timeRange)
+    return this.request(`/api/v1/monitoring/${encodeURIComponent(workspace)}/entities/${encodeURIComponent(entityId)}/dashboard?${params.toString()}`)
   }
 
   importUModel(workspace: string, payload: UModelImportRequest): Promise<UModelImportResult> {

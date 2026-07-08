@@ -32,6 +32,7 @@ type RecommendationKind = 'domain' | 'entity' | 'catalog'
 type EntityInstanceTab =
   | 'detail'
   | 'topology'
+  | 'dashboard'
   | 'trace'
   | 'page'
   | 'heatmap'
@@ -466,6 +467,8 @@ export function EntityExplorerPage({
             />
           ) : view === 'topology' ? (
             <EntityTopologyView
+              api={api}
+              workspaceId={workspaceId}
               data={data}
               focusedTypes={topologyTypes}
               focusSelection={!topologyOnly}
@@ -1329,6 +1332,8 @@ function entityTagCountFromRecord(record: EntityRecord) {
 }
 
 function EntityTopologyView({
+  api,
+  workspaceId,
   data,
   focusedTypes,
   focusSelection = true,
@@ -1338,6 +1343,8 @@ function EntityTopologyView({
   onFocusType,
   onResetFocus,
 }: {
+  api: UModelApiClient
+  workspaceId: string
   data: TopologyExplorerData
   focusedTypes: string[]
   focusSelection?: boolean
@@ -1918,6 +1925,8 @@ function EntityTopologyView({
         selectedNode && selectedInstanceItem
           ? (
             <EntityInstanceDetailPanel
+              api={api}
+              workspaceId={workspaceId}
               data={data}
               item={selectedInstanceItem}
               node={selectedNode}
@@ -1928,13 +1937,13 @@ function EntityTopologyView({
               onSelectNode={selectInstance}
             />
           )
-          : <EntityAggregatePanel item={activePanelItem} onSelectNode={selectInstance} />
+          : <EntityAggregatePanel data={data} item={activePanelItem} onSelectNode={selectInstance} />
       )}
     </section>
   )
 }
 
-function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyNode; onSelectNode: (node: TopologyNode) => void }) {
+function EntityAggregatePanel({ data, item, onSelectNode }: { data: TopologyExplorerData; item: ReferenceTopologyNode; onSelectNode: (node: TopologyNode) => void }) {
   const [queryDraft, setQueryDraft] = useState('')
   const [query, setQuery] = useState('')
   const [tagFilterOpen, setTagFilterOpen] = useState(false)
@@ -1942,8 +1951,21 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
   const [sortKey, setSortKey] = useState<EntityAggregateSortKey>('name')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const [currentPage, setCurrentPage] = useState(1)
-  const pageSize = 10
+  const [pageSize, setPageSize] = useState(10)
   const tagOptions = useMemo(() => createAggregateTagOptions(item.instances), [item.instances])
+  const relationCountsById = useMemo(() => {
+    const counts = new Map<string, { upstream: number; downstream: number }>()
+    data.edges.forEach((edge) => {
+      const source = counts.get(edge.source) || { upstream: 0, downstream: 0 }
+      source.downstream += 1
+      counts.set(edge.source, source)
+
+      const target = counts.get(edge.target) || { upstream: 0, downstream: 0 }
+      target.upstream += 1
+      counts.set(edge.target, target)
+    })
+    return counts
+  }, [data.edges])
   const filteredInstances = useMemo(() => {
     const search = query.trim().toLowerCase()
     return item.instances.filter((node) => {
@@ -1992,6 +2014,10 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
   const clearTagFilters = () => {
     setCurrentPage(1)
     setSelectedTagKeys([])
+  }
+  const changePageSize = (value: string) => {
+    setPageSize(Number(value))
+    setCurrentPage(1)
   }
   const changeSort = (key: EntityAggregateSortKey) => {
     setCurrentPage(1)
@@ -2097,6 +2123,8 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
                   实体类型 <span className={`entity-topology-sort ${sortKey === 'type' ? sortDirection : ''}`} />
                 </button>
               </th>
+              <th>上游</th>
+              <th>下游</th>
               <th aria-sort={sortKey === 'created' ? sortDirection === 'asc' ? 'ascending' : 'descending' : 'none'}>
                 <button type="button" className="entity-topology-sort-header" onClick={() => changeSort('created')}>
                   创建时间 <span className={`entity-topology-sort ${sortKey === 'created' ? sortDirection : ''}`} />
@@ -2112,24 +2140,38 @@ function EntityAggregatePanel({ item, onSelectNode }: { item: ReferenceTopologyN
           <tbody>
             {rows.length === 0 && (
               <tr className="entity-topology-empty-row">
-                <td colSpan={6}>暂无匹配实体</td>
+                <td colSpan={8}>暂无匹配实体</td>
               </tr>
             )}
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td><a href="#entity-topology-detail" onClick={(event) => { event.preventDefault(); onSelectNode(row) }}>{row.label}</a></td>
-                <td title={entityInstanceId(row)}>{entityInstanceId(row)}</td>
-                <td>{entityLocationText(row.properties) || valueText(row.properties.__domain__) || '-'}</td>
-                <td title={row.type}>{row.type}</td>
-                <td>{entityCreatedTime(row.properties)}</td>
-                <td>{entityUpdatedTime(row.properties)}</td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const counts = relationCountsById.get(row.id) || { upstream: 0, downstream: 0 }
+              return (
+                <tr key={row.id}>
+                  <td><a href="#entity-topology-detail" onClick={(event) => { event.preventDefault(); onSelectNode(row) }}>{row.label}</a></td>
+                  <td title={entityInstanceId(row)}>{entityInstanceId(row)}</td>
+                  <td>{entityLocationText(row.properties) || valueText(row.properties.__domain__) || '-'}</td>
+                  <td title={row.type}>{row.type}</td>
+                  <td>{counts.upstream}</td>
+                  <td>{counts.downstream}</td>
+                  <td>{entityCreatedTime(row.properties)}</td>
+                  <td>{entityUpdatedTime(row.properties)}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
         <div className="entity-topology-detail-footer">
           <span>每页显示:</span>
-          <button type="button">{pageSize} <ChevronDown size={14} /></button>
+          <select
+            className="entity-topology-page-size"
+            aria-label="每页显示数量"
+            value={pageSize}
+            onChange={(event) => changePageSize(event.target.value)}
+          >
+            {[10, 20, 50, 100].map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
           <span>总数: {filteredInstances.length}</span>
           <button type="button" disabled={currentPage <= 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>‹ 上一页</button>
           {pageButtons[0] > 1 && <button type="button" onClick={() => setCurrentPage(1)}>1</button>}
@@ -2195,12 +2237,16 @@ function entityTimeSortValue(value: unknown) {
 }
 
 function EntityInstanceDetailPanel({
+  api,
+  workspaceId,
   data,
   item,
   node,
   onBack,
   onSelectNode,
 }: {
+  api: UModelApiClient
+  workspaceId: string
   data: TopologyExplorerData
   item: ReferenceTopologyNode
   node: TopologyNode
@@ -2223,6 +2269,7 @@ function EntityInstanceDetailPanel({
   const tabs: Array<{ key: EntityInstanceTab; label: string; count?: number; dropdown?: boolean }> = [
     { key: 'detail', label: '\u5b9e\u4f53\u8be6\u60c5' },
     { key: 'topology', label: '\u5173\u8054\u62d3\u6251' },
+    { key: 'dashboard', label: '\u76d1\u63a7\u5927\u76d8' },
   ]
 
   useEffect(() => {
@@ -2312,6 +2359,7 @@ function EntityInstanceDetailPanel({
         </section>
       )}
       {activeTab === 'topology' && <EntityRelatedTopologyCanvas data={data} node={node} links={relatedLinks} onSelectNode={onSelectNode} />}
+      {activeTab === 'dashboard' && <EntityMonitoringDashboard api={api} workspaceId={workspaceId} node={node} />}
       {activeTab === 'trace' && (
         <EntityTracePanel node={node} links={relatedLinks} />
       )}
@@ -2382,10 +2430,479 @@ function EntityLogSearchPanel({ node, links }: { node: TopologyNode; links: Enti
 
 function EntityInstanceEmptyTab({ title, description }: { title: string; description: string }) {  return (
     <section className="entity-instance-empty-tab">
-      <strong>{title}</strong>
-      <span>{description}</span>
+    <strong>{title}</strong>
+    <span>{description}</span>
+  </section>
+  )
+}
+
+interface MonitoringSeries {
+  name: string
+  color: string
+  values: number[]
+}
+
+interface MonitoringChart {
+  id: string
+  title: string
+  unit?: string
+  series: MonitoringSeries[]
+}
+
+interface MonitoringFilterDefinition {
+  key: string
+  label: string
+  value: string
+}
+
+type MonitoringTimeRange = '15m' | '1h' | '6h'
+
+function EntityMonitoringDashboard({ api, workspaceId, node }: { api: UModelApiClient; workspaceId: string; node: TopologyNode }) {
+  const [openFilter, setOpenFilter] = useState('')
+  const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({})
+  const [expandedChartId, setExpandedChartId] = useState('')
+  const [timeRange, setTimeRange] = useState<MonitoringTimeRange>('15m')
+  const [refreshSeed, setRefreshSeed] = useState(0)
+  const [dashboard, setDashboard] = useState<{ filters: MonitoringFilterDefinition[]; charts: MonitoringChart[] } | null>(null)
+  const [loadingDashboard, setLoadingDashboard] = useState(false)
+  const [dashboardError, setDashboardError] = useState('')
+  const monitorEntityId = entityInstanceId(node)
+  const fallbackCharts = useMemo(() => createMonitoringCharts(node, timeRange, refreshSeed), [node, refreshSeed, timeRange])
+  const fallbackFilters = useMemo(() => createMonitoringFilters(node), [node])
+  const charts = dashboard?.charts?.length ? dashboard.charts : fallbackCharts
+  const filters = dashboard?.filters?.length ? dashboard.filters : fallbackFilters
+  const matchesFilter = filters.every((filter) => {
+    const selected = selectedFilters[filter.key]
+    return !selected || selected === 'all' || selected === filter.value
+  })
+  useEffect(() => {
+    let cancelled = false
+    setLoadingDashboard(true)
+    setDashboardError('')
+    api.getMonitoringDashboard(workspaceId, monitorEntityId, timeRange)
+      .then((nextDashboard) => {
+        if (cancelled) return
+        setDashboard({
+          filters: nextDashboard.filters || [],
+          charts: nextDashboard.charts || [],
+        })
+      })
+      .catch((nextError) => {
+        if (cancelled) return
+        setDashboard(null)
+        setDashboardError(formatError(nextError))
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDashboard(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api, monitorEntityId, refreshSeed, timeRange, workspaceId])
+  useEffect(() => {
+    const nextFilters = Object.fromEntries(filters.map((filter, index) => [filter.key, index === 0 ? filter.value : 'all']))
+    setSelectedFilters(nextFilters)
+    setOpenFilter('')
+    setExpandedChartId('')
+  }, [filters])
+  const setFilterValue = (key: string, value: string) => {
+    setSelectedFilters((current) => ({ ...current, [key]: value }))
+    setOpenFilter('')
+  }
+  return (
+    <section className="entity-monitor-dashboard">
+      <div className="entity-monitor-filterbar">
+        {filters.map((filter) => {
+          const selected = selectedFilters[filter.key] || 'all'
+          return (
+            <label key={filter.key} onBlur={() => window.setTimeout(() => setOpenFilter((current) => current === filter.key ? '' : current), 120)}>
+              <FilterIcon size={15} />
+              <span>{filter.label}</span>
+              <button type="button" className={openFilter === filter.key ? 'active' : ''} onClick={() => setOpenFilter((current) => current === filter.key ? '' : filter.key)}>
+                {selected === 'all' ? 'All' : filter.value}
+                {selected === 'all'
+                  ? <ChevronDown size={13} />
+                  : <X size={13} onClick={(event) => { event.stopPropagation(); setFilterValue(filter.key, 'all') }} />}
+              </button>
+              {openFilter === filter.key && (
+                <div className="entity-monitor-filter-menu" role="menu" aria-label={filter.label}>
+                  <button type="button" className={selected === 'all' ? 'active' : ''} onMouseDown={(event) => event.preventDefault()} onClick={() => setFilterValue(filter.key, 'all')}>All</button>
+                  <button type="button" className={selected === filter.value ? 'active' : ''} onMouseDown={(event) => event.preventDefault()} onClick={() => setFilterValue(filter.key, filter.value)}>{filter.value}</button>
+                </div>
+              )}
+            </label>
+          )
+        })}
+        <div className="entity-monitor-toolbar">
+          {(['15m', '1h', '6h'] as MonitoringTimeRange[]).map((range) => (
+            <button key={range} type="button" className={timeRange === range ? 'active' : ''} onClick={() => setTimeRange(range)}>
+              {range === '15m' ? '15min' : range}
+            </button>
+          ))}
+          <button type="button" aria-label="刷新监控大盘" onClick={() => setRefreshSeed((value) => value + 1)}>
+            <RefreshCw size={14} />
+          </button>
+        </div>
+        {(loadingDashboard || dashboardError) && (
+          <span className={dashboardError ? 'entity-monitor-sync warning' : 'entity-monitor-sync'}>
+            {loadingDashboard ? '加载中' : '后端不可用，展示本地兜底'}
+          </span>
+        )}
+      </div>
+      {matchesFilter ? (
+        <div className="entity-monitor-grid">
+          {charts.map((chart) => (
+            <MonitoringChartCard
+              key={chart.id}
+              chart={chart}
+              timeRange={timeRange}
+              expanded={expandedChartId === chart.id}
+              onToggleExpand={() => setExpandedChartId((current) => current === chart.id ? '' : chart.id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="entity-monitor-empty">
+          <strong>暂无匹配指标</strong>
+          <span>请调整监控筛选条件</span>
+        </div>
+      )}
     </section>
   )
+}
+
+function MonitoringChartCard({
+  chart,
+  timeRange,
+  expanded,
+  onToggleExpand,
+}: {
+  chart: MonitoringChart
+  timeRange: MonitoringTimeRange
+  expanded: boolean
+  onToggleExpand: () => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [metricsOpen, setMetricsOpen] = useState(false)
+  const queryText = createMonitoringQuery(chart, timeRange)
+  const exportCsv = () => downloadMonitoringCsv(chart, timeRange)
+  const copyQuery = () => navigator.clipboard?.writeText(queryText)
+  return (
+    <article className={expanded ? 'entity-monitor-card expanded' : 'entity-monitor-card'}>
+      <header>
+        <strong>{chart.title}</strong>
+        <div className="entity-monitor-card-actions">
+          <button type="button" aria-label="导出图表" onClick={exportCsv}>⇩</button>
+          <button type="button" aria-label={expanded ? '恢复图表' : '放大图表'} onClick={onToggleExpand}>{expanded ? '↙' : '↗'}</button>
+          <span className="entity-monitor-card-more" onBlur={() => window.setTimeout(() => setMenuOpen(false), 120)}>
+            <button type="button" aria-label="更多操作" className={menuOpen ? 'active' : ''} onClick={() => setMenuOpen((open) => !open)}>⋮</button>
+            {menuOpen && (
+              <span className="entity-monitor-card-menu" role="menu">
+                <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { setMetricsOpen((open) => !open); setMenuOpen(false) }}>查看指标</button>
+                <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { copyQuery(); setMenuOpen(false) }}>复制查询</button>
+                <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onToggleExpand}>{expanded ? '恢复大小' : '放大查看'}</button>
+              </span>
+            )}
+          </span>
+        </div>
+      </header>
+      {metricsOpen && (
+        <div className="entity-monitor-metric-panel">
+          {chart.series.map((series) => (
+            <code key={series.name}>{series.name}</code>
+          ))}
+        </div>
+      )}
+      <MonitoringLineChart chart={chart} timeRange={timeRange} />
+    </article>
+  )
+}
+
+function MonitoringLineChart({ chart, timeRange }: { chart: MonitoringChart; timeRange: MonitoringTimeRange }) {
+  const [hiddenSeries, setHiddenSeries] = useState<string[]>([])
+  const width = 420
+  const height = 285
+  const plot = { left: 48, right: 20, top: 34, bottom: 56 }
+  const visibleSeries = chart.series.filter((item) => !hiddenSeries.includes(item.name))
+  const renderedSeries = visibleSeries.length > 0 ? visibleSeries : chart.series
+  const allValues = renderedSeries.flatMap((item) => item.values)
+  const rawMin = Math.min(...allValues)
+  const rawMax = Math.max(...allValues)
+  const spread = Math.max(0.01, rawMax - rawMin)
+  const min = rawMin - spread * 0.12
+  const max = rawMax + spread * 0.16
+  const xFor = (index: number, count: number) => plot.left + (index / Math.max(1, count - 1)) * (width - plot.left - plot.right)
+  const yFor = (value: number) => plot.top + ((max - value) / Math.max(0.01, max - min)) * (height - plot.top - plot.bottom)
+  const ticks = Array.from({ length: 5 }, (_, index) => max - ((max - min) * index) / 4)
+  const xLabels = monitoringTimeLabels(timeRange)
+  return (
+    <div className="entity-monitor-chart">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={chart.title}>
+        <g className="entity-monitor-gridlines">
+          {ticks.map((tick, index) => {
+            const y = yFor(tick)
+            return (
+              <g key={index}>
+                <line x1={plot.left} x2={width - plot.right} y1={y} y2={y} />
+                <text x={plot.left - 10} y={y + 4} textAnchor="end">{formatMonitorTick(tick, chart.unit)}</text>
+              </g>
+            )
+          })}
+          {[0, 0.5, 1].map((ratio) => {
+            const x = plot.left + ratio * (width - plot.left - plot.right)
+            return <line key={ratio} className="vertical" x1={x} x2={x} y1={plot.top} y2={height - plot.bottom} />
+          })}
+        </g>
+        <g className="entity-monitor-lines">
+          {renderedSeries.map((series) => {
+            const points = series.values.map((value, index) => `${xFor(index, series.values.length)},${yFor(value)}`).join(' ')
+            return (
+              <g key={series.name}>
+                <polyline points={points} style={{ stroke: series.color }} />
+                {series.values.map((value, index) => (
+                  <circle key={index} cx={xFor(index, series.values.length)} cy={yFor(value)} r="2.8" style={{ fill: series.color }} />
+                ))}
+              </g>
+            )
+          })}
+        </g>
+        <g className="entity-monitor-xaxis">
+          <text x={plot.left + 38} y={height - 25}>{xLabels[0]}</text>
+          <text x={plot.left + (width - plot.left - plot.right) / 2} y={height - 25}>{xLabels[1]}</text>
+          <text x={width - plot.right - 38} y={height - 25}>{xLabels[2]}</text>
+        </g>
+      </svg>
+      <footer>
+        {chart.series.map((series) => (
+          <button
+            key={series.name}
+            type="button"
+            className={hiddenSeries.includes(series.name) ? 'muted' : ''}
+            onClick={() => setHiddenSeries((current) => current.includes(series.name) ? current.filter((item) => item !== series.name) : [...current, series.name])}
+          >
+            <i style={{ background: series.color }} />{series.name}
+          </button>
+        ))}
+      </footer>
+    </div>
+  )
+}
+
+function createMonitoringCharts(node: TopologyNode, timeRange: MonitoringTimeRange, refreshSeed: number): MonitoringChart[] {
+  const rangeFactor = timeRange === '15m' ? 1 : timeRange === '1h' ? 1.35 : 1.75
+  const seed = entitySequence({ id: `${node.id}:${timeRange}:${refreshSeed}` } as EntityRecord)
+  const stable = (index: number, base: number, amplitude: number, step = 0.7) => Array.from({ length: 46 }, (_, point) => {
+    const wave = Math.sin((point + index * 3 + seed % 11) * step / rangeFactor) * amplitude * rangeFactor
+    const jitter = (((seed + point * (index + 7)) % 9) - 4) * amplitude * 0.08 * rangeFactor
+    return Number((base + wave + jitter).toFixed(2))
+  })
+  const plateau = (first: number, second: number) => Array.from({ length: 46 }, (_, index) => index < 22 ? first : second)
+  const stepValues = (base: number) => Array.from({ length: 46 }, (_, index) => Number((base + ((seed + index * 13) % 8) * 0.12).toFixed(2)))
+  const templateKey = monitoringTemplateKey(node)
+  const mysqlCharts = (): MonitoringChart[] => [
+    {
+      id: 'mysql_cpu_memory',
+      title: 'MySQL CPU/内存 利用率',
+      series: [
+        { name: 'mem_usage', color: '#ebb735', values: stable(1, 5, 0.05, 0.23) },
+        { name: 'cpu_usage', color: '#79ad6f', values: stable(2, 0.18, 0.03, 0.45) },
+      ],
+    },
+    {
+      id: 'mysql_storage',
+      title: 'MySQL存储空间使用量',
+      series: [
+        { name: 'disk_size', color: '#79ad6f', values: stable(3, 4050, 8, 0.18) },
+        { name: 'other_size', color: '#65c6d4', values: stable(4, 3180, 6, 0.18) },
+        { name: 'log_size', color: '#ebb735', values: stable(5, 18, 1.2, 0.4) },
+        { name: 'tmp_size', color: '#f08a3e', values: stable(6, 4, 0.8, 0.4) },
+      ],
+    },
+    { id: 'disk_usage', title: '磁盘使用率(%)', series: [{ name: 'disk_usage', color: '#79ad6f', values: plateau(3.965, 3.974) }] },
+    { id: 'mysql_iops', title: 'MySQL IOPS', series: [{ name: 'iops', color: '#79ad6f', values: stepValues(13.7) }] },
+    { id: 'iops_usage', title: 'IOPS使用率', series: [{ name: 'iops_usage', color: '#79ad6f', values: stable(7, 0.105, 0.018, 1.65) }] },
+    { id: 'data_io', title: 'MySQL每秒读写吞吐量', unit: 'KiB', series: [{ name: 'data_io_bytes_ps', color: '#79ad6f', values: stepValues(198).map((value, index) => value + (index % 11 < 7 ? 10 : 0)) }] },
+    {
+      id: 'network',
+      title: '网络流量吞吐',
+      unit: 'KiB/s',
+      series: [
+        { name: 'network_out', color: '#ebb735', values: stable(8, 68, 2.2, 0.5) },
+        { name: 'network_in', color: '#79ad6f', values: stable(9, 49, 0.4, 0.36) },
+      ],
+    },
+    {
+      id: 'tps_qps',
+      title: 'TPS/QPS',
+      series: [
+        { name: 'qps', color: '#ebb735', values: stable(10, 16.2, 2.4, 1.3) },
+        { name: 'tps', color: '#79ad6f', values: stable(11, 0.35, 0.12, 0.8) },
+      ],
+    },
+  ]
+  const redisCharts = (): MonitoringChart[] => [
+    {
+      id: 'redis_cpu_memory',
+      title: 'Redis CPU/内存使用率',
+      series: [
+        { name: 'cpu_usage', color: '#79ad6f', values: stable(1, 12, 3.5, 0.6) },
+        { name: 'memory_usage', color: '#ebb735', values: stable(2, 58, 6, 0.36) },
+      ],
+    },
+    { id: 'redis_ops', title: 'Redis 每秒操作数', series: [{ name: 'ops', color: '#79ad6f', values: stable(3, 1280, 260, 1.1) }] },
+    { id: 'redis_qps', title: 'Redis QPS', series: [{ name: 'qps', color: '#ebb735', values: stable(4, 860, 180, 1.2) }] },
+    {
+      id: 'redis_connections',
+      title: 'Redis 连接数',
+      series: [
+        { name: 'connected_clients', color: '#79ad6f', values: stable(5, 128, 18, 0.5) },
+        { name: 'blocked_clients', color: '#f08a3e', values: stable(6, 2, 1.2, 0.8) },
+      ],
+    },
+    { id: 'redis_hit_rate', title: '缓存命中率(%)', series: [{ name: 'hit_rate', color: '#79ad6f', values: stable(7, 96.8, 0.9, 0.33) }] },
+    { id: 'redis_evicted', title: 'Key淘汰/过期速率', series: [{ name: 'evicted_keys', color: '#f08a3e', values: stable(8, 12, 8, 1.4) }, { name: 'expired_keys', color: '#65c6d4', values: stable(9, 42, 14, 1.1) }] },
+    { id: 'redis_memory', title: '内存使用量', unit: 'MiB', series: [{ name: 'used_memory', color: '#79ad6f', values: stable(10, 768, 42, 0.22) }] },
+    { id: 'redis_network', title: '网络流量', unit: 'KiB/s', series: [{ name: 'input_kbps', color: '#79ad6f', values: stable(11, 180, 32, 0.7) }, { name: 'output_kbps', color: '#ebb735', values: stable(12, 220, 38, 0.8) }] },
+  ]
+  const workloadCharts = (): MonitoringChart[] => [
+    { id: 'workload_cpu', title: 'CPU 使用率', series: [{ name: 'cpu_usage', color: '#79ad6f', values: stable(1, 46, 14, 0.8) }] },
+    { id: 'workload_memory', title: '内存使用率', series: [{ name: 'memory_usage', color: '#ebb735', values: stable(2, 62, 9, 0.45) }] },
+    { id: 'workload_pod', title: 'Pod 数量', series: [{ name: 'ready_pods', color: '#79ad6f', values: plateau(6, 7) }, { name: 'desired_pods', color: '#65c6d4', values: plateau(7, 7) }] },
+    { id: 'workload_restart', title: '容器重启次数', series: [{ name: 'restart_count', color: '#f08a3e', values: stepValues(0.6) }] },
+    { id: 'workload_request', title: '请求量', series: [{ name: 'request_count', color: '#79ad6f', values: stable(3, 320, 96, 1.2) }] },
+    { id: 'workload_latency', title: '响应耗时', unit: 'ms', series: [{ name: 'p95_latency', color: '#ebb735', values: stable(4, 86, 22, 1.0) }, { name: 'avg_latency', color: '#65c6d4', values: stable(5, 36, 8, 0.8) }] },
+    { id: 'workload_error', title: '错误率(%)', series: [{ name: 'error_rate', color: '#ef6f5c', values: stable(6, 0.8, 0.55, 1.7) }] },
+    { id: 'workload_network', title: '网络吞吐', unit: 'KiB/s', series: [{ name: 'rx', color: '#79ad6f', values: stable(7, 420, 76, 0.7) }, { name: 'tx', color: '#ebb735', values: stable(8, 360, 66, 0.9) }] },
+  ]
+  const ecsCharts = (): MonitoringChart[] => [
+    { id: 'ecs_cpu', title: 'CPU使用率(%)', series: [{ name: 'cpu_total', color: '#79ad6f', values: stable(1, 38, 12, 0.7) }] },
+    { id: 'ecs_load', title: '系统负载', series: [{ name: 'load1', color: '#79ad6f', values: stable(2, 1.2, 0.5, 0.8) }, { name: 'load5', color: '#ebb735', values: stable(3, 1.0, 0.35, 0.55) }] },
+    { id: 'ecs_memory', title: '内存使用率(%)', series: [{ name: 'memory_used', color: '#ebb735', values: stable(4, 71, 8, 0.4) }] },
+    { id: 'ecs_disk', title: '磁盘使用率(%)', series: [{ name: 'disk_used', color: '#79ad6f', values: stable(5, 55, 4, 0.22) }] },
+    { id: 'ecs_disk_io', title: '磁盘IO', unit: 'KiB/s', series: [{ name: 'read', color: '#79ad6f', values: stable(6, 230, 68, 1.2) }, { name: 'write', color: '#f08a3e', values: stable(7, 190, 54, 1.1) }] },
+    { id: 'ecs_network', title: '网络流量', unit: 'KiB/s', series: [{ name: 'in', color: '#79ad6f', values: stable(8, 620, 110, 0.8) }, { name: 'out', color: '#ebb735', values: stable(9, 540, 92, 0.9) }] },
+    { id: 'ecs_tcp', title: 'TCP连接数', series: [{ name: 'tcp_established', color: '#79ad6f', values: stable(10, 520, 88, 0.7) }] },
+    { id: 'ecs_process', title: '进程数', series: [{ name: 'process_count', color: '#65c6d4', values: stable(11, 156, 12, 0.3) }] },
+  ]
+  const genericCharts = (): MonitoringChart[] => [
+    { id: 'entity_events', title: '事件数量', series: [{ name: 'events', color: '#ebb735', values: stable(1, 6, 3, 1.1) }] },
+    { id: 'entity_health', title: '健康分', series: [{ name: 'health_score', color: '#79ad6f', values: stable(2, 92, 4, 0.4) }] },
+    { id: 'entity_relation', title: '关联关系数', series: [{ name: 'relations', color: '#65c6d4', values: stable(3, Number(node.properties.relationCount || 8), 2, 0.6) }] },
+    { id: 'entity_latency', title: '平均延迟', unit: 'ms', series: [{ name: 'latency', color: '#ebb735', values: stable(4, 45, 12, 1.0) }] },
+    { id: 'entity_request', title: '请求量', series: [{ name: 'requests', color: '#79ad6f', values: stable(5, 160, 45, 1.2) }] },
+    { id: 'entity_error', title: '错误数', series: [{ name: 'errors', color: '#ef6f5c', values: stable(6, 3, 2.2, 1.6) }] },
+    { id: 'entity_log', title: '日志写入量', series: [{ name: 'logs', color: '#79ad6f', values: stable(7, 260, 72, 0.9) }] },
+    { id: 'entity_throughput', title: '吞吐量', unit: 'KiB/s', series: [{ name: 'throughput', color: '#65c6d4', values: stable(8, 120, 36, 0.8) }] },
+  ]
+
+  if (templateKey === 'mysql') return mysqlCharts()
+  if (templateKey === 'redis') return redisCharts()
+  if (templateKey === 'workload') return workloadCharts()
+  if (templateKey === 'ecs') return ecsCharts()
+  return genericCharts()
+}
+
+function monitoringTimeLabels(range: MonitoringTimeRange) {
+  if (range === '1h') return ['10:30', '11:00', '11:30']
+  if (range === '6h') return ['06:00', '09:00', '12:00']
+  return ['11:20', '11:25', '11:30']
+}
+
+function createMonitoringQuery(chart: MonitoringChart, timeRange: MonitoringTimeRange) {
+  const metrics = chart.series.map((series) => series.name).join(', ')
+  return `metric | range=${timeRange} | chart=${chart.id} | select ${metrics}`
+}
+
+function downloadMonitoringCsv(chart: MonitoringChart, timeRange: MonitoringTimeRange) {
+  const maxPoints = Math.max(...chart.series.map((series) => series.values.length))
+  const rows = Array.from({ length: maxPoints }, (_, index) => [
+    monitoringCsvTimeLabel(index, maxPoints, timeRange),
+    ...chart.series.map((series) => series.values[index] ?? ''),
+  ])
+  const header = ['time', ...chart.series.map((series) => series.name)]
+  const csv = [header, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${chart.id}-${timeRange}.csv`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function monitoringCsvTimeLabel(index: number, total: number, range: MonitoringTimeRange) {
+  const minutes = range === '15m' ? 15 : range === '1h' ? 60 : 360
+  const start = Date.now() - minutes * 60 * 1000
+  const time = new Date(start + (minutes * 60 * 1000 * index) / Math.max(1, total - 1))
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${pad(time.getHours())}:${pad(time.getMinutes())}:${pad(time.getSeconds())}`
+}
+
+function monitoringTemplateKey(node: TopologyNode) {
+  const text = [
+    node.type,
+    node.label,
+    entityNodeDomain(node),
+    valueText(node.properties.engine),
+    valueText(node.properties.category),
+    valueText(node.properties.kind),
+    valueText(node.properties.__domain__),
+  ].join(' ').toLowerCase()
+  if (text.includes('redis') || text.includes('cache') || text.includes('kvstore')) return 'redis'
+  if (text.includes('rds') || text.includes('mysql') || text.includes('postgres') || text.includes('database')) return 'mysql'
+  if (text.includes('workload') || text.includes('deployment') || text.includes('statefulset') || text.includes('pod') || text.includes('service') || text.includes('application')) return 'workload'
+  if (text.includes('ecs') || text.includes('host') || text.includes('vm') || text.includes('server') || text.includes('compute')) return 'ecs'
+  return 'generic'
+}
+
+function createMonitoringFilters(node: TopologyNode): MonitoringFilterDefinition[] {
+  const templateKey = monitoringTemplateKey(node)
+  const props = node.properties
+  const instanceId = entityInstanceId(node)
+  const instanceName = valueText(props.instanceName) || valueText(props.name) || valueText(props.display_name) || node.label
+  const namespace = valueText(props.namespace) || valueText(props.__namespace__) || valueText(props.k8s_namespace) || 'default'
+  const podName = valueText(props.pod) || valueText(props.podName) || valueText(props.pod_name) || instanceName
+  const ip = valueText(props.ip) || valueText(props.privateIp) || valueText(props.private_ip) || valueText(props.host) || instanceId
+  const database = valueText(props.database) || valueText(props.db) || valueText(props.dbName) || 'default'
+
+  if (templateKey === 'workload') {
+    return [
+      { key: 'namespace', label: 'namespace', value: namespace },
+      { key: 'workloadName', label: 'workloadName', value: instanceName },
+      { key: 'podName', label: 'podName', value: podName },
+    ]
+  }
+  if (templateKey === 'ecs') {
+    return [
+      { key: 'instanceId', label: 'instanceId', value: instanceId },
+      { key: 'ip', label: 'ip', value: ip },
+    ]
+  }
+  if (templateKey === 'redis') {
+    return [
+      { key: 'instanceId', label: 'instanceId', value: instanceId },
+      { key: 'database', label: 'database', value: database },
+    ]
+  }
+  if (templateKey === 'mysql') {
+    return [
+      { key: 'instanceId', label: 'instanceId', value: instanceId },
+      { key: 'instanceName', label: 'instanceName', value: instanceName },
+    ]
+  }
+  return [
+    { key: 'entityId', label: 'entityId', value: node.id },
+    { key: 'entityName', label: 'entityName', value: node.label },
+  ]
+}
+
+function formatMonitorTick(value: number, unit?: string) {
+  const text = Math.abs(value) >= 100 ? String(Math.round(value)) : Number(value.toFixed(2)).toString()
+  return unit ? `${text} ${unit}` : text
 }
 
 function entityLogConditions(node: TopologyNode) {
@@ -2726,6 +3243,10 @@ function EntityRelatedTopologyCanvas({
   const domain = valueText(node.properties.__domain__) || valueText(node.properties.domain) || 'domain'
   const zoomScale = zoom / 100
   const graphTransform = 'translate(' + canvasCenter.x + ' ' + canvasCenter.y + ') scale(' + zoomScale + ') translate(' + (-canvasCenter.x) + ' ' + (-canvasCenter.y) + ')'
+  const minimap = useMemo(
+    () => createRelatedTopologyMinimap(layout, graph.edges, width, height, zoomScale, canvasCenter),
+    [canvasCenter, graph.edges, height, layout, width, zoomScale],
+  )
   useEffect(() => {
     const availableKeys = new Set(graph.nodes.map((item) => item.id))
     setNodePositions((current) => {
@@ -2936,11 +3457,32 @@ function EntityRelatedTopologyCanvas({
               </g>
             </svg>
             <div className="entity-related-minimap" aria-hidden="true">
-              <svg viewBox={'0 0 ' + width + ' ' + height}>
-                <rect width={width} height={height} />
-                {layout.map(({ node: item, x, y }) => (
-                  <rect key={item.id} className={item.id === node.id ? 'current' : ''} x={x - 3} y={y - 3} width="6" height="6" rx="3" />
-                ))}
+              <svg viewBox={`0 0 ${minimap.width} ${minimap.height}`}>
+                <rect className="background" width={minimap.width} height={minimap.height} />
+                <g className="edges">
+                  {minimap.edges.map((edge) => (
+                    <line key={edge.id} x1={edge.x1} y1={edge.y1} x2={edge.x2} y2={edge.y2} />
+                  ))}
+                </g>
+                <g className="nodes">
+                  {minimap.nodes.map((item) => (
+                    <circle
+                      key={item.id}
+                      className={item.id === node.id ? 'current' : ''}
+                      cx={item.x}
+                      cy={item.y}
+                      r={item.id === node.id ? 4.8 : 3.6}
+                    />
+                  ))}
+                </g>
+                <rect
+                  className="viewport"
+                  x={minimap.viewport.x}
+                  y={minimap.viewport.y}
+                  width={minimap.viewport.width}
+                  height={minimap.viewport.height}
+                  rx="3"
+                />
               </svg>
             </div>
             <div className="entity-related-legend">
@@ -3145,6 +3687,71 @@ function layoutRelatedInstanceGraph(nodes: TopologyNode[], edges: RelatedInstanc
     })
   })
   return { positions, width, height, center }
+}
+
+function createRelatedTopologyMinimap(
+  layout: Array<{ node: TopologyNode; x: number; y: number }>,
+  edges: RelatedInstanceEdge[],
+  width: number,
+  height: number,
+  zoomScale: number,
+  center: { x: number; y: number },
+) {
+  const mapWidth = 156
+  const mapHeight = 92
+  if (layout.length === 0) {
+    return { width: mapWidth, height: mapHeight, nodes: [], edges: [], viewport: { x: 8, y: 8, width: mapWidth - 16, height: mapHeight - 16 } }
+  }
+  const nodeById = new Map(layout.map((item) => [item.node.id, item]))
+  const xs = layout.flatMap((item) => [item.x - 96, item.x + 118])
+  const ys = layout.flatMap((item) => [item.y - 54, item.y + 54])
+  edges.forEach((edge) => {
+    const source = nodeById.get(edge.source.id)
+    const target = nodeById.get(edge.target.id)
+    if (!source || !target) return
+    xs.push(source.x, target.x)
+    ys.push(source.y, target.y)
+  })
+  let minX = Math.min(...xs)
+  let maxX = Math.max(...xs)
+  let minY = Math.min(...ys)
+  let maxY = Math.max(...ys)
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+    minX = 0
+    minY = 0
+    maxX = width
+    maxY = height
+  }
+  const padding = 10
+  const boundsWidth = Math.max(1, maxX - minX)
+  const boundsHeight = Math.max(1, maxY - minY)
+  const scale = Math.min((mapWidth - padding * 2) / boundsWidth, (mapHeight - padding * 2) / boundsHeight)
+  const offsetX = (mapWidth - boundsWidth * scale) / 2 - minX * scale
+  const offsetY = (mapHeight - boundsHeight * scale) / 2 - minY * scale
+  const mapPoint = (x: number, y: number) => ({ x: x * scale + offsetX, y: y * scale + offsetY })
+  const viewportWorldWidth = width / Math.max(0.5, zoomScale)
+  const viewportWorldHeight = height / Math.max(0.5, zoomScale)
+  const viewportTopLeft = mapPoint(center.x - viewportWorldWidth / 2, center.y - viewportWorldHeight / 2)
+  const viewportBottomRight = mapPoint(center.x + viewportWorldWidth / 2, center.y + viewportWorldHeight / 2)
+  return {
+    width: mapWidth,
+    height: mapHeight,
+    nodes: layout.map((item) => ({ id: item.node.id, ...mapPoint(item.x, item.y) })),
+    edges: edges.flatMap((edge) => {
+      const source = nodeById.get(edge.source.id)
+      const target = nodeById.get(edge.target.id)
+      if (!source || !target) return []
+      const from = mapPoint(source.x, source.y)
+      const to = mapPoint(target.x, target.y)
+      return [{ id: edge.id, x1: from.x, y1: from.y, x2: to.x, y2: to.y }]
+    }),
+    viewport: {
+      x: Math.max(2, Math.min(mapWidth - 4, viewportTopLeft.x)),
+      y: Math.max(2, Math.min(mapHeight - 4, viewportTopLeft.y)),
+      width: Math.max(8, Math.min(mapWidth - 4, viewportBottomRight.x) - Math.max(2, Math.min(mapWidth - 4, viewportTopLeft.x))),
+      height: Math.max(8, Math.min(mapHeight - 4, viewportBottomRight.y) - Math.max(2, Math.min(mapHeight - 4, viewportTopLeft.y))),
+    },
+  }
 }
 
 function uniqueRelatedLegend(nodes: TopologyNode[]) {

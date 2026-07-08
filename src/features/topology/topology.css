@@ -668,6 +668,214 @@
   pointer-events: auto;
 }
 
+.topo-architecture-shell {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 74% 22%, rgba(20, 184, 166, 0.12), transparent 28%),
+    radial-gradient(circle at 28% 72%, rgba(59, 130, 246, 0.1), transparent 30%),
+    linear-gradient(145deg, #f8fbff 0%, #eef5fb 46%, #fbfdff 100%);
+}
+
+.topo-architecture-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+}
+
+.topo-architecture-viewport:active {
+  cursor: grabbing;
+}
+
+.topo-architecture-projection {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.topo-architecture-projected-layer polygon {
+  stroke-width: 1.35;
+  stroke-dasharray: 5 6;
+  filter: url(#topo-architecture-board-shadow);
+}
+
+.topo-architecture-projected-layer.microservice polygon,
+.topo-architecture-projected-layer.host polygon,
+.topo-architecture-projected-layer.datacenter polygon {
+  stroke-dasharray: none;
+}
+
+.topo-architecture-projected-layer.active polygon {
+  stroke: #facc15 !important;
+  stroke-width: 2.4;
+}
+
+.topo-architecture-projected-layer text {
+  fill: #0f172a;
+  font-size: 22px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.68);
+  stroke-width: 3px;
+}
+
+.topo-architecture-projected-layer.microservice text,
+.topo-architecture-projected-layer.host text,
+.topo-architecture-projected-layer.datacenter text {
+  fill: #f8fafc;
+  stroke: rgba(15, 23, 42, 0.42);
+}
+
+.topo-architecture-projected-layer text.title {
+  font-size: 18px;
+}
+
+.topo-architecture-projected-layer text.hidden {
+  fill: #64748b;
+  font-size: 12px;
+  stroke-width: 2px;
+}
+
+.topo-architecture-projected-layer.microservice text.hidden,
+.topo-architecture-projected-layer.host text.hidden,
+.topo-architecture-projected-layer.datacenter text.hidden {
+  fill: #b9c7d7;
+}
+
+.topo-architecture-projected-edges line {
+  fill: none;
+  stroke-width: 1.45;
+  marker-end: url(#topo-architecture-projection-arrow);
+  filter: drop-shadow(0 3px 4px rgba(15, 23, 42, 0.16));
+}
+
+.topo-architecture-projected-edges .cross-layer line {
+  stroke-width: 2;
+  stroke-dasharray: 7 7;
+}
+
+.topo-architecture-projected-edges .same-layer line {
+  stroke-width: 1.25;
+}
+
+.topo-architecture-projected-edges text {
+  max-width: 110px;
+  font-size: 10px;
+  font-weight: 800;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.86);
+  stroke-width: 4px;
+}
+
+.topo-architecture-projected-edges marker path {
+  fill: currentColor;
+}
+
+.topo-architecture-node-hit {
+  cursor: pointer;
+  outline: none;
+}
+
+.topo-architecture-node-hit .halo {
+  fill: color-mix(in srgb, var(--topo-node-color, #1677ff) 18%, transparent);
+  opacity: 0.78;
+}
+
+.topo-architecture-node-hit .dot {
+  fill: var(--topo-node-color, #1677ff);
+  stroke: rgba(255, 255, 255, 0.96);
+  stroke-width: 1.7;
+  filter: url(#topo-architecture-node-glow);
+}
+
+.topo-architecture-node-hit.active .dot,
+.topo-architecture-node-hit:hover .dot,
+.topo-architecture-node-hit:focus-visible .dot {
+  stroke: #facc15;
+  stroke-width: 2.6;
+}
+
+.topo-architecture-node-hit .degree {
+  fill: #ffffff;
+  font-size: 9px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: rgba(15, 23, 42, 0.42);
+  stroke-width: 3px;
+}
+
+.topo-architecture-node-hit .label {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.topo-architecture-node-hit.active .label,
+.topo-architecture-node-hit:hover .label,
+.topo-architecture-node-hit:focus-visible .label {
+  opacity: 1;
+}
+
+.topo-architecture-node-hit .label rect {
+  fill: rgba(255, 255, 255, 0.94);
+  stroke: color-mix(in srgb, var(--topo-node-color, #1677ff) 48%, #ffffff);
+  filter: drop-shadow(0 8px 14px rgba(15, 23, 42, 0.14));
+}
+
+.topo-architecture-node-hit .label text {
+  fill: #172033;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.topo-architecture-node-hit .label text.type {
+  fill: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.topo-architecture-legend {
+  position: absolute;
+  right: 24px;
+  bottom: 22px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #475569;
+  font-size: 12px;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);
+}
+
+.topo-architecture-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.topo-architecture-legend i {
+  width: 22px;
+  height: 0;
+  border-top: 2px solid #ef4565;
+}
+
+.topo-architecture-legend i.cross {
+  border-top-style: dashed;
+}
+
+.topo-architecture-legend b {
+  color: #111827;
+}
+
 .topo-cosmos-graph canvas {
   display: block;
   cursor: grab;

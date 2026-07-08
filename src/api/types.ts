@@ -174,6 +174,36 @@ export interface QueryExecuteResponse {
   }
 }
 
+export interface MonitoringFilterDefinition {
+  key: string
+  label: string
+  value: string
+}
+
+export interface MonitoringSeriesResponse {
+  name: string
+  color: string
+  values: number[]
+}
+
+export interface MonitoringChartResponse {
+  id: string
+  title: string
+  unit?: string
+  series: MonitoringSeriesResponse[]
+}
+
+export interface MonitoringDashboardResponse {
+  workspace: string
+  entity_id: string
+  entity_type?: string
+  domain?: string
+  time_range: string
+  filters: MonitoringFilterDefinition[]
+  charts: MonitoringChartResponse[]
+  updated_at: string
+}
+
 export interface EntityWriteBatch {
   workspace?: string
   idempotency_key?: string

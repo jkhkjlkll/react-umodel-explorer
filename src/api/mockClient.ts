@@ -2,6 +2,7 @@ import type { UModelApiClient } from './client'
 import { createMockUModelDataset } from './mockData'
 import type {
   HealthResponse,
+  MonitoringDashboardResponse,
   QueryRequest,
   QueryResult,
   SampleImportResult,
@@ -85,6 +86,34 @@ export class MockUModelApi implements UModelApiClient {
         total: 0,
         has_more: false,
       },
+    }
+  }
+
+  async getMonitoringDashboard(workspace: string, entityId: string, timeRange = '15m'): Promise<MonitoringDashboardResponse> {
+    const values = Array.from({ length: timeRange === '6h' ? 72 : 46 }, (_, index) => Number((52 + Math.sin(index / 4) * 12 + (index % 5)).toFixed(2)))
+    return {
+      workspace,
+      entity_id: entityId,
+      entity_type: 'mock.entity',
+      domain: 'mock',
+      time_range: timeRange,
+      updated_at: new Date().toISOString(),
+      filters: [
+        { key: 'entityId', label: 'entityId', value: entityId },
+        { key: 'entityName', label: 'entityName', value: entityId },
+      ],
+      charts: [
+        {
+          id: 'mock_health',
+          title: '健康分',
+          series: [{ name: 'health_score', color: '#79ad6f', values }],
+        },
+        {
+          id: 'mock_requests',
+          title: '请求量',
+          series: [{ name: 'requests', color: '#ebb735', values: values.map((value) => Number((value * 3.4).toFixed(2))) }],
+        },
+      ],
     }
   }
 
