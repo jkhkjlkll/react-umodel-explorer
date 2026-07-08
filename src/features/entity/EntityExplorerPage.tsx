@@ -2239,7 +2239,7 @@ function EntityInstanceDetailPanel({
         <div className="entity-instance-title-block">
           <strong>{node.label}</strong>
           <span className="entity-instance-type-pill">
-            {entityTypeDisplayName(node.type)}
+            {entityNodeDomain(node)}
             <i aria-hidden="true" />
           </span>
         </div>
@@ -2417,7 +2417,7 @@ function escapeSplString(value: string) {
 function entityDetailProperties(node: TopologyNode) {  const props = node.properties
   const baseRows = [
     { label: '\u5b9e\u4f53ID', value: node.id },
-    { label: '\u5b9e\u4f53Domain', value: valueText(props.__domain__) || valueText(props.domain) || node.cluster || '-' },
+    { label: '\u5b9e\u4f53Domain', value: entityNodeDomain(node) },
     { label: '\u5b9e\u4f53\u7c7b\u578b', value: node.type },
     { label: '\u5b9e\u4f8b ID', value: valueText(props.instanceId) || valueText(props.instance_id) || valueText(props.id) || node.id },
     { label: '\u5b9e\u4f8b\u540d\u79f0', value: node.label },
@@ -2439,6 +2439,14 @@ function entityDetailProperties(node: TopologyNode) {  const props = node.proper
       return true
     })
   return [...baseRows, ...extraRows]
+}
+
+function entityNodeDomain(node: TopologyNode) {
+  return valueText(node.properties.__domain__)
+    || valueText(node.properties.domain)
+    || node.cluster
+    || node.type.split('.')[0]
+    || '-'
 }
 
 function EntityInstanceHealthPanel({ node, links }: { node: TopologyNode; links: EntityRelatedLink[] }) {
