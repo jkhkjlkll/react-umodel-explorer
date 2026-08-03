@@ -141,7 +141,7 @@ export interface EntityData {
 }
 
 export interface QueryExplain {
-  source?: '.umodel' | '.entity' | '.topo'
+  source?: '.umodel' | '.entity' | '.topo' | '.runbook_set'
   provider?: string
   storage_provider?: string
   cypher_dialect?: string

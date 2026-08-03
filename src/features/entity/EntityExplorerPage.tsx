@@ -732,6 +732,7 @@ export function EntityTopologyView({
   nodeDragEnabled = false,
   onSelectNode,
   onFocusType,
+  onInspectInstance,
 }: {
   data: ReturnType<typeof createAliyunLikeTopologyData>
   focusedTypes: string[]
@@ -740,6 +741,7 @@ export function EntityTopologyView({
   nodeDragEnabled?: boolean
   onSelectNode: (node: TopologyNode | null) => void
   onFocusType: (type: string) => void
+  onInspectInstance?: (instance: EntityTopologyInstance) => void
 }) {
   const [regionMode, setRegionMode] = useState(false)
   const [nodeOffsets, setNodeOffsets] = useState<Record<string, { x: number; y: number }>>({})
@@ -874,7 +876,15 @@ export function EntityTopologyView({
     if (!drag || drag.pointerId !== event.pointerId) return
     nodeDragRef.current = null
     setIsDraggingNode(false)
-    if (drag.moved) window.setTimeout(() => { suppressClickRef.current = false }, 0)
+    if (!drag.moved) {
+      const item = referenceTopology.nodes.find((candidate) => candidate.node.id === drag.id)
+      if (item) {
+        onSelectNode(item.node)
+        onFocusType(item.node.type)
+      }
+      suppressClickRef.current = true
+    }
+    window.setTimeout(() => { suppressClickRef.current = false }, 0)
   }
   const moveTopologyPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (nodeDragRef.current) {
@@ -967,14 +977,9 @@ export function EntityTopologyView({
                 <g
                   key={item.node.id}
                   className={selectedId === item.node.id ? 'selected' : ''}
+                  data-node-id={item.node.id}
                   data-region={item.region}
                   transform={`translate(${item.x} ${item.y})`}
-                  onPointerDown={(event) => startNodeDrag(event, item.node.id)}
-                  onClick={() => {
-                    if (suppressClickRef.current) return
-                    onSelectNode(item.node)
-                    onFocusType(item.node.type)
-                  }}
                 >
                   <clipPath id={`entity-reference-title-clip-${index}`}>
                     <rect x={cardMetrics.titleX} y={cardMetrics.titleClipY} width={Math.max(cardMetrics.titleClipMinWidth, item.width - cardMetrics.titleClipReserve)} height={cardMetrics.titleClipHeight} />
@@ -1027,6 +1032,42 @@ export function EntityTopologyView({
                       <text x={cardMetrics.subtitleX} y={item.height - cardMetrics.subtitleBottom} className="muted" clipPath={`url(#entity-reference-subtitle-clip-${index})`}>{item.subtitle}</text>
                     </>
                   )}
+                  <rect
+                    className="entity-reference-card-hit-target"
+                    width={item.width}
+                    height={item.height}
+                    rx={useOModelCards ? omodelMetrics.cardRadius : cardMetrics.cardRadius}
+                    fill="transparent"
+                    pointerEvents="all"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`查看${item.title}实例明细`}
+                    onPointerDown={(event) => {
+                      event.stopPropagation()
+                      if (!nodeDragEnabled) {
+                        onSelectNode(item.node)
+                        onFocusType(item.node.type)
+                        return
+                      }
+                      startNodeDrag(event, item.node.id)
+                    }}
+                    onPointerUp={(event) => {
+                      event.stopPropagation()
+                      stopNodeDrag(event)
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      if (suppressClickRef.current) return
+                      onSelectNode(item.node)
+                      onFocusType(item.node.type)
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return
+                      event.preventDefault()
+                      onSelectNode(item.node)
+                      onFocusType(item.node.type)
+                    }}
+                  />
                 </g>
               ))}
             </g>
@@ -1047,12 +1088,36 @@ export function EntityTopologyView({
           </svg>
         </div>
       </div>
-      {selectedReferenceItem && <EntityTopologyMetricPanel item={selectedReferenceItem} onClose={() => onSelectNode(null)} />}
+      {selectedReferenceItem && (
+        <EntityTopologyMetricPanel
+          item={selectedReferenceItem}
+          onClose={() => onSelectNode(null)}
+          onInspectInstance={onInspectInstance}
+        />
+      )}
     </section>
   )
 }
 
-function EntityTopologyMetricPanel({ item, onClose }: { item: ReferenceTopologyNode; onClose: () => void }) {
+export interface EntityTopologyInstance {
+  name: string
+  requests: string
+  errors: string
+  latency: string
+  node: TopologyNode
+  entityTitle: string
+  entityType: string
+}
+
+function EntityTopologyMetricPanel({
+  item,
+  onClose,
+  onInspectInstance,
+}: {
+  item: ReferenceTopologyNode
+  onClose: () => void
+  onInspectInstance?: (instance: EntityTopologyInstance) => void
+}) {
   const rows = topologyMetricRowsFor(item)
   const total = topologyMetricTotalFor(item)
   const totalPages = Math.max(1, Math.ceil(total / 10))
@@ -1086,7 +1151,23 @@ function EntityTopologyMetricPanel({ item, onClose }: { item: ReferenceTopologyN
           <tbody>
             {visibleRows.map((row) => (
               <tr key={row.name} className={selectedRowName === row.name ? 'active' : ''}>
-                <td><button className="entity-table-link" type="button" onClick={() => setSelectedRowName(row.name)}>{row.name}</button></td>
+                <td>
+                  <button
+                    className="entity-table-link"
+                    type="button"
+                    onClick={() => {
+                      setSelectedRowName(row.name)
+                      onInspectInstance?.({
+                        ...row,
+                        node: item.node,
+                        entityTitle: item.title,
+                        entityType: item.subtitle,
+                      })
+                    }}
+                  >
+                    {row.name}
+                  </button>
+                </td>
                 <td>{row.requests}</td>
                 <td>{row.errors}</td>
                 <td>{row.latency}</td>

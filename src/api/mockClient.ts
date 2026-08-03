@@ -111,6 +111,7 @@ export class MockUModelApi implements UModelApiClient {
     const limit = payload.limit || extractLimit(payload.query) || 1000
     if (source === '.topo') return this.topoResult(limit)
     if (source === '.entity') return this.entityResult(limit)
+    if (source === '.runbook_set') return this.runbookResult(limit, payload.query)
     return this.umodelResult(limit, extractKindFilter(payload.query))
   }
 
@@ -344,6 +345,35 @@ export class MockUModelApi implements UModelApiClient {
       },
     }
   }
+
+  private runbookResult(limit: number, query: string): QueryResult {
+    const domainFilter = extractStringFilter(query, 'domain')
+    const typeFilter = normalizeRunbookType(extractStringFilter(query, 'type'))
+    const search = extractStringFilter(query, 'query').toLowerCase()
+    const rows = this.elements
+      .filter((element) => element.kind === 'runbook_set')
+      .filter((element) => !domainFilter || element.domain === domainFilter)
+      .flatMap((element) => runbookRowsFromElement(element))
+      .filter((row) => !typeFilter || normalizeRunbookType(stringValue(row.type)) === typeFilter)
+      .map((row) => {
+        const text = `${row.title} ${row.content} ${row.name}`.toLowerCase()
+        const score = search ? tokenOverlapScore(search, text) : 1
+        return { row: { ...row, __score__: score }, score }
+      })
+      .filter((item) => !search || item.score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, limit)
+      .map((item) => item.row)
+    return {
+      columns: ['type', 'source', 'domain', 'kind', 'name', 'section', 'title', 'content', 'spec', '__score__'],
+      rows,
+      page: {
+        limit,
+        total: rows.length,
+        has_more: false,
+      },
+    }
+  }
 }
 
 function makeWorkspace(
@@ -366,8 +396,9 @@ function makeWorkspace(
   }
 }
 
-function detectQuerySource(query: string): '.umodel' | '.entity' | '.topo' {
+function detectQuerySource(query: string): '.umodel' | '.entity' | '.topo' | '.runbook_set' {
   const normalized = query.toLowerCase()
+  if (normalized.includes('.runbook_set')) return '.runbook_set'
   if (normalized.includes('.topo') || normalized.includes('graph-call')) return '.topo'
   if (normalized.includes('.entity ') || normalized.startsWith('.entity') || normalized.includes('.entity_set')) return '.entity'
   return '.umodel'
@@ -381,10 +412,15 @@ function extractLimit(query: string) {
 }
 
 function extractKindFilter(query: string) {
-  const sourceMatch = query.match(/^\s*\.(entity_set|metric_set|log_set|data_link|entity_set_link|storage_link|explorer_link|runbook_link)\b/i)
+  const sourceMatch = query.match(/^\s*\.(entity_set|metric_set|log_set|runbook_set|data_link|entity_set_link|storage_link|explorer_link|runbook_link)\b/i)
   if (sourceMatch) return sourceMatch[1]
   const kindMatch = query.match(/with\s*\(\s*kind\s*=\s*['"]([^'"]+)['"]/i)
   return kindMatch?.[1]
+}
+
+function extractStringFilter(query: string, key: string) {
+  const match = query.match(new RegExp(`${key}\\s*=\\s*['"]([^'"]*)['"]`, 'i'))
+  return match?.[1] || ''
 }
 
 function isLinkElement(element: UModelElement) {
@@ -456,6 +492,68 @@ function relationTypeFromSpec(element: UModelElement) {
   return candidates.map(stringValue).find(Boolean) || element.kind || 'related_to'
 }
 
+function runbookRowsFromElement(element: UModelElement): Array<Record<string, unknown>> {
+  const spec = asRecord(element.spec)
+  const rows: Array<Record<string, unknown>> = []
+  for (const section of ['knowledge', 'observations', 'actions', 'automations', 'automation', 'skills', 'steps']) {
+    const items = asArray(spec[section])
+    items.forEach((item, index) => {
+      const itemMap = asRecord(item)
+      const title = stringValue(itemMap.title) || stringValue(itemMap.name) || `${section}[${index}]`
+      rows.push({
+        type: section === 'automation' ? 'automations' : section,
+        source: `${element.domain}.runbook_set`,
+        domain: element.domain,
+        kind: element.kind,
+        name: element.name,
+        section: `${section}[${index}]`,
+        title,
+        content: typeof item === 'string' ? item : JSON.stringify(item),
+        spec,
+      })
+    })
+  }
+  if (rows.length === 0) {
+    rows.push({
+      type: 'runbook',
+      source: `${element.domain}.runbook_set`,
+      domain: element.domain,
+      kind: element.kind,
+      name: element.name,
+      section: 'spec',
+      title: element.name,
+      content: JSON.stringify(spec),
+      spec,
+    })
+  }
+  return rows
+}
+
+function normalizeRunbookType(value: string) {
+  const normalized = value.trim().toLowerCase()
+  if (!normalized) return ''
+  const aliases: Record<string, string> = {
+    knowledge: 'knowledge',
+    observation: 'observations',
+    observations: 'observations',
+    action: 'actions',
+    actions: 'actions',
+    automation: 'automations',
+    automations: 'automations',
+    skill: 'skills',
+    skills: 'skills',
+    step: 'steps',
+    steps: 'steps',
+  }
+  return aliases[normalized] || normalized
+}
+
+function tokenOverlapScore(query: string, text: string) {
+  const tokens = query.split(/\s+/).map((token) => token.trim()).filter(Boolean)
+  if (tokens.length === 0) return 1
+  return tokens.reduce((score, token) => score + (text.includes(token) ? 1 : 0), 0)
+}
+
 function mergeRowsByStableId(
   current: Array<Record<string, unknown>>,
   incoming: Array<Record<string, unknown>>,
@@ -497,6 +595,12 @@ function stableRelationId(row: Record<string, unknown>) {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function asArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (value === undefined || value === null || value === '') return []
+  return [value]
 }
 
 function stringValue(value: unknown) {

@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import ReactDOM from 'react-dom'
 import {
+  Activity,
   ChevronRight,
   CircleHelp,
   Clock3,
+  Database,
   Grid2X2,
+  Info,
+  LineChart,
   Network,
   Play,
   Search,
   Settings,
   Shuffle,
+  X,
 } from 'lucide-react'
 import type { UModelApiClient } from '../../api/client'
-import { EntityTopologyView } from '../entity/EntityExplorerPage'
+import { EntityTopologyView, type EntityTopologyInstance } from '../entity/EntityExplorerPage'
 import { createAliyunLikeTopologyData, type TopologyNode } from './topologyModel'
 import { resolveTopologyNodeIconPreset, TopologyPresetIcon } from './topologyIcons'
 import { TopologyCanvas } from './TopologyCanvas'
@@ -21,6 +26,7 @@ import './topology.css'
 type PanelTab = 'overview' | 'layout'
 type TopologyStageMode = 'canvas' | 'entity-reference'
 type TimeRangeMode = '1h' | '1d' | 'custom'
+type InstanceDetailTab = 'detail' | 'topology' | 'metrics'
 
 interface TopologyTimeRange {
   mode: TimeRangeMode
@@ -61,6 +67,7 @@ export function TopologyExplorerPage({
   const [showClusterLabels, setShowClusterLabels] = useState(true)
   const [focusedTypes, setFocusedTypes] = useState<string[]>([])
   const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null)
+  const [selectedInstance, setSelectedInstance] = useState<EntityTopologyInstance | null>(null)
   const [playing, setPlaying] = useState(false)
   const [playhead, setPlayhead] = useState(0.98)
   const [selectedApplicationId, setSelectedApplicationId] = useState(mockApplications[0]?.id || '')
@@ -185,6 +192,15 @@ export function TopologyExplorerPage({
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [timePanelOpen])
+
+  useEffect(() => {
+    if (!selectedInstance) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedInstance(null)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedInstance])
 
   const focusType = (type: string) => {
     setStageMode('canvas')
@@ -405,11 +421,12 @@ export function TopologyExplorerPage({
                 focusedTypes={focusedTypes}
                 selectedNode={selectedNode}
                 cardVariant="omodel"
-                nodeDragEnabled
+                nodeDragEnabled={allowDrag}
                 onSelectNode={setSelectedNode}
                 onFocusType={(type) => {
                   setFocusedTypes([type])
                 }}
+                onInspectInstance={setSelectedInstance}
               />
             ) : (
               <>
@@ -455,8 +472,290 @@ export function TopologyExplorerPage({
           </footer>
         </main>
       </section>
+      {selectedInstance && (
+        <div className="topo-instance-drawer-layer">
+          <button
+            className="topo-instance-drawer-backdrop"
+            type="button"
+            tabIndex={-1}
+            aria-hidden="true"
+            onClick={() => setSelectedInstance(null)}
+          />
+          <aside
+            className="topo-instance-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="topo-instance-title"
+          >
+            <InstanceExplorer
+              data={data}
+              instance={selectedInstance}
+              applicationId={selectedApplicationId}
+              timeRangeSummary={timeRangeSummary}
+              onClose={() => setSelectedInstance(null)}
+            />
+          </aside>
+        </div>
+      )}
     </div>
   )
+}
+
+function InstanceExplorer({
+  data,
+  instance,
+  applicationId,
+  timeRangeSummary,
+  onClose,
+}: {
+  data: ReturnType<typeof createAliyunLikeTopologyData>
+  instance: EntityTopologyInstance
+  applicationId: string
+  timeRangeSummary: string
+  onClose: () => void
+}) {
+  const [activeTab, setActiveTab] = useState<InstanceDetailTab>('detail')
+  const application = mockApplications.find((item) => item.id === applicationId)
+  const tabs: Array<{ id: InstanceDetailTab; label: string; icon: typeof Database }> = [
+    { id: 'detail', label: '实体详情', icon: Database },
+    { id: 'topology', label: '关联拓扑', icon: Network },
+    { id: 'metrics', label: '指标探索', icon: LineChart },
+  ]
+
+  return (
+    <div className="topo-instance-page">
+      <header className="topo-instance-header">
+        <span className="topo-instance-mark" style={{ color: instance.node.color, borderColor: instance.node.color }}>
+          <TopologyPresetIcon preset={resolveTopologyNodeIconPreset(instance.node)} label={instance.entityType} size={20} />
+        </span>
+        <div className="topo-instance-heading">
+          <strong id="topo-instance-title">{instance.name}</strong>
+          <span>{instance.entityTitle} · {instance.entityType}</span>
+        </div>
+        <span className="topo-instance-status"><i />运行中</span>
+        <div className="topo-instance-context">
+          <span>{applicationId} · {application?.name}</span>
+          <b>{timeRangeSummary}</b>
+        </div>
+        <button className="topo-instance-close" type="button" onClick={onClose} aria-label="关闭实例详情" autoFocus>
+          <X size={18} />
+        </button>
+      </header>
+
+      <nav className="topo-instance-tabs" aria-label="实例探索页签">
+        {tabs.map((tab) => {
+          const Icon = tab.icon
+          return (
+            <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} type="button" onClick={() => setActiveTab(tab.id)}>
+              <Icon size={15} />
+              {tab.label}
+            </button>
+          )
+        })}
+      </nav>
+
+      <main className="topo-instance-content">
+        {activeTab === 'detail' && <InstanceDetailTabView instance={instance} applicationId={applicationId} />}
+        {activeTab === 'topology' && <InstanceTopologyTabView data={data} instance={instance} />}
+        {activeTab === 'metrics' && <InstanceMetricsTabView instance={instance} timeRangeSummary={timeRangeSummary} />}
+      </main>
+    </div>
+  )
+}
+
+function InstanceDetailTabView({ instance, applicationId }: { instance: EntityTopologyInstance; applicationId: string }) {
+  const node = instance.node
+  const relationCount = Number(node.properties.relationCount) || 0
+  const rows = [
+    ['实例 ID', instance.name],
+    ['实体类型', instance.entityType],
+    ['所属实体', instance.entityTitle],
+    ['应用 ID', applicationId],
+    ['区域', node.properties.region || 'cn-hongkong'],
+    ['运行状态', node.properties.status || 'normal'],
+    ['主机地址', node.properties.host || '-'],
+    ['IP 地址', node.properties.ip || '-'],
+    ['关联关系', `${relationCount} 条`],
+  ]
+  return (
+    <div className="topo-instance-detail-view">
+      <section className="topo-instance-summary-grid">
+        <SummaryMetric label="平均请求次数" value={instance.requests || '0'} unit="次/min" />
+        <SummaryMetric label="平均错误次数" value={instance.errors || '0'} unit="次/min" tone={Number(instance.errors) > 0 ? 'danger' : 'normal'} />
+        <SummaryMetric label="平均延迟" value={instance.latency || '0 ms'} unit="" />
+        <SummaryMetric label="关联实体" value={String(relationCount)} unit="个" />
+      </section>
+      <section className="topo-instance-section topo-instance-property-section">
+        <div className="topo-instance-section-head">
+          <div><strong>基本信息</strong><span>实例标识、归属和运行属性</span></div>
+          <span className="topo-instance-info"><Info size={14} /> Mock 数据</span>
+        </div>
+        <dl className="topo-instance-property-grid">
+          {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+        </dl>
+      </section>
+    </div>
+  )
+}
+
+function SummaryMetric({ label, value, unit, tone = 'normal' }: { label: string; value: string; unit: string; tone?: 'normal' | 'danger' }) {
+  return (
+    <article className={`topo-instance-summary-card ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {unit && <small>{unit}</small>}
+    </article>
+  )
+}
+
+function InstanceTopologyTabView({
+  data,
+  instance,
+}: {
+  data: ReturnType<typeof createAliyunLikeTopologyData>
+  instance: EntityTopologyInstance
+}) {
+  const neighbors = useMemo(() => {
+    const rows = data.edges
+      .filter((edge) => edge.source === instance.node.id || edge.target === instance.node.id)
+      .map((edge) => {
+        const peerId = edge.source === instance.node.id ? edge.target : edge.source
+        const peer = data.nodesById.get(peerId)
+        return peer ? { edge, peer, incoming: edge.target === instance.node.id } : null
+      })
+      .filter(Boolean)
+    return rows.slice(0, 8) as Array<{ edge: (typeof data.edges)[number]; peer: TopologyNode; incoming: boolean }>
+  }, [data, instance.node.id])
+  const centerX = 430
+  const centerY = 245
+  const radiusX = 310
+  const radiusY = 165
+
+  return (
+    <section className="topo-instance-section topo-neighbor-section">
+      <div className="topo-instance-section-head">
+        <div><strong>一跳关联拓扑</strong><span>{neighbors.length} 个直接邻居，关系来自当前拓扑数据</span></div>
+      </div>
+      <div className="topo-neighbor-canvas">
+        <svg viewBox="0 0 860 490" role="img" aria-label={`${instance.name} 的关联拓扑`}>
+          <defs>
+            <marker id="topo-instance-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#b8c1cf" />
+            </marker>
+          </defs>
+          {neighbors.map((item, index) => {
+            const angle = (Math.PI * 2 * index) / Math.max(1, neighbors.length) - Math.PI / 2
+            const x = centerX + Math.cos(angle) * radiusX
+            const y = centerY + Math.sin(angle) * radiusY
+            const sourceX = item.incoming ? x : centerX
+            const sourceY = item.incoming ? y : centerY
+            const targetX = item.incoming ? centerX : x
+            const targetY = item.incoming ? centerY : y
+            return (
+              <g key={item.edge.id}>
+                <line x1={sourceX} y1={sourceY} x2={targetX} y2={targetY} stroke="#cbd3df" strokeWidth="2" markerEnd="url(#topo-instance-arrow)" />
+                <text x={(centerX + x) / 2} y={(centerY + y) / 2 - 7} textAnchor="middle" className="topo-neighbor-edge-label">{item.edge.type}</text>
+                <g transform={`translate(${x - 77} ${y - 31})`}>
+                  <rect width="154" height="62" rx="6" fill="#fff" stroke={item.peer.color} strokeWidth="2" />
+                  <circle cx="18" cy="19" r="6" fill={item.peer.color} />
+                  <text x="31" y="22" className="topo-neighbor-title">{shortSvgLabel(item.peer.label, 17)}</text>
+                  <text x="14" y="44" className="topo-neighbor-subtitle">{shortSvgLabel(item.peer.type, 22)}</text>
+                </g>
+              </g>
+            )
+          })}
+          <g transform={`translate(${centerX - 92} ${centerY - 38})`}>
+            <rect width="184" height="76" rx="8" fill="#f7f6ff" stroke="#6559e8" strokeWidth="3" />
+            <circle cx="22" cy="22" r="8" fill={instance.node.color} />
+            <text x="38" y="26" className="topo-neighbor-center-title">{shortSvgLabel(instance.name, 20)}</text>
+            <text x="18" y="53" className="topo-neighbor-center-subtitle">{shortSvgLabel(instance.entityType, 25)}</text>
+          </g>
+          {neighbors.length === 0 && <text x="430" y="250" textAnchor="middle" className="topo-neighbor-empty">当前实例暂无直接关联</text>}
+        </svg>
+      </div>
+    </section>
+  )
+}
+
+function InstanceMetricsTabView({ instance, timeRangeSummary }: { instance: EntityTopologyInstance; timeRangeSummary: string }) {
+  const metrics = useMemo(() => createInstanceMetrics(instance), [instance])
+  return (
+    <div className="topo-instance-metrics-view">
+      <div className="topo-metrics-toolbar">
+        <div><Activity size={16} /><strong>实例指标</strong><span>{timeRangeSummary}</span></div>
+        <span>采样间隔 5 分钟</span>
+      </div>
+      <section className="topo-metric-grid">
+        {metrics.map((metric) => <MetricChart key={metric.id} metric={metric} />)}
+      </section>
+    </div>
+  )
+}
+
+interface InstanceMetric {
+  id: string
+  title: string
+  value: string
+  unit: string
+  color: string
+  points: number[]
+}
+
+function MetricChart({ metric }: { metric: InstanceMetric }) {
+  const width = 420
+  const height = 150
+  const padding = 18
+  const max = Math.max(...metric.points, 1)
+  const min = Math.min(...metric.points, 0)
+  const range = Math.max(1, max - min)
+  const coordinates = metric.points.map((point, index) => ({
+    x: padding + (index / Math.max(1, metric.points.length - 1)) * (width - padding * 2),
+    y: height - padding - ((point - min) / range) * (height - padding * 2),
+  }))
+  const line = coordinates.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ')
+  const lastCoordinate = coordinates[coordinates.length - 1]
+  const area = `${line} L${lastCoordinate?.x || padding},${height - padding} L${padding},${height - padding} Z`
+  return (
+    <article className="topo-metric-card">
+      <header><span>{metric.title}</span><strong>{metric.value}<small>{metric.unit}</small></strong></header>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${metric.title}时序图`}>
+        {[0.25, 0.5, 0.75].map((ratio) => <line key={ratio} x1={padding} x2={width - padding} y1={height * ratio} y2={height * ratio} stroke="#edf0f5" />)}
+        <path d={area} fill={`${metric.color}18`} />
+        <path d={line} fill="none" stroke={metric.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <footer><span>开始</span><span>当前</span></footer>
+    </article>
+  )
+}
+
+function createInstanceMetrics(instance: EntityTopologyInstance): InstanceMetric[] {
+  const seed = hashText(`${instance.name}:${instance.entityType}`)
+  const series = (base: number, variance: number, offset: number) => Array.from({ length: 24 }, (_, index) => {
+    const wave = Math.sin((index + offset) * 0.58) * variance
+    const jitter = ((seed + index * 17 + offset * 13) % 11) * variance * 0.07
+    return Math.max(0, Number((base + wave + jitter).toFixed(2)))
+  })
+  const requests = Number(instance.requests) || 32 + (seed % 25)
+  const errors = Number(instance.errors) || 0
+  const latency = Number.parseFloat(instance.latency) || 21 + (seed % 18)
+  return [
+    { id: 'request', title: '请求次数', value: `${requests.toFixed(0)}`, unit: ' 次/min', color: '#6559e8', points: series(requests, Math.max(3, requests * 0.16), 1) },
+    { id: 'latency', title: '平均延迟', value: `${latency.toFixed(0)}`, unit: ' ms', color: '#0ea5e9', points: series(latency, Math.max(2, latency * 0.12), 3) },
+    { id: 'error', title: '错误次数', value: `${errors.toFixed(0)}`, unit: ' 次/min', color: '#ef4444', points: series(errors, errors > 0 ? 1.4 : 0.15, 5) },
+    { id: 'availability', title: '可用率', value: '99.96', unit: '%', color: '#10b981', points: series(99.92, 0.035, 7) },
+    { id: 'cpu', title: 'CPU 使用率', value: `${38 + (seed % 24)}`, unit: '%', color: '#f59e0b', points: series(42 + (seed % 16), 8, 9) },
+    { id: 'memory', title: '内存使用率', value: `${51 + (seed % 18)}`, unit: '%', color: '#ec4899', points: series(56 + (seed % 12), 5, 11) },
+  ]
+}
+
+function shortSvgLabel(value: string, limit: number) {
+  return value.length > limit ? `${value.slice(0, limit - 1)}…` : value
+}
+
+function hashText(value: string) {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0
+  return Math.abs(hash)
 }
 
 function createPresetTimeRange(mode: TimeRangeMode, nextMode = mode): TopologyTimeRange {

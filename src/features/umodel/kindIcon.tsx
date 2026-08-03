@@ -1,6 +1,7 @@
-import { Activity, Box, Braces, Database, FileJson, GitBranch } from 'lucide-react'
+import { Activity, BookOpen, Box, Braces, Database, FileJson, GitBranch } from 'lucide-react'
 
 export function iconForKind(kind: string) {
+  if (kind.includes('runbook')) return <BookOpen size={13} />
   if (kind.includes('metric')) return <Activity size={13} />
   if (kind.includes('log') || kind.includes('trace') || kind.includes('event') || kind.includes('profile')) return <Database size={13} />
   if (kind.includes('link')) return <GitBranch size={13} />

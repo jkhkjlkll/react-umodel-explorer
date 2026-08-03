@@ -131,7 +131,7 @@ export function createMockUModelDataset(_nodeTarget = 749): MockDataset {
   addFanout('storage_link', metricNodes, slsMetricNodes, 'stored_in_metricstore', 120)
   addFanout('data_link', prometheusNodes, metricNodes, 'scrapes_metric', 210)
   addFanout('explorer_link', explorerNodes, [...entityNodes, ...metricNodes, ...logNodes], 'visualizes', 260)
-  addFanout('runbook_link', runbookNodes, [...entityNodes, ...metricNodes, ...logNodes, ...eventNodes], 'remediates', 245)
+  addFanout('runbook_link', entityNodes, runbookNodes, 'guides', 245)
   addFanout('data_link', [aiHub, appHub], metricNodes.slice(0, 80), 'ai_metric', 110)
   addFanout('data_link', [aiHub, appHub], logNodes.concat(slsLogNodes).slice(0, 80), 'ai_log', 80)
   addFanout('data_link', eventNodes, [...entityNodes, ...metricNodes], 'triggers', 60)
@@ -232,9 +232,31 @@ function createRunbookSet(kind: string, domain: string, name: string, index: num
     name,
     version: 'v1.0.0',
     spec: {
+      display_name: { zh_cn: name, en_us: `Runbook ${index}` },
       description: { zh_cn: `${name} 自动化处置流程。` },
+      knowledge: [
+        {
+          name: `diagnosis_${index}`,
+          title: `${name} 诊断知识`,
+          summary: '结合实体指标、错误日志和拓扑邻居判断影响面。',
+          signals: ['latency_p99', 'error_count', 'topology_neighbors'],
+          actions: ['查看指标趋势', '检查错误日志', '展开直接依赖'],
+        },
+      ],
+      observations: [
+        { name: `observe_${index}`, description: '实体异常命中后优先关联所属 Runbook 和邻居节点。' },
+      ],
+      actions: [
+        { name: 'collect_context', action_type: 'query', description: '收集实体、关系、指标和日志上下文。' },
+      ],
+      automations: [
+        { name: 'prepare_rca', description: '生成根因分析上下文。' },
+      ],
+      skills: [
+        { name: 'umodel-rca', title: 'UModel RCA', description: '通过 OModel、实体和拓扑数据执行 RCA。' },
+      ],
       steps: [{ name: 'inspect', action: 'query' }, { name: 'repair', action: 'runbook' }],
-      labels: { severity: String((index % 4) + 1) },
+      labels: { severity: String((index % 4) + 1), runbook: 'true' },
     },
   }
 }

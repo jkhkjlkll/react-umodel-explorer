@@ -315,6 +315,7 @@ function relationLabelForUModelEdge(data?: UModelEdgeData) {
   const spec = (data?.element?.spec || {}) as Record<string, unknown>
   const semanticType = optionalString(spec.data_link_type)
     || optionalString(spec.entity_link_type)
+    || optionalString(spec.runbook_link_type)
     || optionalString(spec.relation_type)
     || optionalString(spec.link_type)
     || optionalString(spec.type)

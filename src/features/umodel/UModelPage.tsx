@@ -42,7 +42,7 @@ import {
   cloneLinkForDraft,
   colorForKind,
   countEntries,
-  createDataLink,
+  createElementLink,
   defaultNewNode,
   descriptionForElement,
   detailShort,
@@ -58,6 +58,8 @@ import {
   kindRank,
   labelForKind,
   linkTouchesElement,
+  linkSourceEndpoint,
+  linkTargetEndpoint,
   nodeKindOptions,
   nodeKindOrder,
   optionalString,
@@ -197,6 +199,15 @@ export function UModelPage({
     }
   }, [searchPanelOpen, updateSearchPanelGeometry])
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const focusKind = params.get('focusKind')
+    if (!focusKind) return
+    setMode('graph')
+    setKindFilters((items) => (items.includes(focusKind) ? items : [...items, focusKind]))
+    setForceFullMode(true)
+  }, [])
+
   const stats = useMemo(() => summarize(draftElements), [draftElements])
   const searchIndex = useMemo(() => buildSearchIndex(draftElements), [draftElements])
   const resultLimit = queryResult?.page.limit
@@ -219,8 +230,8 @@ export function UModelPage({
     setMode('graph')
     if (isLinkElement(element)) {
       const alias = aliasForElements(draftElements.filter((item) => !isLinkElement(item)))
-      const source = alias.get(endpointId((element.spec || {}).src)) || endpointId((element.spec || {}).src)
-      const target = alias.get(endpointId((element.spec || {}).dest)) || endpointId((element.spec || {}).dest)
+      const source = alias.get(endpointId(linkSourceEndpoint(element))) || endpointId(linkSourceEndpoint(element))
+      const target = alias.get(endpointId(linkTargetEndpoint(element))) || endpointId(linkTargetEndpoint(element))
       const ids = [source, target].filter(Boolean)
       setFocusIds(ids.length > 0 ? ids : [elementKey(element)])
     } else {
@@ -321,7 +332,7 @@ export function UModelPage({
 
   const createDraftLinks = useCallback((source: UModelElement, targets: UModelElement[]) => {
     if (targets.length === 0) return
-    const links = targets.map((target) => createDataLink(source, target))
+    const links = targets.map((target) => createElementLink(source, target))
     updateDraft((items) => {
       let next = items
       for (const link of links) next = upsertById(next, link)
@@ -810,8 +821,8 @@ function selectGraphDisplayElements(
   for (const element of graphNodeElements) degreeById.set(elementKey(element), 0)
 
   for (const link of elements.filter(isLinkElement)) {
-    const source = alias.get(endpointId((link.spec || {}).src)) || endpointId((link.spec || {}).src)
-    const target = alias.get(endpointId((link.spec || {}).dest)) || endpointId((link.spec || {}).dest)
+    const source = alias.get(endpointId(linkSourceEndpoint(link))) || endpointId(linkSourceEndpoint(link))
+    const target = alias.get(endpointId(linkTargetEndpoint(link))) || endpointId(linkTargetEndpoint(link))
     if (source && degreeById.has(source)) degreeById.set(source, (degreeById.get(source) || 0) + 1)
     if (target && degreeById.has(target)) degreeById.set(target, (degreeById.get(target) || 0) + 1)
   }
@@ -850,8 +861,8 @@ function selectGraphDisplayElements(
 
   for (const link of elements.filter(isLinkElement)) {
     const key = elementKey(link)
-    const source = alias.get(endpointId((link.spec || {}).src)) || endpointId((link.spec || {}).src)
-    const target = alias.get(endpointId((link.spec || {}).dest)) || endpointId((link.spec || {}).dest)
+    const source = alias.get(endpointId(linkSourceEndpoint(link))) || endpointId(linkSourceEndpoint(link))
+    const target = alias.get(endpointId(linkTargetEndpoint(link))) || endpointId(linkTargetEndpoint(link))
     const linkAsNode = entitySetLinkDisplay === 'relative_link' && isEntitySetLinkElement(link)
     if (source && target && visibleNodeIds.has(source) && visibleNodeIds.has(target)) result.set(key, link)
     if (linkAsNode && visibleNodeIds.has(key)) result.set(key, link)

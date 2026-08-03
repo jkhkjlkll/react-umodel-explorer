@@ -59,10 +59,12 @@ export function StandaloneExplorerApp() {
     const nextApiBase = params.get('apiBase')
     const nextWorkspaceId = params.get('workspace')
     const nextDataSource = params.get('dataSource')
+    const nextSection = params.get('section')
     if (nextApiBase !== null) setApiBase(nextApiBase.trim())
     if (nextWorkspaceId) setWorkspaceId(nextWorkspaceId.trim())
     if (nextDataSource === 'api' || nextDataSource === 'mock') setDataSource(nextDataSource)
-  }, [setApiBase, setDataSource, setWorkspaceId])
+    if (isStandaloneSection(nextSection)) setSection(nextSection)
+  }, [setApiBase, setDataSource, setSection, setWorkspaceId])
 
   return (
     <div className={`workspace-shell app-shell canvas-host ${sidebarCollapsed ? 'collapsed' : ''}`}>
@@ -150,6 +152,16 @@ export function StandaloneExplorerApp() {
       </section>
     </div>
   )
+}
+
+function isStandaloneSection(value: string | null): value is StandaloneSection {
+  return value === 'umodel'
+    || value === 'entity'
+    || value === 'topology'
+    || value === 'query'
+    || value === 'imports'
+    || value === 'settings'
+    || value === 'apiDebug'
 }
 
 function StandaloneBrand() {

@@ -1,4 +1,5 @@
 .topo-page {
+  position: relative;
   width: 100%;
   height: 100%;
   display: block;
@@ -1179,5 +1180,552 @@
 @media (max-width: 1200px) {
   .topo-console {
     grid-template-columns: 290px minmax(0, 1fr);
+  }
+}
+
+.topo-instance-drawer-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.topo-instance-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: rgba(24, 32, 48, 0.34);
+  cursor: default;
+  animation: topo-instance-backdrop-in 180ms ease-out;
+}
+
+.topo-instance-drawer {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: min(92%, 1480px);
+  min-width: min(760px, 100%);
+  overflow: hidden;
+  background: #f7f8fa;
+  box-shadow: -12px 0 32px rgba(17, 24, 39, 0.2);
+  animation: topo-instance-drawer-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes topo-instance-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes topo-instance-drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.topo-instance-page {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 72px 52px minmax(0, 1fr);
+  overflow: hidden;
+  background: #f7f8fa;
+  color: #252b3a;
+}
+
+.topo-instance-header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 22px;
+  border-bottom: 1px solid #e4e8ef;
+  background: #fff;
+}
+
+.topo-instance-close {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid #dfe4ec;
+  border-radius: 6px;
+  background: #fff;
+  color: #5f6878;
+  cursor: pointer;
+}
+
+.topo-instance-close:hover {
+  border-color: #6559e8;
+  color: #6559e8;
+}
+
+.topo-instance-mark {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.topo-instance-heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.topo-instance-heading strong,
+.topo-instance-heading span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topo-instance-heading strong {
+  color: #161c2a;
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.topo-instance-heading span {
+  color: #7a8494;
+  font-size: 12px;
+}
+
+.topo-instance-status {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid #c8ebd9;
+  border-radius: 999px;
+  background: #effbf5;
+  color: #178655;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.topo-instance-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #18a66a;
+}
+
+.topo-instance-context {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+  color: #717b8c;
+  font-size: 12px;
+}
+
+.topo-instance-close {
+  margin-left: 2px;
+}
+
+.topo-instance-context span {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topo-instance-context b {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border: 1px solid #e0e4eb;
+  border-radius: 5px;
+  background: #fafbfc;
+  color: #4b5565;
+  font-weight: 650;
+}
+
+.topo-instance-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 22px;
+  padding: 0 24px;
+  border-bottom: 1px solid #dfe4eb;
+  background: #fff;
+}
+
+.topo-instance-tabs button {
+  position: relative;
+  min-width: 104px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  color: #566070;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.topo-instance-tabs button::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: transparent;
+}
+
+.topo-instance-tabs button.active {
+  color: #6559e8;
+}
+
+.topo-instance-tabs button.active::after {
+  background: #6559e8;
+}
+
+.topo-instance-content {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px 28px;
+}
+
+.topo-instance-detail-view,
+.topo-instance-metrics-view {
+  width: min(1480px, 100%);
+  margin: 0 auto;
+}
+
+.topo-instance-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.topo-instance-summary-card {
+  min-width: 0;
+  min-height: 112px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: center;
+  gap: 8px;
+  padding: 18px 20px;
+  border: 1px solid #e1e6ee;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(31, 45, 75, 0.05);
+}
+
+.topo-instance-summary-card > span {
+  grid-column: 1 / -1;
+  color: #788293;
+  font-size: 13px;
+}
+
+.topo-instance-summary-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #202736;
+  font-size: 28px;
+  font-weight: 720;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topo-instance-summary-card small {
+  align-self: end;
+  color: #8b94a2;
+  font-size: 12px;
+}
+
+.topo-instance-summary-card.danger strong {
+  color: #dc3f4b;
+}
+
+.topo-instance-section {
+  min-width: 0;
+  margin: 16px auto 0;
+  border: 1px solid #e1e6ee;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(31, 45, 75, 0.04);
+}
+
+.topo-instance-property-section,
+.topo-neighbor-section {
+  width: min(1480px, 100%);
+}
+
+.topo-instance-section-head {
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.topo-instance-section-head > div {
+  min-width: 0;
+}
+
+.topo-instance-section-head strong,
+.topo-instance-section-head span {
+  display: block;
+}
+
+.topo-instance-section-head strong {
+  color: #242b38;
+  font-size: 15px;
+}
+
+.topo-instance-section-head > div span {
+  margin-top: 4px;
+  color: #8a93a2;
+  font-size: 12px;
+}
+
+.topo-instance-info {
+  flex: 0 0 auto;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  color: #8a93a2;
+  font-size: 12px;
+}
+
+.topo-instance-property-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 4px 18px 18px;
+}
+
+.topo-instance-property-grid > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 10px;
+  padding: 15px 8px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.topo-instance-property-grid dt {
+  color: #8a93a2;
+}
+
+.topo-instance-property-grid dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #303845;
+  font-weight: 650;
+}
+
+.topo-neighbor-canvas {
+  min-height: 0;
+  padding: 10px;
+  overflow: auto;
+  background-color: #fbfcfd;
+  background-image: radial-gradient(#dfe4ec 0.8px, transparent 0.8px);
+  background-size: 14px 14px;
+}
+
+.topo-neighbor-canvas svg {
+  width: 100%;
+  min-width: 720px;
+  height: auto;
+  max-height: calc(100vh - 270px);
+  display: block;
+}
+
+.topo-neighbor-edge-label {
+  fill: #7c8696;
+  font-size: 11px;
+  font-weight: 650;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 4px;
+}
+
+.topo-neighbor-title,
+.topo-neighbor-center-title {
+  fill: #253044;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.topo-neighbor-subtitle,
+.topo-neighbor-center-subtitle {
+  fill: #7c8696;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.topo-neighbor-center-title {
+  font-size: 13px;
+}
+
+.topo-neighbor-empty {
+  fill: #8a93a2;
+  font-size: 14px;
+}
+
+.topo-metrics-toolbar {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+  color: #6d7787;
+  font-size: 12px;
+}
+
+.topo-metrics-toolbar > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topo-metrics-toolbar svg {
+  color: #6559e8;
+}
+
+.topo-metrics-toolbar strong {
+  color: #222a38;
+  font-size: 15px;
+}
+
+.topo-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.topo-metric-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dfe4ec;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(31, 45, 75, 0.04);
+}
+
+.topo-metric-card header {
+  min-height: 70px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 16px 8px;
+}
+
+.topo-metric-card header > span {
+  color: #343c49;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.topo-metric-card header strong {
+  color: #252d3a;
+  font-size: 22px;
+}
+
+.topo-metric-card header small {
+  margin-left: 3px;
+  color: #8a93a2;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.topo-metric-card svg {
+  width: 100%;
+  height: 150px;
+  display: block;
+}
+
+.topo-metric-card footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 18px 14px;
+  color: #9aa2af;
+  font-size: 10px;
+}
+
+@media (max-width: 1180px) {
+  .topo-instance-summary-grid,
+  .topo-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .topo-instance-property-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .topo-instance-context span {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .topo-instance-drawer {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .topo-instance-page {
+    grid-template-rows: auto 48px minmax(0, 1fr);
+  }
+
+  .topo-instance-header {
+    min-height: 82px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+  }
+
+  .topo-instance-status,
+  .topo-instance-context {
+    display: none;
+  }
+
+  .topo-instance-tabs {
+    gap: 0;
+    padding: 0 8px;
+  }
+
+  .topo-instance-tabs button {
+    min-width: 0;
+    flex: 1;
+    font-size: 12px;
+  }
+
+  .topo-instance-content {
+    padding: 12px;
+  }
+
+  .topo-instance-summary-grid,
+  .topo-instance-property-grid,
+  .topo-metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topo-instance-drawer,
+  .topo-instance-drawer-backdrop {
+    animation: none;
   }
 }

@@ -8,6 +8,8 @@ import {
   entityLinkTypeForEdge,
   isEntitySetLinkElement,
   isLinkElement,
+  linkSourceEndpoint,
+  linkTargetEndpoint,
   tagCountForElement,
   tagsForElement,
   titleForElement,
@@ -110,8 +112,8 @@ export function buildGraph(
   }> = []
 
   for (const element of linkElements) {
-    const src = endpointId((element.spec || {}).src)
-    const dest = endpointId((element.spec || {}).dest)
+    const src = endpointId(linkSourceEndpoint(element))
+    const dest = endpointId(linkTargetEndpoint(element))
     const source = src ? alias.get(src) || src : ''
     const target = dest ? alias.get(dest) || dest : ''
     const sourceElement = nodeById.get(source)

@@ -103,6 +103,10 @@ export const nodeKindOptions = [
   { value: 'event_set', label: 'EventSet' },
 ] as const
 
+const runbookSectionKeys = ['knowledge', 'observations', 'actions', 'automations', 'automation', 'skills', 'steps'] as const
+const dataSetKinds = new Set(['metric_set', 'log_set', 'trace_set', 'event_set', 'profile_set'])
+const storageKinds = new Set(['sls_logstore', 'sls_metricstore', 'aliyun_prometheus', 'prometheus', 'elasticsearch', 'local.ladybug'])
+
 export function buildElementId(kind: unknown, domain?: string, name?: string) {
   return [domain, name, kind].filter(Boolean).join('/')
 }
@@ -179,8 +183,8 @@ export function filterGraphElements(
   for (const element of graphNodeElements) {
     const key = elementKey(element)
     if (!isEntitySetLinkElement(element) || !selectedNodeIds.has(key)) continue
-    const source = alias.get(endpointId((element.spec || {}).src)) || endpointId((element.spec || {}).src)
-    const target = alias.get(endpointId((element.spec || {}).dest)) || endpointId((element.spec || {}).dest)
+    const source = alias.get(endpointId(linkSourceEndpoint(element))) || endpointId(linkSourceEndpoint(element))
+    const target = alias.get(endpointId(linkTargetEndpoint(element))) || endpointId(linkTargetEndpoint(element))
     if (source) selectedNodeIds.add(source)
     if (target) selectedNodeIds.add(target)
   }
@@ -190,8 +194,8 @@ export function filterGraphElements(
 
   for (const link of linkElements) {
     const key = elementKey(link)
-    const source = alias.get(endpointId((link.spec || {}).src)) || endpointId((link.spec || {}).src)
-    const target = alias.get(endpointId((link.spec || {}).dest)) || endpointId((link.spec || {}).dest)
+    const source = alias.get(endpointId(linkSourceEndpoint(link))) || endpointId(linkSourceEndpoint(link))
+    const target = alias.get(endpointId(linkTargetEndpoint(link))) || endpointId(linkTargetEndpoint(link))
     const touchesSelectedNode = Boolean(
       (source && selectedNodeIds.has(source)) ||
       (target && selectedNodeIds.has(target)) ||
@@ -252,7 +256,8 @@ const recommendationStopWords = new Set([
   'status', 'time', 'count', 'index', 'service', 'instance', 'version', 'labels', 'filter', 'dynamic',
   'en_us', 'zh_cn', 'string', 'number', 'object', 'array', 'boolean', 'true', 'false', 'null', 'undefined',
   'raw', 'primary', 'ordered', 'first', 'last', 'observed', 'time_field', 'primary_key_fields', 'ordered_fields',
-  'entity_set', 'metric_set', 'log_set', 'data_link', 'entity_set_link', 'runbook_set',
+  'entity_set', 'metric_set', 'log_set', 'data_link', 'entity_set_link', 'runbook_set', 'runbook_link',
+  'runbook', 'knowledge', 'observations', 'observation', 'actions', 'action', 'automations', 'automation', 'skills', 'skill',
   'sls_logstore', 'sls_metricstore', 'aliyun_prometheus', 'explorer', 'storage',
 ])
 
@@ -414,12 +419,12 @@ function namedSpecValues(spec: Record<string, unknown>): string[] {
     const value = optionalString(spec[key])
     if (value) values.push(value)
   }
-  for (const key of ['fields', 'metrics', 'dimensions', 'keys', 'primary_key_fields', 'ordered_fields']) {
+  for (const key of ['fields', 'metrics', 'dimensions', 'keys', 'primary_key_fields', 'ordered_fields', ...runbookSectionKeys]) {
     for (const item of asUnknownArray(spec[key])) {
       if (typeof item === 'string') {
         values.push(item)
       } else if (isObject(item)) {
-        for (const field of ['name', 'type', 'example']) {
+        for (const field of ['name', 'type', 'example', 'title', 'summary', 'action', 'action_type', 'compatibility']) {
           const value = optionalString(item[field])
           if (value) values.push(value)
         }
@@ -477,8 +482,8 @@ export function relatedElementIds(elements: UModelElement[], ids: string[]): Set
   const related = new Set(ids)
   for (const element of elements.filter(isLinkElement)) {
     const key = elementKey(element)
-    const source = endpointId((element.spec || {}).src)
-    const target = endpointId((element.spec || {}).dest)
+    const source = endpointId(linkSourceEndpoint(element))
+    const target = endpointId(linkTargetEndpoint(element))
     const sourceId = alias.get(source) || source
     const targetId = alias.get(target) || target
     if (related.has(key) || related.has(sourceId) || related.has(targetId)) {
@@ -497,8 +502,8 @@ export function focusIdsForElements(elements: UModelElement[], allElements: UMod
   for (const element of elements) {
     ids.add(elementKey(element))
     if (isLinkElement(element)) {
-      const source = alias.get(endpointId((element.spec || {}).src)) || endpointId((element.spec || {}).src)
-      const target = alias.get(endpointId((element.spec || {}).dest)) || endpointId((element.spec || {}).dest)
+      const source = alias.get(endpointId(linkSourceEndpoint(element))) || endpointId(linkSourceEndpoint(element))
+      const target = alias.get(endpointId(linkTargetEndpoint(element))) || endpointId(linkTargetEndpoint(element))
       if (source) ids.add(source)
       if (target) ids.add(target)
     }
@@ -508,8 +513,8 @@ export function focusIdsForElements(elements: UModelElement[], allElements: UMod
 
 export function linkTouchesElement(link: UModelElement, element: UModelElement, elements: UModelElement[]) {
   const alias = aliasForElements(elements.filter((item) => !isLinkElement(item)))
-  const source = endpointId((link.spec || {}).src)
-  const target = endpointId((link.spec || {}).dest)
+  const source = endpointId(linkSourceEndpoint(link))
+  const target = endpointId(linkTargetEndpoint(link))
   const key = elementKey(element)
   return (alias.get(source) || source) === key || (alias.get(target) || target) === key
 }
@@ -539,8 +544,10 @@ export function cloneElementForDraft(element: UModelElement): UModelElement {
 export function cloneLinkForDraft(link: UModelElement, original: UModelElement, copy: UModelElement): UModelElement {
   const linkCopy = cloneElementForDraft(link)
   const spec = { ...(linkCopy.spec || {}) }
-  spec.src = rewriteEndpointForCopy(spec.src, original, copy)
-  spec.dest = rewriteEndpointForCopy(spec.dest, original, copy)
+  const sourceKey = spec.src !== undefined ? 'src' : 'source'
+  const targetKey = spec.dest !== undefined ? 'dest' : 'target'
+  spec[sourceKey] = rewriteEndpointForCopy(spec[sourceKey], original, copy)
+  spec[targetKey] = rewriteEndpointForCopy(spec[targetKey], original, copy)
   linkCopy.spec = spec
   return linkCopy
 }
@@ -605,6 +612,35 @@ export function defaultNewNode(kind = 'entity_set'): UModelElement {
       },
     }
   }
+  if (kind === 'runbook_set') {
+    return {
+      ...common,
+      spec: {
+        display_name: { zh_cn: '自定义 Runbook', en_us: 'Custom Runbook' },
+        description: { zh_cn: '用于实体故障定位和处置的 Runbook。', en_us: 'Runbook for entity diagnosis and remediation.' },
+        knowledge: [
+          {
+            name: 'initial-diagnosis',
+            title: '初始诊断',
+            summary: '结合实体指标、日志和拓扑关系判断影响范围。',
+            actions: ['检查关键指标', '查看错误日志', '确认上下游拓扑'],
+          },
+        ],
+        observations: [
+          { name: 'latency-or-error-spike', description: '延迟或错误率升高时优先关联依赖关系和最近变更。' },
+        ],
+        actions: [
+          { name: 'collect_entity_context', action_type: 'query', description: '收集实体指标、日志和邻居节点上下文。' },
+        ],
+        automations: [
+          { name: 'prepare_rca_context', description: '生成 RCA 所需的实体、关系、遥测和 Runbook 上下文。' },
+        ],
+        skills: [
+          { name: 'umodel-rca', title: 'UModel RCA', description: '使用 UModel 查询链路进行根因分析。' },
+        ],
+      },
+    }
+  }
   return {
     ...common,
     spec: {
@@ -615,22 +651,36 @@ export function defaultNewNode(kind = 'entity_set'): UModelElement {
   }
 }
 
-export function createDataLink(source: UModelElement, target: UModelElement): UModelElement {
-  const sourceName = source.name || elementKey(source)
-  const targetName = target.name || elementKey(target)
+export function createElementLink(source: UModelElement, target: UModelElement): UModelElement {
+  const plan = linkPlanForElements(source, target)
+  const sourceName = plan.source.name || elementKey(plan.source)
+  const targetName = plan.target.name || elementKey(plan.target)
   const name = `${sourceName}_to_${targetName}`.replace(/[^a-zA-Z0-9_]+/g, '_')
+  const spec: Record<string, unknown> = {
+    [plan.typeField]: plan.relation,
+    src: { domain: plan.source.domain, kind: plan.source.kind, name: plan.source.name || elementKey(plan.source) },
+    dest: { domain: plan.target.domain, kind: plan.target.kind, name: plan.target.name || elementKey(plan.target) },
+  }
+  if (plan.kind === 'runbook_link') {
+    spec.token_replace = {
+      entity_id: '${__entity_id__}',
+      entity_name: '${display_name}',
+    }
+    spec.fields_mapping = {
+      id: 'entity_id',
+      name: 'entity_name',
+    }
+  }
   return {
-    kind: 'data_link',
-    domain: source.domain || target.domain || 'default',
+    kind: plan.kind,
+    domain: plan.source.domain || plan.target.domain || 'default',
     name,
-    version: source.version || target.version || 'v0.1.0',
-    spec: {
-      data_link_type: 'related_to',
-      src: { domain: source.domain, kind: source.kind, name: source.name || elementKey(source) },
-      dest: { domain: target.domain, kind: target.kind, name: target.name || elementKey(target) },
-    },
+    version: plan.source.version || plan.target.version || 'v0.1.0',
+    spec,
   }
 }
+
+export const createDataLink = createElementLink
 
 export function columnForKind(kind: string) {
   if (kind === 'entity_set') return 0
@@ -651,8 +701,18 @@ export function endpointId(value: unknown): string {
   return ''
 }
 
+export function linkSourceEndpoint(element: UModelElement): unknown {
+  const spec = element.spec || {}
+  return spec.src ?? spec.source
+}
+
+export function linkTargetEndpoint(element: UModelElement): unknown {
+  const spec = element.spec || {}
+  return spec.dest ?? spec.target
+}
+
 export function isLinkElement(element: UModelElement): boolean {
-  return linkKinds.has(element.kind) || Boolean((element.spec || {}).src && (element.spec || {}).dest)
+  return linkKinds.has(element.kind) || Boolean(linkSourceEndpoint(element) && linkTargetEndpoint(element))
 }
 
 export function isEntitySetLinkElement(element: UModelElement): boolean {
@@ -720,11 +780,12 @@ export function tagsForElement(element: UModelElement): string[] {
   const fields = asUnknownArray(spec.fields)
   const metrics = asUnknownArray(spec.metrics)
   const pk = asUnknownArray(spec.primary_key_fields)
-  const source = fields.length > 0 ? fields : metrics.length > 0 ? metrics : pk
+  const runbookItems = runbookSectionItems(spec)
+  const source = fields.length > 0 ? fields : metrics.length > 0 ? metrics : pk.length > 0 ? pk : runbookItems
   return source
     .map((item) => {
       if (typeof item === 'string') return item
-      if (isObject(item)) return optionalString(item.name) || optionalString(item.type) || ''
+      if (isObject(item)) return optionalString(item.name) || optionalString(item.title) || optionalString(item.type) || ''
       return ''
     })
     .filter(Boolean)
@@ -737,30 +798,99 @@ export function tagCountForElement(element: UModelElement): number {
     asUnknownArray(spec.fields).length,
     asUnknownArray(spec.metrics).length,
     asUnknownArray(spec.primary_key_fields).length,
+    runbookSectionItems(spec).length,
     tagsForElement(element).length,
   )
 }
 
 export function detailShort(element: UModelElement, labels: { fields: string; metrics: string } = { fields: 'fields', metrics: 'metrics' }): string {
   if (isLinkElement(element)) {
-    const src = endpointId((element.spec || {}).src)
-    const dest = endpointId((element.spec || {}).dest)
+    const src = endpointId(linkSourceEndpoint(element))
+    const dest = endpointId(linkTargetEndpoint(element))
     return src && dest ? `${src} -> ${dest}` : ''
   }
   const fields = asUnknownArray((element.spec || {}).fields).length
   const metrics = asUnknownArray((element.spec || {}).metrics).length
+  const runbookItems = runbookSectionItems(element.spec || {}).length
   if (fields) return `${fields} ${labels.fields}`
   if (metrics) return `${metrics} ${labels.metrics}`
+  if (runbookItems) return `${runbookItems} runbook items`
   return element.version || ''
 }
 
 export function entityLinkTypeForEdge(element: UModelElement): string {
   const spec = element.spec || {}
-  return optionalString(spec.entity_link_type) || optionalString(spec.link_type) || optionalString(spec.type) || labelForKind(element.kind)
+  return optionalString(spec.entity_link_type)
+    || optionalString(spec.runbook_link_type)
+    || optionalString(spec.data_link_type)
+    || optionalString(spec.storage_link_type)
+    || optionalString(spec.explorer_link_type)
+    || optionalString(spec.link_type)
+    || optionalString(spec.type)
+    || labelForKind(element.kind)
 }
 
 export function asUnknownArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : []
+}
+
+function linkPlanForElements(source: UModelElement, target: UModelElement) {
+  if (source.kind === 'entity_set' && target.kind === 'runbook_set') {
+    return {
+      kind: 'runbook_link',
+      source,
+      target,
+      typeField: 'runbook_link_type',
+      relation: 'guides',
+    }
+  }
+  if (source.kind === 'runbook_set' && target.kind === 'entity_set') {
+    return {
+      kind: 'runbook_link',
+      source: target,
+      target: source,
+      typeField: 'runbook_link_type',
+      relation: 'guides',
+    }
+  }
+  if (dataSetKinds.has(source.kind) && storageKinds.has(target.kind)) {
+    return {
+      kind: 'storage_link',
+      source,
+      target,
+      typeField: 'storage_link_type',
+      relation: 'stored_in',
+    }
+  }
+  if (storageKinds.has(source.kind) && dataSetKinds.has(target.kind)) {
+    return {
+      kind: 'storage_link',
+      source: target,
+      target: source,
+      typeField: 'storage_link_type',
+      relation: 'stored_in',
+    }
+  }
+  if (source.kind === 'explorer' || target.kind === 'explorer') {
+    return {
+      kind: 'explorer_link',
+      source,
+      target,
+      typeField: 'explorer_link_type',
+      relation: 'visualizes',
+    }
+  }
+  return {
+    kind: 'data_link',
+    source,
+    target,
+    typeField: 'data_link_type',
+    relation: 'related_to',
+  }
+}
+
+function runbookSectionItems(spec: Record<string, unknown>): unknown[] {
+  return runbookSectionKeys.flatMap((key) => asUnknownArray(spec[key]))
 }
 
 export function optionalString(value: unknown): string | undefined {
