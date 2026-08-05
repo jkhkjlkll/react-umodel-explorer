@@ -1600,6 +1600,143 @@
   gap: 8px;
 }
 
+.topo-metrics-title {
+  min-width: 0;
+}
+
+.topo-metric-time-control {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.topo-metric-time-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  color: #667184;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.topo-metric-time-label svg {
+  color: #6559e8;
+}
+
+.topo-metric-time-presets {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border: 1px solid #dfe4ec;
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+.topo-metric-time-presets button {
+  height: 27px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #707b8d;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.topo-metric-time-presets button:hover,
+.topo-metric-time-presets button.active {
+  background: #fff;
+  color: #6559e8;
+  box-shadow: 0 1px 4px rgba(31, 45, 75, 0.1);
+}
+
+.topo-metric-sampling-label {
+  flex: 0 0 auto;
+  color: #8a93a2;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.topo-metric-time-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: 280px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #dfe4ec;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 14px 34px rgba(29, 40, 68, 0.16);
+}
+
+.topo-metric-time-popover-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #252d3a;
+  font-size: 13px;
+}
+
+.topo-metric-time-popover-title svg {
+  color: #6559e8;
+}
+
+.topo-metric-time-popover label {
+  display: grid;
+  gap: 5px;
+  color: #7a8494;
+  font-size: 11px;
+}
+
+.topo-metric-time-popover input {
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #dfe4ec;
+  border-radius: 5px;
+  color: #303845;
+  font: inherit;
+}
+
+.topo-metric-time-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.topo-metric-time-popover-actions button {
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid #dfe4ec;
+  border-radius: 5px;
+  background: #fff;
+  color: #697486;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.topo-metric-time-popover-actions button.primary {
+  border-color: #6559e8;
+  background: #6559e8;
+  color: #fff;
+}
+
+.topo-metric-time-popover-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .topo-metrics-toolbar svg {
   color: #6559e8;
 }
@@ -1714,6 +1851,22 @@
 
   .topo-instance-content {
     padding: 12px;
+  }
+
+  .topo-metrics-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .topo-metric-time-control {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .topo-metric-time-presets {
+    max-width: 100%;
+    overflow-x: auto;
   }
 
   .topo-instance-summary-grid,

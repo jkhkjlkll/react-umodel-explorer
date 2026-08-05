@@ -557,7 +557,7 @@ function InstanceExplorer({
       <main className="topo-instance-content">
         {activeTab === 'detail' && <InstanceDetailTabView instance={instance} applicationId={applicationId} />}
         {activeTab === 'topology' && <InstanceTopologyTabView data={data} instance={instance} />}
-        {activeTab === 'metrics' && <InstanceMetricsTabView instance={instance} timeRangeSummary={timeRangeSummary} />}
+        {activeTab === 'metrics' && <InstanceMetricsTabView instance={instance} />}
       </main>
     </div>
   )
@@ -677,17 +677,156 @@ function InstanceTopologyTabView({
   )
 }
 
-function InstanceMetricsTabView({ instance, timeRangeSummary }: { instance: EntityTopologyInstance; timeRangeSummary: string }) {
-  const metrics = useMemo(() => createInstanceMetrics(instance), [instance])
+function InstanceMetricsTabView({ instance }: { instance: EntityTopologyInstance }) {
+  const [timeRange, setTimeRange] = useState<MetricTimeRange>(() => createMetricPresetTimeRange('15m'))
+  const [customRangeDraft, setCustomRangeDraft] = useState<MetricTimeRange>(() => createMetricPresetTimeRange('15m'))
+  const [customRangeOpen, setCustomRangeOpen] = useState(false)
+  const metrics = useMemo(() => createInstanceMetrics(instance, timeRange), [instance, timeRange])
+  const samplingLabel = getMetricSamplingLabel(timeRange.mode)
+
+  const applyPreset = (mode: MetricTimeRangeMode) => {
+    const nextRange = createMetricPresetTimeRange(mode)
+    setTimeRange(nextRange)
+    setCustomRangeDraft(nextRange)
+    setCustomRangeOpen(false)
+  }
+
+  const toggleCustomRange = () => {
+    setCustomRangeDraft(timeRange.mode === 'custom' ? timeRange : createMetricPresetTimeRange('1h', 'custom'))
+    setCustomRangeOpen((value) => !value)
+  }
+
+  const applyCustomRange = () => {
+    if (!customRangeDraft.from || !customRangeDraft.to) return
+    const nextRange = normalizeMetricTimeRange(customRangeDraft)
+    setTimeRange(nextRange)
+    setCustomRangeDraft(nextRange)
+    setCustomRangeOpen(false)
+  }
+
   return (
     <div className="topo-instance-metrics-view">
       <div className="topo-metrics-toolbar">
-        <div><Activity size={16} /><strong>实例指标</strong><span>{timeRangeSummary}</span></div>
-        <span>采样间隔 5 分钟</span>
+        <div className="topo-metrics-title"><Activity size={16} /><strong>实例指标</strong></div>
+        <MetricTimeRangeControl
+          range={timeRange}
+          customRangeDraft={customRangeDraft}
+          customRangeOpen={customRangeOpen}
+          samplingLabel={samplingLabel}
+          onPresetChange={applyPreset}
+          onCustomRangeToggle={toggleCustomRange}
+          onCustomRangeChange={setCustomRangeDraft}
+          onCustomRangeClose={() => setCustomRangeOpen(false)}
+          onCustomRangeApply={applyCustomRange}
+        />
       </div>
       <section className="topo-metric-grid">
-        {metrics.map((metric) => <MetricChart key={metric.id} metric={metric} />)}
+        {metrics.map((metric) => <MetricChart key={metric.id} metric={metric} range={timeRange} />)}
       </section>
+    </div>
+  )
+}
+
+type MetricTimeRangeMode = '15m' | '1h' | '6h' | '1d' | 'custom'
+
+interface MetricTimeRange {
+  mode: MetricTimeRangeMode
+  from: string
+  to: string
+}
+
+const metricTimeRangePresets: Array<{ mode: Exclude<MetricTimeRangeMode, 'custom'>; label: string; minutes: number }> = [
+  { mode: '15m', label: '15分钟', minutes: 15 },
+  { mode: '1h', label: '1小时', minutes: 60 },
+  { mode: '6h', label: '6小时', minutes: 360 },
+  { mode: '1d', label: '1天', minutes: 1440 },
+]
+
+function createMetricPresetTimeRange(mode: MetricTimeRangeMode, nextMode = mode): MetricTimeRange {
+  const preset = metricTimeRangePresets.find((item) => item.mode === mode) || metricTimeRangePresets[1]
+  const to = new Date()
+  const from = new Date(to.getTime() - preset.minutes * 60 * 1000)
+  return {
+    mode: nextMode,
+    from: toDateTimeLocalValue(from),
+    to: toDateTimeLocalValue(to),
+  }
+}
+
+function normalizeMetricTimeRange(range: MetricTimeRange): MetricTimeRange {
+  if (!range.from || !range.to) return { ...range, mode: 'custom' }
+  return range.from <= range.to
+    ? { ...range, mode: 'custom' }
+    : { mode: 'custom', from: range.to, to: range.from }
+}
+
+function getMetricSamplingLabel(mode: MetricTimeRangeMode) {
+  if (mode === '15m') return '采样间隔 1 分钟'
+  if (mode === '1h') return '采样间隔 5 分钟'
+  if (mode === '6h') return '采样间隔 15 分钟'
+  return '采样间隔 1 小时'
+}
+
+function MetricTimeRangeControl({
+  range,
+  customRangeDraft,
+  customRangeOpen,
+  samplingLabel,
+  onPresetChange,
+  onCustomRangeToggle,
+  onCustomRangeChange,
+  onCustomRangeClose,
+  onCustomRangeApply,
+}: {
+  range: MetricTimeRange
+  customRangeDraft: MetricTimeRange
+  customRangeOpen: boolean
+  samplingLabel: string
+  onPresetChange: (mode: MetricTimeRangeMode) => void
+  onCustomRangeToggle: () => void
+  onCustomRangeChange: (range: MetricTimeRange) => void
+  onCustomRangeClose: () => void
+  onCustomRangeApply: () => void
+}) {
+  return (
+    <div className="topo-metric-time-control">
+      <span className="topo-metric-time-label"><Clock3 size={14} />时间范围</span>
+      <div className="topo-metric-time-presets" role="group" aria-label="指标时间范围">
+        {metricTimeRangePresets.map((preset) => (
+          <button key={preset.mode} className={range.mode === preset.mode ? 'active' : ''} type="button" onClick={() => onPresetChange(preset.mode)}>
+            {preset.label}
+          </button>
+        ))}
+        <button className={range.mode === 'custom' ? 'active' : ''} type="button" onClick={onCustomRangeToggle}>
+          自定义
+        </button>
+      </div>
+      <span className="topo-metric-sampling-label">{samplingLabel}</span>
+      {customRangeOpen && (
+        <div className="topo-metric-time-popover">
+          <div className="topo-metric-time-popover-title"><Clock3 size={15} /><strong>自定义时间范围</strong></div>
+          <label>
+            <span>开始时间</span>
+            <input
+              type="datetime-local"
+              value={customRangeDraft.from}
+              onChange={(event) => onCustomRangeChange({ ...customRangeDraft, from: event.currentTarget.value, mode: 'custom' })}
+            />
+          </label>
+          <label>
+            <span>结束时间</span>
+            <input
+              type="datetime-local"
+              value={customRangeDraft.to}
+              onChange={(event) => onCustomRangeChange({ ...customRangeDraft, to: event.currentTarget.value, mode: 'custom' })}
+            />
+          </label>
+          <div className="topo-metric-time-popover-actions">
+            <button type="button" onClick={onCustomRangeClose}>取消</button>
+            <button className="primary" type="button" disabled={!customRangeDraft.from || !customRangeDraft.to} onClick={onCustomRangeApply}>应用</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -701,16 +840,16 @@ interface InstanceMetric {
   points: number[]
 }
 
-function MetricChart({ metric }: { metric: InstanceMetric }) {
+function MetricChart({ metric, range }: { metric: InstanceMetric; range: MetricTimeRange }) {
   const width = 420
   const height = 150
   const padding = 18
   const max = Math.max(...metric.points, 1)
   const min = Math.min(...metric.points, 0)
-  const range = Math.max(1, max - min)
+  const valueRange = Math.max(1, max - min)
   const coordinates = metric.points.map((point, index) => ({
     x: padding + (index / Math.max(1, metric.points.length - 1)) * (width - padding * 2),
-    y: height - padding - ((point - min) / range) * (height - padding * 2),
+    y: height - padding - ((point - min) / valueRange) * (height - padding * 2),
   }))
   const line = coordinates.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ')
   const lastCoordinate = coordinates[coordinates.length - 1]
@@ -723,13 +862,13 @@ function MetricChart({ metric }: { metric: InstanceMetric }) {
         <path d={area} fill={`${metric.color}18`} />
         <path d={line} fill="none" stroke={metric.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <footer><span>开始</span><span>当前</span></footer>
+      <footer><span>{formatShortDateTime(range.from)}</span><span>{formatShortDateTime(range.to)}</span></footer>
     </article>
   )
 }
 
-function createInstanceMetrics(instance: EntityTopologyInstance): InstanceMetric[] {
-  const seed = hashText(`${instance.name}:${instance.entityType}`)
+function createInstanceMetrics(instance: EntityTopologyInstance, range: MetricTimeRange): InstanceMetric[] {
+  const seed = hashText(`${instance.name}:${instance.entityType}:${range.mode}:${range.from}:${range.to}`)
   const series = (base: number, variance: number, offset: number) => Array.from({ length: 24 }, (_, index) => {
     const wave = Math.sin((index + offset) * 0.58) * variance
     const jitter = ((seed + index * 17 + offset * 13) % 11) * variance * 0.07
