@@ -12,7 +12,7 @@ export const zhCNCommon = {
   'language.label': '语言',
   'language.english': 'English',
   'language.simplifiedChinese': '简体中文',
-  'nav.apiMap': 'API 调试',
+  'nav.apiMap': 'MCP 调试',
   'nav.collapseSidebar': '收起侧边栏',
   'nav.entityTopo': '拓扑探索',
   'nav.expandSidebar': '展开侧边栏',

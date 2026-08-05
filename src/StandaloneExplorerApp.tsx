@@ -13,7 +13,7 @@ import { EntityExplorerPage } from './features/entity/EntityExplorerPage'
 import { QueryPage } from './features/query/QueryPage'
 import { ImportsPage } from './features/imports/ImportsPage'
 import { SettingsPage } from './features/settings/SettingsPage'
-import { ApiMapPage } from './features/settings/ApiMapPage'
+import { McpDebuggerPage } from './features/settings/McpDebuggerPage'
 
 const storageKeys = {
   apiBase: 'standalone.umodel.apiBase',
@@ -146,7 +146,7 @@ export function StandaloneExplorerApp() {
               onBack={() => setSection('umodel')}
             />
           ) : (
-            <ApiMapPage api={api} workspaceId={workspaceId} />
+            <McpDebuggerPage />
           )}
         </main>
       </section>
