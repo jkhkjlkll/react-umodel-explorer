@@ -8,6 +8,8 @@ UModel Java Backend 是 UModel 后端的 JDK 21 实现线。项目以公共契�
 
 - JDK 21 + Spring Boot 3。
 - 多模块 Maven 工程。
+- `umodel-model-sdk`：23 个标准 UModel kind 的类型注册、JSON/YAML 自动解析、序列化、结构校验、Link endpoint helper 和自定义类型扩展。
+- `umodel-service-client`：覆盖公共 REST 契约的 JDK HTTP Client，支持超时、Bearer Token、结构化错误，以及模型对象直接 validate/put。
 - REST 路由覆盖 `compat/openapi/openapi.yaml` 中的核心 `/api/v1/**` 路径。
 - `memory` GraphStore provider。
 - `file.memory` GraphStore provider，使用 JSON 快照持久化。
@@ -30,6 +32,8 @@ UModel Java Backend 是 UModel 后端的 JDK 21 实现线。项目以公共契�
 
 ```text
 apps/umodel-server        Spring Boot HTTP 服务入口
+modules/model-sdk         UModel 模型对象、注册表、JSON/YAML codec 和校验
+modules/service-client    公共 REST 契约 Java Client
 modules/contract          DTO、错误模型、公共契约
 modules/bootstrap         Spring Bean 装配
 modules/workspace         Workspace 元数据服务
@@ -336,6 +340,36 @@ curl -X POST http://localhost:8080/mcp \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"workspace":"demo","name":"query_spl_execute","arguments":{"query":".umodel | limit 20"}}}'
 ```
 
+## Java SDK
+
+模型 SDK 和服务客户端都是可独立使用的 Maven JAR：
+
+```xml
+<dependency>
+  <groupId>com.alibaba.umodel</groupId>
+  <artifactId>umodel-model-sdk</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+</dependency>
+<dependency>
+  <groupId>com.alibaba.umodel</groupId>
+  <artifactId>umodel-service-client</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
+
+```java
+UModelCodec codec = new UModelCodec();
+UModelObject model = codec.parseYaml(yaml);
+
+UModelClient client = UModelClient.builder(URI.create("http://localhost:8080"))
+        .requestTimeout(Duration.ofSeconds(30))
+        .build();
+client.putModelObjects("demo", List.of(model));
+client.executeQuery("demo", new QueryRequest(".umodel | limit 5", Map.of(), 5, null, null, null));
+```
+
+完整说明：[Java SDK 指南](docs/sdk.zh-CN.md)，[English](docs/sdk.md)。
+
 ## 配置项
 
 | 环境变量 | 默认值 | 说明 |
@@ -351,6 +385,7 @@ curl -X POST http://localhost:8080/mcp \
 - [兼容矩阵](docs/compatibility-matrix.md)
 - [REST OpenAPI](compat/openapi/openapi.yaml)
 - [MCP schema](compat/mcp/tools.schema.json)
+- [Java SDK 指南](docs/sdk.zh-CN.md)
 
 ## 开发验证
 

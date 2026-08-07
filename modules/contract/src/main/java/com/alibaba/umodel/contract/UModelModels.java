@@ -142,8 +142,20 @@ public final class UModelModels {
             String domain,
             String name,
             Map<String, Object> spec,
-            Map<String, Object> metadata
+            Map<String, Object> metadata,
+            String version
     ) {
+        public UModelElement(
+                String id,
+                String kind,
+                String domain,
+                String name,
+                Map<String, Object> spec,
+                Map<String, Object> metadata
+        ) {
+            this(id, kind, domain, name, spec, metadata, null);
+        }
+
         public String stableId() {
             if (id != null && !id.isBlank()) {
                 return id;

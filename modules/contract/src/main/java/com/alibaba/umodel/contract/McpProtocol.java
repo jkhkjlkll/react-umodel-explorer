@@ -445,7 +445,8 @@ public final class McpProtocol {
                 builder.append(key).append(":\n");
                 level++;
             }
-            map.keySet().stream().sorted().forEach(itemKey -> writeTOONValue(builder, itemKey, map.get(itemKey), level));
+            int nestedLevel = level;
+            map.keySet().stream().sorted().forEach(itemKey -> writeTOONValue(builder, itemKey, map.get(itemKey), nestedLevel));
             return;
         }
         if (value instanceof List<?> list) {

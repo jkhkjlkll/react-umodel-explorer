@@ -21,6 +21,8 @@
 
     <modules>
         <module>modules/contract</module>
+        <module>modules/model-sdk</module>
+        <module>modules/service-client</module>
         <module>modules/graphstore-api</module>
         <module>modules/graphstore-memory</module>
         <module>modules/graphstore-file</module>

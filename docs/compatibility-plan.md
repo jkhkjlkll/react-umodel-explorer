@@ -161,7 +161,7 @@ Initial parser requirements:
 - Add PaaS-compatible `mode=data` endpoint conformance fixtures and production
   credential/configuration examples.
 - Replace handwritten schema checks with generated schema validation parity.
-- Add SDK and CLI compatibility gates.
+- Add CLI compatibility gates and shared running-service SDK fixtures.
 - Expand the initial Java Query tests into shared fixture-based Go/Java parity
   tests for REST, AgentGateway, MCP, skills, and query outputs.
 
@@ -170,7 +170,7 @@ Initial parser requirements:
 - Real `local.ladybug` execution without a Ladybug Java adapter.
 - Full Cypher engine compatibility beyond controlled read-only relation rows.
 - Production-grade vector and hybrid ranking beyond the bundled memory provider.
-- Generated SDK regeneration.
+- Field-level generated SDK regeneration beyond the standard kind-level model SDK.
 
 ## Design Constraints
 

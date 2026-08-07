@@ -28,6 +28,8 @@ The Java backend is currently a subset-compatible implementation track.
 | GraphStore `local.ladybug` | Compatibility stub | Provider can be selected and reports unavailable with stable provider error until a Ladybug Java runtime adapter is added. |
 | Search/vector/hybrid | Provider abstraction complete | `SearchService` exposes keyword/vector/hybrid, health, capabilities, indexing, and delete hooks. UModel and entity writes update the index. The memory provider supports keyword scoring, deterministic token-overlap vector search, and hybrid RRF fusion; external ANN/embedding providers remain pluggable work. |
 | Full schema validation | Expanded partial | Covers core Java sample, field/metric shape checks, link dependency checks, and DataLink/StorageLink endpoint kind checks; full generated schema parity is still pending. |
+| Java model SDK | Complete for public SDK baseline | `umodel-model-sdk` exposes all 23 standard kind types, JSON/YAML auto-detection, v0-to-v1 compatibility, round-trip serialization, extensible type registration, stable validation errors, and link endpoint helpers. Field-level generated classes remain part of the generated-schema parity gate. |
+| Java service client | Complete for current OpenAPI surface | `umodel-service-client` covers workspace, UModel, EntityStore, sample, Query Service, and AgentGateway REST paths with timeouts, headers/Bearer auth, typed standard responses, agent-plan responses, and structured errors. |
 
 ## Full 1:1 Parity Blockers
 
@@ -40,5 +42,6 @@ The Java backend is moving toward a 1:1 public-behavior replica, but the followi
 | Cypher | Controlled read-only relation-row fallback. | Full read-only Cypher engine behavior aligned with Go `internal/cypher`, including optional match, with/unwind, projection, path, aggregation, params, and conformance tests. |
 | Telemetry `mode=data` | Provider boundary and HTTP execution provider are in place for `get_logs`/`get_metrics`; default runtime stays unavailable until configured. | PaaS-compatible endpoint conformance fixtures and production credentials/configuration. |
 | Generated schema validation | Handwritten expanded partial validation. | Generated schema loading/validation parity with upstream schema specs. |
-| SDK/CLI/UI | Java backend server/MCP only. | CLI, SDK, UI, and fixture gates that exercise the same public contracts against Java. |
+| CLI/UI | Java backend now includes model and REST client SDKs, but no Java CLI or dedicated UI. | CLI/UI support and shared fixtures that exercise the same public contracts against Java. |
+| SDK conformance | Model and service-client unit contract tests are present. | Shared Go/Java fixtures against both running services and field-level generated schema parity. |
 | Parity tests | Java Query parity tests cover telemetry plan shape, SearchService-backed runbook skill search, and configured `mode=data` execution. | Shared Go/Java fixture suite comparing response shape, stable fields, errors, MCP, AgentGateway, skills, and query output. |
